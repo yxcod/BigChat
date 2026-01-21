@@ -1,0 +1,62 @@
+import 'package:flutter/material.dart';
+import '../pages/LoginPages/loginWidget.dart';
+import '../pages/mainPages/chatMainWidget.dart';
+import '../pages/chatDialog.dart';
+import '../pages/friendManage/searchFriendPage.dart';
+import '../pages/friendManage/friendDetailPage.dart';
+import '../pages/friendManage/friendAddManagerPage.dart';
+import '../pages/friendManage/addFriendRequestPage.dart';
+import '../pages/profileEditPage.dart';
+import '../pages/LoginPages/registerPage.dart';
+import '../model/friendRequestModel.dart';
+
+Widget getRootWidget() {
+  return MaterialApp(
+    initialRoute: "/login",
+    routes: getRoutes(),
+    // 使用 onGenerateRoute 处理需要传递参数的路由
+    onGenerateRoute: (settings) {
+      switch (settings.name) {
+        case '/chatDialog':
+          // 确保路由参数被正确传递
+          return MaterialPageRoute(
+            builder: (context) => ChatDialogPage(),
+            settings: settings, // 传递完整的路由设置，包括参数
+          );
+        case '/friendDetailPage':
+          final friendData = settings.arguments as Map<String, dynamic>;
+          return MaterialPageRoute(
+            builder: (context) => FriendDetailPage(friendData: friendData),
+          );
+        case '/addFriendRequestPage':
+          final addUserData = settings.arguments as Map<String, dynamic>;
+          return MaterialPageRoute(
+            builder: (context) => AddFriendRequestPage(targetUser: addUserData),
+          );
+        case '/friendAddManagerPage':
+          final friendReuqestData =
+              settings.arguments as List<FriendRequestModel>;
+          return MaterialPageRoute(
+            builder: (context) =>
+                FriendAddManagerPage(initialRequests: friendReuqestData),
+          );
+        case '/ProfileEditPage':
+          final profileInfo = settings.arguments as Map<String, dynamic>;
+          return MaterialPageRoute(
+            builder: (context) => ProfileEditPage(profileInfo: profileInfo),
+          );
+        default:
+          return null;
+      }
+    },
+  );
+}
+
+Map<String, Widget Function(BuildContext)> getRoutes() {
+  return {
+    "/login": (context) => BigchatLoginPage(),
+    '/mainWidget': (context) => BigchatMainPage(),
+    '/searchFriendPage': (context) => SearchFriendPage(),
+    '/registerPage': (context) => RegisterPage(),
+  };
+}
