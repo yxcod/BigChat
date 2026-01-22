@@ -4,6 +4,7 @@ import '../pages/mainPages/chatMainWidget.dart';
 import '../pages/mainPages/groupChatListPage.dart';
 import '../pages/chatDialog.dart';
 import '../pages/groupChatDialog.dart';
+import '../pages/groupChatSettingsPage.dart';
 import '../pages/friendManage/searchFriendPage.dart';
 import '../pages/friendManage/friendDetailPage.dart';
 import '../pages/friendManage/friendAddManagerPage.dart';
@@ -58,6 +59,15 @@ Widget getRootWidget() {
           );
         case '/groupChatList':
           return MaterialPageRoute(builder: (context) => GroupChatListPage());
+        case '/groupChatSettings':
+          final groupData = settings.arguments as Map<String, dynamic>;
+          return MaterialPageRoute(
+            builder: (context) => GroupChatSettingsPage(
+              groupId: groupData['groupId'] ?? '',
+              groupName: groupData['groupName'] ?? '',
+              groupMembers: groupData['groupMembers'] ?? [],
+            ),
+          );
         default:
           return null;
       }

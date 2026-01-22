@@ -6,12 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../utils/Gloabl.dart';
-import '../model/friendInfoModel.dart';
-import '../utils/WebSocketManager.dart';
-import '../model/messageModel.dart';
-import 'videoCallPage.dart';
-import '../utils/http.dart';
+import '../../utils/Gloabl.dart';
+import '../../model/friendInfoModel.dart';
+import '../../utils/WebSocketManager.dart';
+import '../../model/messageModel.dart';
+import '../videoCallPage.dart';
+import '../../utils/http.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final String groupId;
@@ -504,16 +504,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           IconButton(
             icon: Icon(Icons.more_vert, color: Colors.black),
             onPressed: () {
-              // 进入群管理页面
-              Navigator.push(
+              // 进入群聊设置页面
+              Navigator.pushNamed(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => GroupManagePage(
-                    groupId: widget.groupId,
-                    groupName: widget.groupName,
-                    groupMembers: widget.groupMembers,
-                  ),
-                ),
+                '/groupChatSettings',
+                arguments: {
+                  'groupId': widget.groupId,
+                  'groupName': widget.groupName,
+                  'groupMembers': widget.groupMembers,
+                },
               );
             },
           ),
