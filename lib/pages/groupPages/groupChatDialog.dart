@@ -1329,7 +1329,7 @@ class _GroupManagePageState extends State<GroupManagePage> {
                 context,
                 MaterialPageRoute(
                   builder: (context) =>
-                      GroupMembersPage(groupMembers: widget.groupMembers),
+                      GroupMembersManagePage(groupMembers: widget.groupMembers),
                 ),
               );
             },
@@ -1393,10 +1393,11 @@ class _GroupManagePageState extends State<GroupManagePage> {
   }
 }
 
-class GroupMembersPage extends StatelessWidget {
+class GroupMembersManagePage extends StatelessWidget {
   final List<FriendInfoModel> groupMembers;
 
-  GroupMembersPage({Key? key, required this.groupMembers}) : super(key: key);
+  GroupMembersManagePage({Key? key, required this.groupMembers})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {

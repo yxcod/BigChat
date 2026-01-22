@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../utils/Gloabl.dart';
+import 'package:image_picker/image_picker.dart';
+//import '../../utils/Gloabl.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
@@ -18,10 +20,62 @@ class GroupChatSettingsPage extends StatefulWidget {
 }
 
 class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
-  GlobalUtil globalUtil = GlobalUtil();
   String _groupName = '';
   String _groupAnnouncement = '未设置';
+  String _groupAvatar = 'https://via.placeholder.com/60';
   List<Map<String, dynamic>> _members = [];
+
+  Future<void> _pickGroupAvatar() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      setState(() {
+        _groupAvatar = image.path;
+      });
+
+      // 这里可以添加上传头像的逻辑
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text('提示'),
+            content: Text('群头像已更新'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('确定'),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
+  void _inviteMembers() async {
+    final result = await Navigator.pushNamed(context, '/selectContactsPage');
+    if (result != null && result is List<dynamic>) {
+      // 处理返回的选择结果
+      List<dynamic> selectedFriends = result;
+      // 这里可以添加邀请好友进群的逻辑
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text('提示'),
+            content: Text('已邀请 ${selectedFriends.length} 位好友'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('确定'),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -109,62 +163,12 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     }
   }
 
-  void _inviteMembers() {
-    // 实现邀请成员功能
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('邀请成员'),
-          content: Text('邀请成员功能待实现'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('确定'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   void _viewAllMembers() {
-    // 实现查看所有成员功能
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('群聊成员'),
-          content: Container(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _members.length,
-              itemBuilder: (context, index) {
-                final member = _members[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage: NetworkImage(member['avatar']),
-                  ),
-                  title: Text(member['name']),
-                  trailing: IconButton(
-                    icon: Icon(Icons.more_vert),
-                    onPressed: () {
-                      // 实现成员管理功能（如移除成员）
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('确定'),
-            ),
-          ],
-        );
-      },
+    // 导航到群成员页面
+    Navigator.pushNamed(
+      context,
+      '/groupMembersPage',
+      arguments: {'groupId': widget.groupId, 'groupName': widget.groupName},
     );
   }
 
@@ -470,6 +474,65 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                           children: [
                             Text(
                               _groupName,
+                              style: TextStyle(
+                                fontSize: 14.0,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              color: Colors.grey[400],
+                              size: 16.0,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 群头像设置
+                GestureDetector(
+                  onTap: _pickGroupAvatar,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.grey[100]!,
+                          width: 1.0,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '群头像',
+                          style: TextStyle(
+                            fontSize: 14.0,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 40.0,
+                              height: 40.0,
+                              margin: EdgeInsets.only(right: 8.0),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                image: DecorationImage(
+                                  image: _groupAvatar.startsWith('http')
+                                      ? NetworkImage(_groupAvatar)
+                                      : FileImage(File(_groupAvatar))
+                                            as ImageProvider,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '修改',
                               style: TextStyle(
                                 fontSize: 14.0,
                                 color: Colors.grey[600],

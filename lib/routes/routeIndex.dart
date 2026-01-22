@@ -6,6 +6,8 @@ import '../pages/groupPages/groupCreatePage.dart';
 import '../pages/chatDialog.dart';
 import '../pages/groupPages/groupChatDialog.dart';
 import '../pages/groupPages/groupChatSettingsPage.dart';
+import '../pages/groupPages/selectContactsPage.dart';
+import '../pages/groupPages/groupMembersPage.dart';
 import '../pages/friendManage/searchFriendPage.dart';
 import '../pages/friendManage/friendDetailPage.dart';
 import '../pages/friendManage/friendAddManagerPage.dart';
@@ -76,6 +78,14 @@ Widget getRootWidget() {
           );
         case '/groupCreatePage':
           return MaterialPageRoute(builder: (context) => GroupCreatePage());
+        case '/groupMembersPage':
+          final groupData = settings.arguments as Map<String, dynamic>? ?? {};
+          return MaterialPageRoute(
+            builder: (context) => GroupMembersPage(
+              groupId: groupData['groupId'] ?? 'default',
+              groupName: groupData['groupName'] ?? '默认群聊',
+            ),
+          );
         default:
           return null;
       }
@@ -89,5 +99,8 @@ Map<String, Widget Function(BuildContext)> getRoutes() {
     '/mainWidget': (context) => BigchatMainPage(),
     '/searchFriendPage': (context) => SearchFriendPage(),
     '/registerPage': (context) => RegisterPage(),
+    '/selectContactsPage': (context) => SelectContactsPage(),
+    '/groupMembersPage': (context) =>
+        GroupMembersPage(groupId: 'default', groupName: '默认群聊'),
   };
 }
