@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../pages/LoginPages/loginWidget.dart';
 import '../pages/mainPages/chatMainWidget.dart';
-import '../pages/mainPages/groupChatListPage.dart';
+import '../pages/groupPages/groupChatListPage.dart';
 import '../pages/chatDialog.dart';
-import '../pages/groupChatDialog.dart';
-import '../pages/groupChatSettingsPage.dart';
+import '../pages/groupPages/groupChatDialog.dart';
+import '../pages/groupPages/groupChatSettingsPage.dart';
 import '../pages/friendManage/searchFriendPage.dart';
 import '../pages/friendManage/friendDetailPage.dart';
 import '../pages/friendManage/friendAddManagerPage.dart';
@@ -57,7 +57,7 @@ Widget getRootWidget() {
               groupMembers: groupData['groupMembers'] ?? [],
             ),
           );
-        case '/groupChatList':
+        case '/groupChatListPage':
           return MaterialPageRoute(builder: (context) => GroupChatListPage());
         case '/groupChatSettings':
           final groupData = settings.arguments as Map<String, dynamic>;

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../utils/Gloabl.dart';
 
 class GroupChat {
   final String groupId;
@@ -35,7 +34,28 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
     ),
   ];
 
-  GlobalUtil globalUtil = GlobalUtil();
+  TextEditingController _searchController = TextEditingController();
+  List<GroupChat> _filteredGroupChats = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredGroupChats = _groupChats;
+  }
+
+  void _filterGroupChats(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredGroupChats = _groupChats;
+      } else {
+        _filteredGroupChats = _groupChats
+            .where(
+              (group) => group.name.toLowerCase().contains(query.toLowerCase()),
+            )
+            .toList();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,59 +65,107 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
         backgroundColor: Colors.white,
         elevation: 1,
       ),
-      body: ListView.builder(
-        itemCount: _groupChats.length,
-        itemBuilder: (context, index) {
-          final groupChat = _groupChats[index];
-          return GestureDetector(
-            onTap: () {
-              // 导航到群聊对话框
-              Navigator.pushNamed(
-                context,
-                '/groupChatDialog',
-                arguments: {
-                  'groupId': groupChat.groupId,
-                  'groupName': groupChat.name,
-                  'groupMembers': [], // 这里应该传递实际的群成员列表
-                },
-              );
-            },
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey[200]!, width: 1.0),
-                ),
-                color: Colors.white,
-              ),
-              child: Row(
-                children: [
-                  // 群头像
-                  Container(
-                    width: 50.0,
-                    height: 50.0,
-                    margin: EdgeInsets.only(right: 12.0),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      image: DecorationImage(
-                        image: NetworkImage(groupChat.avatar),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  // 群名
-                  Text(
-                    groupChat.name,
-                    style: TextStyle(
-                      fontSize: 16.0,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
+      body: Column(
+        children: [
+          // 搜索框
+          Container(
+            margin: EdgeInsets.all(16.0),
+            padding: EdgeInsets.symmetric(horizontal: 12.0),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8.0),
             ),
-          );
-        },
+            child: Row(
+              children: [
+                Icon(Icons.search, color: Colors.grey[500], size: 20),
+                SizedBox(width: 8.0),
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _filterGroupChats,
+                    decoration: InputDecoration(
+                      hintText: '搜索群聊',
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(color: Colors.grey[500]),
+                    ),
+                  ),
+                ),
+                if (_searchController.text.isNotEmpty)
+                  GestureDetector(
+                    onTap: () {
+                      _searchController.clear();
+                      _filterGroupChats('');
+                    },
+                    child: Icon(Icons.clear, color: Colors.grey[500], size: 20),
+                  ),
+              ],
+            ),
+          ),
+          // 群聊列表
+          Expanded(
+            child: ListView.builder(
+              itemCount: _filteredGroupChats.length,
+              itemBuilder: (context, index) {
+                final groupChat = _filteredGroupChats[index];
+                return GestureDetector(
+                  onTap: () {
+                    // 导航到群聊对话框
+                    Navigator.pushNamed(
+                      context,
+                      '/groupChatDialog',
+                      arguments: {
+                        'groupId': groupChat.groupId,
+                        'groupName': groupChat.name,
+                        'groupMembers': [], // 这里应该传递实际的群成员列表
+                      },
+                    );
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 12.0,
+                      vertical: 12.0,
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            // 群头像
+                            Container(
+                              width: 50.0,
+                              height: 50.0,
+                              margin: EdgeInsets.only(right: 12.0),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                image: DecorationImage(
+                                  image: NetworkImage(groupChat.avatar),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            // 群名
+                            Text(
+                              groupChat.name,
+                              style: TextStyle(
+                                fontSize: 16.0,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        // 下划线，不覆盖头像
+                        Container(
+                          margin: EdgeInsets.only(left: 54.0, top: 12.0),
+                          height: 1.0,
+                          color: Colors.grey[200],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

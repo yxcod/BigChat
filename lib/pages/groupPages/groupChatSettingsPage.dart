@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utils/Gloabl.dart';
+import '../../utils/Gloabl.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;

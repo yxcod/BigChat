@@ -246,7 +246,9 @@ class _FriendsPage extends State<Friendspage>
                     color: Colors.grey,
                     size: 16,
                   ),
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pushNamed(context, '/groupChatListPage');
+                  },
                 ),
               ],
             ),
