@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../pages/LoginPages/loginWidget.dart';
 import '../pages/mainPages/chatMainWidget.dart';
 import '../pages/chatDialog.dart';
+import '../pages/groupChatDialog.dart';
 import '../pages/friendManage/searchFriendPage.dart';
 import '../pages/friendManage/friendDetailPage.dart';
 import '../pages/friendManage/friendAddManagerPage.dart';
@@ -44,6 +45,15 @@ Widget getRootWidget() {
           final profileInfo = settings.arguments as Map<String, dynamic>;
           return MaterialPageRoute(
             builder: (context) => ProfileEditPage(profileInfo: profileInfo),
+          );
+        case '/groupChatDialog':
+          final groupData = settings.arguments as Map<String, dynamic>;
+          return MaterialPageRoute(
+            builder: (context) => GroupChatDialogPage(
+              groupId: groupData['groupId'] ?? '',
+              groupName: groupData['groupName'] ?? '',
+              groupMembers: groupData['groupMembers'] ?? [],
+            ),
           );
         default:
           return null;
