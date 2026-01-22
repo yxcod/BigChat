@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -11,8 +10,8 @@ import '../utils/Gloabl.dart';
 import '../model/friendInfoModel.dart';
 import '../utils/WebSocketManager.dart';
 import '../model/messageModel.dart';
-import '../utils/http.dart';
 import 'videoCallPage.dart';
+import '../utils/http.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final String groupId;
@@ -149,15 +148,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
       // 生成图片文件名
       String imageName = '${globalUtil.userName}_${widget.groupId}_$msgId.jpg';
-
-      // 模拟上传图片并获取网络URL
-      // 实际应用中应该调用上传API
-      String imageUrl = 'https://via.placeholder.com/300x300?text=Image';
-
+      // 上传图片到服务器
+      await _uploadImage(imageFile, imageName);
       // 创建消息对象
       Message newMessage = Message(
         msgId: msgId,
-        content: imageUrl,
+        content: imageName,
         isMe: true,
         time: time,
         isRead: false,
@@ -178,7 +174,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         // 构建并发送WebSocket消息
         _sendWebSocketMessage(
           msgId: msgId,
-          content: imageUrl,
+          content: imageName,
           receiver: widget.groupId,
           conversationId: conversationId,
           messageType: MessageType.image,
@@ -199,6 +195,24 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       }
     } catch (e) {
       debugPrint('发送图片消息失败: $e');
+    }
+  }
+
+  // 上传图片到服务器
+  Future<void> _uploadImage(File imageFile, String imageName) async {
+    try {
+      final httpUtil = HttpUtil();
+
+      // 将File转换为Uint8List
+      Uint8List imageData = await imageFile.readAsBytes();
+
+      // 调用HttpUtil的uploadImage接口
+      await httpUtil.uploadImage(imageName, imageData);
+
+      debugPrint('Image uploaded successfully');
+    } catch (e) {
+      debugPrint('Error uploading image: $e');
+      rethrow;
     }
   }
 
@@ -961,9 +975,9 @@ class GroupMessageBubble extends StatelessWidget {
   // 删除图片消息
   void _deleteImageMessage(BuildContext context) {
     // 从全局聊天记录中删除消息
-    String receiver = message.isMe
-        ? '' // 群聊消息不需要指定接收者
-        : globalUtil.userName ?? '';
+    // String receiver = message.isMe
+    //     ? '' // 群聊消息不需要指定接收者
+    //     : globalUtil.userName ?? '';
     globalUtil.deleteMessage(message.conversationId, message.msgId);
   }
 
@@ -1020,9 +1034,9 @@ class GroupMessageBubble extends StatelessWidget {
       Clipboard.setData(ClipboardData(text: message.content));
     } else if (result == 'delete') {
       // 删除消息
-      String receiver = message.isMe
-          ? '' // 群聊消息不需要指定接收者
-          : globalUtil.userName ?? '';
+      // String receiver = message.isMe
+      //     ? '' // 群聊消息不需要指定接收者
+      //     : globalUtil.userName ?? '';
       globalUtil.deleteMessage(message.conversationId, message.msgId);
     }
   }

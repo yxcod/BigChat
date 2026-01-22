@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../pages/LoginPages/loginWidget.dart';
 import '../pages/mainPages/chatMainWidget.dart';
+import '../pages/mainPages/groupChatListPage.dart';
 import '../pages/chatDialog.dart';
 import '../pages/groupChatDialog.dart';
 import '../pages/friendManage/searchFriendPage.dart';
@@ -55,6 +56,8 @@ Widget getRootWidget() {
               groupMembers: groupData['groupMembers'] ?? [],
             ),
           );
+        case '/groupChatList':
+          return MaterialPageRoute(builder: (context) => GroupChatListPage());
         default:
           return null;
       }
