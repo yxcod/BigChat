@@ -64,6 +64,14 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
         title: Text('群聊'),
         backgroundColor: Colors.white,
         elevation: 1,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.add),
+            onPressed: () {
+              Navigator.pushNamed(context, '/groupCreatePage');
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -128,6 +136,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
                     child: Column(
                       children: [
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             // 群头像
                             Container(
@@ -143,11 +152,13 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
                               ),
                             ),
                             // 群名
-                            Text(
-                              groupChat.name,
-                              style: TextStyle(
-                                fontSize: 16.0,
-                                fontWeight: FontWeight.w500,
+                            Expanded(
+                              child: Text(
+                                groupChat.name,
+                                style: TextStyle(
+                                  fontSize: 16.0,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],

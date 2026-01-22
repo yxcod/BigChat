@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import '../../utils/messageUtil.dart';
 import '../../utils/Gloabl.dart';
 import '../../api/getInfoAPI.dart';
 import '../../api/getFriendRequestsAPI.dart';
@@ -135,7 +134,7 @@ class _FriendsPage extends State<Friendspage>
 
   //新建群聊
   void _showFindGroup() {
-    MessageUtil.showSuccess(context, '添加群聊');
+    Navigator.pushNamed(context, '/groupCreatePage');
   }
 
   @override

@@ -198,6 +198,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text('群聊设置'),
         backgroundColor: Colors.white,
@@ -300,45 +301,15 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                 ),
                 SizedBox(height: 12.0),
                 Container(
-                  height: 80.0,
-                  child: GridView.builder(
+                  height: 70.0,
+                  child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12.0,
-                      crossAxisSpacing: 12.0,
-                      childAspectRatio: 0.8,
-                    ),
-                    itemCount: _members.length + 1, // +1 用于邀请按钮
+                    itemCount: _members.length + 2, // +1 用于邀请按钮, +1 用于移除按钮
                     itemBuilder: (context, index) {
                       if (index < _members.length) {
                         final member = _members[index];
-                        return Column(
-                          children: [
-                            Container(
-                              width: 40.0,
-                              height: 40.0,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                image: DecorationImage(
-                                  image: NetworkImage(member['avatar']),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                            SizedBox(height: 4.0),
-                            Text(
-                              member['name'],
-                              style: TextStyle(fontSize: 12.0),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        );
-                      } else {
-                        // 邀请按钮
-                        return GestureDetector(
-                          onTap: _inviteMembers,
+                        return Container(
+                          margin: EdgeInsets.only(right: 16.0),
                           child: Column(
                             children: [
                               Container(
@@ -346,19 +317,108 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                                 height: 40.0,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Colors.grey[200],
+                                  image: DecorationImage(
+                                    image: NetworkImage(member['avatar']),
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
-                                child: Icon(Icons.add, color: Colors.grey[500]),
                               ),
                               SizedBox(height: 4.0),
                               Text(
-                                '邀请',
-                                style: TextStyle(
-                                  fontSize: 12.0,
-                                  color: Colors.grey[600],
-                                ),
+                                member['name'],
+                                style: TextStyle(fontSize: 12.0),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
+                          ),
+                        );
+                      } else if (index == _members.length) {
+                        // 邀请按钮
+                        return Container(
+                          margin: EdgeInsets.only(right: 16.0),
+                          child: GestureDetector(
+                            onTap: _inviteMembers,
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 40.0,
+                                  height: 40.0,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.grey[200],
+                                  ),
+                                  child: Icon(
+                                    Icons.add,
+                                    color: Colors.grey[500],
+                                  ),
+                                ),
+                                SizedBox(height: 4.0),
+                                Text(
+                                  '邀请',
+                                  style: TextStyle(
+                                    fontSize: 12.0,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      } else {
+                        // 移除按钮
+                        return Container(
+                          margin: EdgeInsets.only(right: 16.0),
+                          child: GestureDetector(
+                            onTap: () {
+                              // 实现移除成员功能
+                              showDialog(
+                                context: context,
+                                builder: (context) {
+                                  return AlertDialog(
+                                    title: Text('移除成员'),
+                                    content: Text('请选择要移除的成员'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: Text('取消'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          // 这里可以添加移除成员的逻辑
+                                        },
+                                        child: Text('确定'),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 40.0,
+                                  height: 40.0,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.grey[200],
+                                  ),
+                                  child: Icon(
+                                    Icons.remove,
+                                    color: Colors.grey[500],
+                                  ),
+                                ),
+                                SizedBox(height: 4.0),
+                                Text(
+                                  '移除',
+                                  style: TextStyle(
+                                    fontSize: 12.0,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       }
@@ -424,6 +484,35 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+
+                // 群号
+                Container(
+                  padding: EdgeInsets.symmetric(vertical: 12.0),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey[100]!, width: 1.0),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '群号',
+                        style: TextStyle(
+                          fontSize: 14.0,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                      Text(
+                        widget.groupId,
+                        style: TextStyle(
+                          fontSize: 14.0,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
