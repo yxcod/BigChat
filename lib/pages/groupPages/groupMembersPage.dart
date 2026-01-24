@@ -18,7 +18,7 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
   TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _groupMembers = [];
   List<Map<String, dynamic>> _filteredMembers = [];
-  List<String> _userFriends = []; // 模拟用户好友列表，存储好友的userId
+  //List<String> _userFriends = []; // 模拟用户好友列表，存储好友的userId
 
   @override
   void initState() {
@@ -108,7 +108,7 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
 
   void _loadUserFriends() {
     // 模拟加载用户好友列表
-    _userFriends = ['1', '2', '3', '5', '7', '8', '10', '12'];
+    //_userFriends = ['1', '2', '3', '5', '7', '8', '10', '12'];
   }
 
   void _filterMembers(String query) {

@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import './gloabl.dart';
+import './Gloabl.dart';
+
 
 class HttpUtil {
   static final HttpUtil _instance = HttpUtil._internal();
@@ -135,6 +136,8 @@ class HttpUtil {
       onReceiveProgress: onReceiveProgress,
     );
   }
+
+
 
   // DELETE请求
   Future<Response> delete(
