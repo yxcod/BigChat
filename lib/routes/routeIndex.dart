@@ -15,7 +15,6 @@ import '../pages/friendManage/addFriendRequestPage.dart';
 import '../pages/profileEditPage.dart';
 import '../pages/LoginPages/registerPage.dart';
 import '../model/friendRequestModel.dart';
-import '../model/friendInfoModel.dart';
 
 Widget getRootWidget() {
   return MaterialApp(
@@ -58,11 +57,6 @@ Widget getRootWidget() {
             builder: (context) => GroupChatDialogPage(
               groupId: groupData['groupId'] ?? '',
               groupName: groupData['groupName'] ?? '',
-              groupMembers:
-                  (groupData['groupMembers'] as List<dynamic>?)
-                      ?.map((e) => e as FriendInfoModel)
-                      .toList() ??
-                  [],
             ),
           );
         case '/groupChatListPage':
@@ -73,7 +67,7 @@ Widget getRootWidget() {
             builder: (context) => GroupChatSettingsPage(
               groupId: groupData['groupId'] ?? '',
               groupName: groupData['groupName'] ?? '',
-              groupMembers: groupData['groupMembers'] ?? [],
+              groupMembers: [],
             ),
           );
         case '/groupCreatePage':

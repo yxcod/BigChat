@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../utils/gloabl.dart';
+import '../../utils/Gloabl.dart';
+import '../../api/getGroupInfoAPI.dart';
 
 class GroupCreatePage extends StatefulWidget {
   const GroupCreatePage({Key? key}) : super(key: key);
@@ -34,7 +35,7 @@ class _GroupCreatePageState extends State<GroupCreatePage> {
     }
   }
 
-  void _createGroup() {
+  void _createGroup() async {
     if (_groupIdController.text.isEmpty || _groupNameController.text.isEmpty) {
       showDialog(
         context: context,
@@ -73,30 +74,135 @@ class _GroupCreatePageState extends State<GroupCreatePage> {
       return;
     }
 
-    // 实现创建群聊的逻辑
+    // 显示加载对话框
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
           title: Text('创建群聊'),
-          content: Text('确定要创建群聊吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('取消'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pop(context);
-                // 这里可以添加创建群聊的逻辑
-              },
-              child: Text('确定'),
-            ),
-          ],
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('正在创建群聊...'),
+            ],
+          ),
         );
       },
     );
+
+    try {
+      // 检查 userName 是否为空
+      if (globalUtil.userName == null) {
+        // 关闭加载对话框
+        Navigator.pop(context);
+
+        // 显示错误提示
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text('错误'),
+              content: Text('用户信息未初始化，请重新登录'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+        return;
+      }
+
+      // 调用 createGroup 函数创建群聊
+      int code = await createGroup(
+        globalUtil.userName!,
+        _groupNameController.text,
+        int.parse(_groupIdController.text),
+      );
+
+      // 关闭加载对话框
+      Navigator.pop(context);
+
+      if (code == 100) {
+        // 创建成功
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text('成功'),
+              content: Text('群聊创建成功！'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.pop(context);
+                  },
+                  child: Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+      } else if (code == 102) {
+        // 群 ID 重复
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text('提示'),
+              content: Text('群聊号已存在，请更换其他群聊号'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+      } else {
+        // 其他错误
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text('提示'),
+              content: Text('创建群聊失败，请稍后重试'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+      }
+    } catch (e) {
+      // 关闭加载对话框
+      Navigator.pop(context);
+
+      // 显示错误提示
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text('错误'),
+            content: Text('创建群聊失败，请稍后重试'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('确定'),
+              ),
+            ],
+          );
+        },
+      );
+    }
   }
 
   @override
@@ -148,12 +254,11 @@ class _GroupCreatePageState extends State<GroupCreatePage> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8.0),
-                        borderSide: BorderSide(
-                          color: Colors.blue,
-                          width: 1.0,
-                        ),
+                        borderSide: BorderSide(color: Colors.blue, width: 1.0),
                       ),
-                      errorText: _groupIdError.isNotEmpty ? _groupIdError : null,
+                      errorText: _groupIdError.isNotEmpty
+                          ? _groupIdError
+                          : null,
                       contentPadding: EdgeInsets.symmetric(
                         horizontal: 12.0,
                         vertical: 10.0,
@@ -192,10 +297,7 @@ class _GroupCreatePageState extends State<GroupCreatePage> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8.0),
-                        borderSide: BorderSide(
-                          color: Colors.blue,
-                          width: 1.0,
-                        ),
+                        borderSide: BorderSide(color: Colors.blue, width: 1.0),
                       ),
                       contentPadding: EdgeInsets.symmetric(
                         horizontal: 12.0,

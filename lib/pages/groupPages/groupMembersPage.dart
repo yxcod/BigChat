@@ -1,4 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+
+import '../../model/groupMemberModel.dart';
+import '../../api/getGroupMemberAPI.dart';
+import '../../utils/Gloabl.dart';
 
 class GroupMembersPage extends StatefulWidget {
   final String groupId;
@@ -16,253 +22,252 @@ class GroupMembersPage extends StatefulWidget {
 
 class _GroupMembersPageState extends State<GroupMembersPage> {
   TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _groupMembers = [];
-  List<Map<String, dynamic>> _filteredMembers = [];
-  //List<String> _userFriends = []; // 模拟用户好友列表，存储好友的userId
+  List<GroupMemberModel> _groupMembers = [];
+  List<GroupMemberModel> _filteredMembers = [];
+  late Timer _timer;
+  final globalUtil = GlobalUtil();
+  // 静态缓存已经加载成功的头像 URL，避免重复加载
+  static Map<String, String> _avatarCache = {};
 
   @override
   void initState() {
     super.initState();
-    _loadGroupMembers();
-    _loadUserFriends();
-  }
-
-  void _loadGroupMembers() {
-    // 模拟加载群成员数据
-    _groupMembers = [
-      {
-        'id': '1',
-        'name': '王刚强',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': true,
-      },
-      {
-        'id': '2',
-        'name': '鹿铃',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': true,
-      },
-      {
-        'id': '3',
-        'name': '刘仁杰',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': true,
-      },
-      {
-        'id': '4',
-        'name': '南风',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': false,
-      },
-      {
-        'id': '5',
-        'name': '张蕾蕾',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': true,
-      },
-      {
-        'id': '6',
-        'name': '@琪冰',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': false,
-      },
-      {
-        'id': '7',
-        'name': '汪旭',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': true,
-      },
-      {
-        'id': '8',
-        'name': '祖航',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': true,
-      },
-      {
-        'id': '9',
-        'name': '夏星',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': false,
-      },
-      {
-        'id': '10',
-        'name': '陈子昊',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': true,
-      },
-      {
-        'id': '11',
-        'name': '耿良超',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': false,
-      },
-      {
-        'id': '12',
-        'name': '吴冠群',
-        'avatar': 'https://via.placeholder.com/40',
-        'isFriend': true,
-      },
-    ];
+    print('初始化群成员页面');
+    // 直接设置 _filteredMembers，避免 _filterMembers 方法可能的问题
     _filteredMembers = _groupMembers;
+    print('初始化默认数据完成，成员数: ${_filteredMembers.length}');
+    // 初始化时获取一次成员列表
+    _fetchGroupMembers();
+    // 设置定时器，每秒获取一次成员列表
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      _fetchGroupMembers();
+    });
   }
 
-  void _loadUserFriends() {
-    // 模拟加载用户好友列表
-    //_userFriends = ['1', '2', '3', '5', '7', '8', '10', '12'];
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchGroupMembers() async {
+    try {
+      print('开始获取群成员，groupId: ${widget.groupId}');
+      int groupIdInt = int.parse(widget.groupId);
+      print('转换后的 groupIdInt: $groupIdInt');
+      List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
+      print('获取群成员成功，数量: ${members.length}');
+      // 确保成员列表不为空
+      if (members.isEmpty) {
+        print('获取到的成员列表为空，使用模拟数据');
+        // members = [
+        //   GroupMemberModel(userId: '1', groupNickName: '群主', role: 2),
+        //   GroupMemberModel(userId: '2', groupNickName: '管理员', role: 1),
+        //   GroupMemberModel(userId: '3', groupNickName: '成员1', role: 0),
+        //   GroupMemberModel(userId: '4', groupNickName: '成员2', role: 0),
+        // ];
+      }
+      setState(() {
+        _groupMembers = members;
+        // 直接设置 _filteredMembers，避免 _filterMembers 方法可能的问题
+        _filteredMembers = members;
+        print('更新状态成功，_filteredMembers 数量: ${_filteredMembers.length}');
+      });
+    } catch (e) {
+      print('获取群成员失败: $e');
+    }
   }
 
   void _filterMembers(String query) {
+    print('开始过滤成员，查询条件: "$query"，总成员数: ${_groupMembers.length}');
     if (query.isEmpty) {
       _filteredMembers = _groupMembers;
     } else {
       _filteredMembers = _groupMembers.where((member) {
-        return member['name'].toLowerCase().contains(query.toLowerCase());
+        return member.groupNickName.toLowerCase().contains(query.toLowerCase());
       }).toList();
+      // 确保过滤后的列表不为空
+      if (_filteredMembers.isEmpty) {
+        print('过滤结果为空，使用原始列表');
+        _filteredMembers = _groupMembers;
+      }
     }
-    setState(() {});
-  }
-
-  void _addFriend(String userId) {
-    // 模拟添加好友操作
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('添加好友'),
-          content: Text('发送好友请求成功'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('确定'),
-            ),
-          ],
-        );
-      },
-    );
+    print('过滤完成，结果数: ${_filteredMembers.length}');
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('群聊成员'),
+    try {
+      return Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+        appBar: AppBar(
+          title: Text('群聊成员'),
+          backgroundColor: Colors.white,
+          elevation: 1,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () {
+              Navigator.pop(context);
+            },
+          ),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.sort),
+              onPressed: () {
+                // 排序功能
+              },
+            ),
+            IconButton(
+              icon: Icon(Icons.more_vert),
+              onPressed: () {
+                // 更多功能
+              },
+            ),
+          ],
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.sort),
-            onPressed: () {
-              // 排序功能
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.more_vert),
-            onPressed: () {
-              // 更多功能
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // 搜索框
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            child: TextField(
-              controller: _searchController,
-              onChanged: _filterMembers,
-              decoration: InputDecoration(
-                hintText: '搜索',
-                prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8.0),
-                  borderSide: BorderSide.none,
+        body: Column(
+          children: [
+            // 搜索框
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (query) {
+                  _filterMembers(query);
+                  setState(() {});
+                },
+                decoration: InputDecoration(
+                  hintText: '搜索',
+                  prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[100],
                 ),
-                filled: true,
-                fillColor: Colors.grey[100],
               ),
             ),
-          ),
 
-          // 群成员列表
-          Expanded(
-            child: ListView.builder(
-              itemCount: _filteredMembers.length,
-              itemBuilder: (context, index) {
-                final member = _filteredMembers[index];
-                bool isFriend = member['isFriend'] ?? false;
-
-                return Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 12.0,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Colors.grey[100]!, width: 1.0),
+            // 群成员列表
+            Expanded(
+              child: ListView.builder(
+                itemCount: _filteredMembers.length,
+                itemBuilder: (context, index) {
+                  print('构建列表项，索引: $index');
+                  final member = _filteredMembers[index];
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.grey[200],
+                      radius: 20,
+                      child: ClipOval(
+                        child: CachedNetworkImage(
+                          imageUrl: _getAvatarUrl(member.userId),
+                          fit: BoxFit.cover,
+                          width: 40,
+                          height: 40,
+                          errorWidget: (context, error, stackTrace) {
+                            print('加载头像失败: $error');
+                            return Text(member.groupNickName.substring(0, 1));
+                          },
+                        ),
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      // 头像
-                      Container(
-                        width: 40.0,
-                        height: 40.0,
-                        margin: EdgeInsets.only(right: 12.0),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          image: DecorationImage(
-                            image: NetworkImage(member['avatar']),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-
-                      // 昵称
-                      Expanded(
-                        child: Text(
-                          member['name'],
-                          style: TextStyle(fontSize: 16.0),
-                        ),
-                      ),
-
-                      // 添加按钮（仅当非好友时显示）
-                      if (!isFriend) ...[
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 6.0,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16.0),
-                            border: Border.all(color: Colors.green, width: 1.0),
-                          ),
-                          child: GestureDetector(
-                            onTap: () => _addFriend(member['id']),
-                            child: Text(
-                              '添加',
-                              style: TextStyle(
-                                fontSize: 14.0,
-                                color: Colors.green,
-                              ),
-                            ),
+                    title: Row(
+                      children: [
+                        _buildRoleBadge(member.role),
+                        SizedBox(width: 8),
+                        Text(
+                          member.groupNickName,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                );
-              },
+                    ),
+                    subtitle: Text('ID: ${member.userId}'),
+                  );
+                },
+              ),
             ),
+          ],
+        ),
+      );
+    } catch (e) {
+      print('构建页面失败: $e');
+      // 显示错误页面
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          title: Text('群聊成员'),
+          backgroundColor: Colors.white,
+          elevation: 1,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () {
+              Navigator.pop(context);
+            },
           ),
-        ],
+        ),
+        body: Center(child: Text('页面加载失败，请重试')),
+      );
+    }
+  }
+
+  // 获取头像 URL，使用缓存避免重复加载
+  String _getAvatarUrl(String userId) {
+    try {
+      if (_avatarCache.containsKey(userId)) {
+        return _avatarCache[userId]!;
+      } else {
+        String url = globalUtil.getImageURL(userId, 'head.jpg');
+        _avatarCache[userId] = url;
+        return url;
+      }
+    } catch (e) {
+      print('获取头像 URL 失败: $e');
+      return 'https://via.placeholder.com/40';
+    }
+  }
+
+  // 构建角色标记
+  Widget _buildRoleBadge(int role) {
+    String text;
+    Color color;
+
+    switch (role) {
+      case 2:
+        text = '群主';
+        color = Colors.orange;
+        break;
+      case 1:
+        text = '管理员';
+        color = Colors.green;
+        break;
+      case 0:
+        text = '成员';
+        color = Colors.grey;
+        break;
+      default:
+        text = '成员';
+        color = Colors.grey;
+        break;
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

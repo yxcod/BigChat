@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/foundation.dart';
@@ -6,8 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../utils/gloabl.dart';
-import '../../model/friendInfoModel.dart';
+import '../../utils/Gloabl.dart';
+import '../../model/groupMemberModel.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../model/messageModel.dart';
 import '../videoCallPage.dart';
@@ -16,13 +17,11 @@ import '../../utils/http.dart';
 class GroupChatDialogPage extends StatefulWidget {
   final String groupId;
   final String groupName;
-  final List<FriendInfoModel> groupMembers;
 
   GroupChatDialogPage({
     Key? key,
     required this.groupId,
     required this.groupName,
-    required this.groupMembers,
   }) : super(key: key);
 
   @override
@@ -511,7 +510,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                 arguments: {
                   'groupId': widget.groupId,
                   'groupName': widget.groupName,
-                  'groupMembers': widget.groupMembers,
                 },
               );
             },
@@ -552,7 +550,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                     );
                     final message = groupMessages[index];
                     // 获取消息的未读人数
-                    int unreadCount = widget.groupMembers.length - 1; // 默认值
+                    int unreadCount = 0; // 默认值
                     final msgStatusIndex = _messageReadStatus.indexWhere(
                       (status) => status['msgId'] == message.msgId,
                     );
@@ -564,7 +562,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
                     return GroupMessageBubble(
                       message: message,
-                      groupMembers: widget.groupMembers,
                       currentUserAvatar: globalUtil.userInfoModel.avatar,
                       onReadStatusTap: () {
                         _showReadStatusList(message.msgId);
@@ -677,12 +674,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     _messageReadStatus.add({
       'msgId': msgId,
       'readCount': 0,
-      'unreadCount': widget.groupMembers.length - 1, // 减去自己
+      'unreadCount': 0, // 减去自己
       'readMembers': [],
-      'unreadMembers': widget.groupMembers
-          .where((member) => member.userName != globalUtil.userName)
-          .map((member) => member.userName)
-          .toList(),
+      'unreadMembers': [], // 默认值
     });
 
     // 更新UI并滚动到底部
@@ -768,12 +762,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       orElse: () => {
         'msgId': msgId,
         'readCount': 0,
-        'unreadCount': widget.groupMembers.length - 1,
+        'unreadCount': 0,
         'readMembers': [],
-        'unreadMembers': widget.groupMembers
-            .where((member) => member.userName != GlobalUtil().userName)
-            .map((member) => member.userName)
-            .toList(),
+        'unreadMembers': [], // 默认值
       },
     );
 
@@ -797,22 +788,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                   itemCount: msgStatus['readMembers'].length,
                   itemBuilder: (context, index) {
                     final memberName = msgStatus['readMembers'][index];
-                    final member = widget.groupMembers.firstWhere(
-                      (m) => m.userName == memberName,
-                      orElse: () => FriendInfoModel(
-                        userName: memberName,
-                        nickName: memberName,
-                        remarks: '',
-                        avatar: '',
-                        signature: '',
-                        isOnline: false,
-                      ),
+                    final member = GroupMemberModel(
+                      userId: memberName,
+                      groupNickName: memberName,
                     );
                     return ListTile(
                       leading: CircleAvatar(
-                        child: Text(member.nickName?.substring(0, 1) ?? '?'),
+                        child: Text(member.groupNickName.substring(0, 1)),
                       ),
-                      title: Text(member.nickName ?? member.userName ?? '未知'),
+                      title: Text(member.groupNickName),
                     );
                   },
                 ),
@@ -828,24 +812,17 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                   itemCount: msgStatus['unreadMembers'].length,
                   itemBuilder: (context, index) {
                     final memberName = msgStatus['unreadMembers'][index];
-                    final member = widget.groupMembers.firstWhere(
-                      (m) => m.userName == memberName,
-                      orElse: () => FriendInfoModel(
-                        userName: memberName,
-                        nickName: memberName,
-                        remarks: '',
-                        avatar: '',
-                        signature: '',
-                        isOnline: false,
-                      ),
+                    final member = GroupMemberModel(
+                      userId: memberName,
+                      groupNickName: memberName,
                     );
                     return ListTile(
                       leading: CircleAvatar(
-                        child: Text(member.nickName?.substring(0, 1) ?? '?'),
+                        child: Text(member.groupNickName.substring(0, 1)),
                         backgroundColor: Colors.grey[300],
                       ),
                       title: Text(
-                        member.nickName ?? member.userName ?? '未知',
+                        member.groupNickName,
                         style: TextStyle(color: Colors.grey),
                       ),
                     );
@@ -876,7 +853,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
 class GroupMessageBubble extends StatelessWidget {
   final Message message;
-  final List<FriendInfoModel> groupMembers;
   final String? currentUserAvatar;
   final VoidCallback onReadStatusTap;
   final int unreadCount;
@@ -885,7 +861,6 @@ class GroupMessageBubble extends StatelessWidget {
 
   GroupMessageBubble({
     required this.message,
-    required this.groupMembers,
     required this.currentUserAvatar,
     required this.onReadStatusTap,
     required this.unreadCount,
@@ -1256,175 +1231,16 @@ class GroupMessageBubble extends StatelessWidget {
     if (message.isMe) {
       return globalUtil.userName ?? '我';
     } else {
-      // 由于Message类中没有存储发送者信息，这里返回第一个群成员的名称
+      // 由于Message类中没有存储发送者信息，这里返回默认值
       // 实际应用中应该从消息中获取发送者ID并查找对应的群成员
-      return groupMembers.isNotEmpty
-          ? (groupMembers[0].nickName ?? groupMembers[0].userName ?? '未知')
-          : '未知';
+      return '群成员';
     }
   }
 
   // 获取发送者头像
   String? _getSenderAvatar() {
     // 这里简化处理，实际应该从消息中获取发送者ID，然后查找对应的群成员信息
-    if (!message.isMe && groupMembers.isNotEmpty) {
-      return groupMembers[0].avatar;
-    }
+    // GroupMemberModel 没有 avatar 字段，这里返回 null
     return null;
-  }
-}
-
-class GroupManagePage extends StatefulWidget {
-  final String groupId;
-  final String groupName;
-  final List<FriendInfoModel> groupMembers;
-
-  GroupManagePage({
-    Key? key,
-    required this.groupId,
-    required this.groupName,
-    required this.groupMembers,
-  }) : super(key: key);
-
-  @override
-  _GroupManagePageState createState() => _GroupManagePageState();
-}
-
-class _GroupManagePageState extends State<GroupManagePage> {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('群管理'),
-        backgroundColor: Colors.white,
-        elevation: 1,
-      ),
-      body: ListView(
-        padding: EdgeInsets.all(16),
-        children: [
-          // 群名称
-          ListTile(
-            title: Text('群名称'),
-            subtitle: Text(widget.groupName),
-            trailing: Icon(Icons.chevron_right),
-            onTap: () {
-              // 修改群名称
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('修改群名称功能开发中'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-          ),
-          Divider(),
-          // 群成员
-          ListTile(
-            title: Text('群成员'),
-            subtitle: Text('${widget.groupMembers.length}人'),
-            trailing: Icon(Icons.chevron_right),
-            onTap: () {
-              // 查看群成员
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                      GroupMembersManagePage(groupMembers: widget.groupMembers),
-                ),
-              );
-            },
-          ),
-          Divider(),
-          // 群公告
-          ListTile(
-            title: Text('群公告'),
-            subtitle: Text('未设置'),
-            trailing: Icon(Icons.chevron_right),
-            onTap: () {
-              // 修改群公告
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('修改群公告功能开发中'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-          ),
-          Divider(),
-          // 退出群聊
-          ListTile(
-            title: Text('退出群聊', style: TextStyle(color: Colors.red)),
-            onTap: () {
-              // 退出群聊
-              showDialog(
-                context: context,
-                builder: (context) {
-                  return AlertDialog(
-                    title: Text('退出群聊'),
-                    content: Text('确定要退出该群聊吗？'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text('取消'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.pop(context); // 退出群管理页面
-                          Navigator.pop(context); // 退出群聊页面
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('已退出群聊'),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                        child: Text('确定', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class GroupMembersManagePage extends StatelessWidget {
-  final List<FriendInfoModel> groupMembers;
-
-  GroupMembersManagePage({Key? key, required this.groupMembers})
-    : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('群成员'),
-        backgroundColor: Colors.white,
-        elevation: 1,
-      ),
-      body: ListView.builder(
-        itemCount: groupMembers.length,
-        itemBuilder: (context, index) {
-          final member = groupMembers[index];
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundImage: member.avatar != null
-                  ? NetworkImage(member.avatar!)
-                  : null,
-              child: member.avatar == null
-                  ? Text(member.nickName?.substring(0, 1) ?? '?')
-                  : null,
-            ),
-            title: Text(member.nickName ?? member.userName ?? '未知'),
-            subtitle: Text(member.userName ?? ''),
-          );
-        },
-      ),
-    );
   }
 }

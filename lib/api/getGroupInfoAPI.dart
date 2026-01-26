@@ -33,7 +33,11 @@ Future<int> createGroup(String userName, String groupName, int groupId) async {
     final httpUtil = HttpUtil();
     final response = await httpUtil.post(
       '/api/group/createGroup',
-      data: {'userName': userName, 'groupName': groupName, 'groupId': groupId},
+      data: {
+        'createUserName': userName,
+        'groupName': groupName,
+        'groupId': groupId,
+      },
     );
 
     if (response.statusCode == 200) {

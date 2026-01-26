@@ -1,17 +1,25 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'groupMembersPage.dart';
+import '../../model/groupMemberModel.dart';
+import '../../model/groupInfoModel.dart';
+import '../../api/getGroupMemberAPI.dart';
+import '../../api/getGroupInfoAPI.dart';
+import '../../utils/Gloabl.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
   final String groupName;
-  final List<dynamic> groupMembers;
+  final List<GroupMemberModel> groupMembers;
 
   const GroupChatSettingsPage({
     Key? key,
     required this.groupId,
     required this.groupName,
-    required this.groupMembers,
+    this.groupMembers = const [],
   }) : super(key: key);
 
   @override
@@ -23,6 +31,20 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   String _groupAnnouncement = '未设置';
   String _groupAvatar = 'https://via.placeholder.com/60';
   List<Map<String, dynamic>> _members = [];
+  late Timer _timer;
+  final globalUtil = GlobalUtil();
+  // 静态缓存已经加载成功的头像 URL，避免重复加载
+  static Map<String, String> _avatarCache = {};
+  // 静态缓存已经加载成功的群头像 URL，避免重复加载
+  static Map<String, String> _groupAvatarCache = {};
+  // 当前用户是否为群主
+  bool _isOwner = false;
+  // 当前用户的本群昵称
+  String _myNickname = '';
+  // 群的创建时间
+  String _groupCreatedAt = '';
+  // 群公告
+  String _groupDescription = '';
 
   Future<void> _pickGroupAvatar() async {
     final ImagePicker picker = ImagePicker();
@@ -80,17 +102,124 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   void initState() {
     super.initState();
     _groupName = widget.groupName;
-    // 模拟群成员数据
-    _members = [
-      {'id': '1', 'name': '刘仁杰', 'avatar': 'https://via.placeholder.com/40'},
-      {'id': '2', 'name': '汪旭', 'avatar': 'https://via.placeholder.com/40'},
-      {'id': '3', 'name': '祖航', 'avatar': 'https://via.placeholder.com/40'},
-      {'id': '4', 'name': '夏星', 'avatar': 'https://via.placeholder.com/40'},
-      {'id': '5', 'name': '陈子昊', 'avatar': 'https://via.placeholder.com/40'},
-      {'id': '6', 'name': '耿良超', 'avatar': 'https://via.placeholder.com/40'},
-      {'id': '7', 'name': '鹿铃', 'avatar': 'https://via.placeholder.com/40'},
-      {'id': '8', 'name': '吴冠群', 'avatar': 'https://via.placeholder.com/40'},
-    ];
+    // 初始化时获取一次成员列表
+    _fetchGroupMembers();
+    // 初始化时获取一次群信息
+    _fetchGroupInfo();
+    // 设置定时器，每秒获取一次成员列表
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      _fetchGroupMembers();
+    });
+  }
+
+  // 获取群信息
+  Future<void> _fetchGroupInfo() async {
+    try {
+      // 获取当前用户的所有群信息
+      List<GroupInfoModel> groups = await getGroups(globalUtil.userName ?? '');
+      // 找到当前群
+      for (var group in groups) {
+        if (group.groupId.toString() == widget.groupId) {
+          // 将时间戳转换为可读的日期时间格式（只显示年月日）
+          DateTime createdAt = DateTime.fromMillisecondsSinceEpoch(
+            group.createdAt,
+          );
+          String formattedDate =
+              '${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')}';
+          setState(() {
+            _groupCreatedAt = formattedDate;
+            _groupDescription = group.description;
+          });
+          break;
+        }
+      }
+    } catch (e) {
+      print('获取群信息失败: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    // 清理定时器
+    _timer.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchGroupMembers() async {
+    try {
+      int groupIdInt = int.parse(widget.groupId);
+      List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
+
+      // 遍历群成员列表，找到当前用户并设置相关信息
+      try {
+        // 根据用户要求，userId 就是 userName
+        String? currentUserId = globalUtil.userName;
+        bool foundUser = false;
+        String? userGroupNickName = '';
+        bool isOwner = false;
+
+        for (var member in members) {
+          print(
+            '群成员: userId=${member.userId}, groupNickName=${member.groupNickName}, role=${member.role},createTime=${member.joinTime}',
+          );
+          if (currentUserId != null && member.userId == currentUserId) {
+            // 获取当前用户的本群昵称
+            userGroupNickName = member.groupNickName;
+            // 检查是否为群主
+            if (member.role == 2) {
+              isOwner = true;
+            } else {
+              isOwner = false;
+            }
+            foundUser = true;
+            break;
+          }
+        }
+
+        if (!foundUser) {
+          print('未找到当前用户在群成员列表中');
+        }
+
+        // 在 setState 中更新 UI 相关的变量
+        setState(() {
+          _myNickname = userGroupNickName ?? '';
+          _isOwner = isOwner;
+        });
+
+        print('更新后的 _myNickname: $_myNickname');
+      } catch (e) {
+        print('获取当前用户 ID 失败: $e');
+      }
+
+      // 将 GroupMemberModel 转换为 Map<String, dynamic> 类型的 _members 列表
+      setState(() {
+        _members = members.map((member) {
+          String avatarUrl;
+          try {
+            // 检查缓存中是否已有该用户的头像
+            if (_avatarCache.containsKey(member.userId)) {
+              // 使用缓存的头像 URL
+              avatarUrl = _avatarCache[member.userId]!;
+            } else {
+              // 尝试获取实际头像
+              avatarUrl = globalUtil.getImageURL(member.userId, 'head.jpg');
+              // 将获取到的头像 URL 存入缓存
+              _avatarCache[member.userId] = avatarUrl;
+            }
+          } catch (e) {
+            // 如果获取失败（例如 token 为 null），使用默认头像
+            avatarUrl = 'https://via.placeholder.com/40';
+          }
+          return {
+            'id': member.userId,
+            'name': member.groupNickName,
+            'avatar': avatarUrl,
+          };
+        }).toList();
+      });
+    } catch (e) {
+      print('获取群聊成员列表失败: $e');
+    }
   }
 
   void _editGroupName() async {
@@ -164,10 +293,14 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
 
   void _viewAllMembers() {
     // 导航到群成员页面
-    Navigator.pushNamed(
+    Navigator.push(
       context,
-      '/groupMembersPage',
-      arguments: {'groupId': widget.groupId, 'groupName': widget.groupName},
+      MaterialPageRoute(
+        builder: (context) => GroupMembersPage(
+          groupId: widget.groupId,
+          groupName: widget.groupName,
+        ),
+      ),
     );
   }
 
@@ -198,6 +331,21 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     );
   }
 
+  // 获取群头像 URL，使用缓存避免重复加载
+  String _getGroupAvatarUrl() {
+    if (_groupAvatarCache.containsKey(widget.groupId)) {
+      return _groupAvatarCache[widget.groupId]!;
+    } else {
+      try {
+        String url = globalUtil.getImageURL(widget.groupId, 'head.jpg');
+        _groupAvatarCache[widget.groupId] = url;
+        return url;
+      } catch (e) {
+        return 'https://via.placeholder.com/60';
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -225,14 +373,35 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
             child: Row(
               children: [
                 Container(
-                  width: 60.0,
-                  height: 60.0,
                   margin: EdgeInsets.only(right: 12.0),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    image: DecorationImage(
-                      image: NetworkImage('https://via.placeholder.com/60'),
-                      fit: BoxFit.cover,
+                  child: CachedNetworkImage(
+                    width: 60.0,
+                    height: 60.0,
+                    imageUrl: _getGroupAvatarUrl(),
+                    imageBuilder: (context, imageProvider) => Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        image: DecorationImage(
+                          image: imageProvider,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    placeholder: (context, url) => Container(
+                      width: 60.0,
+                      height: 60.0,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.grey[200],
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 60.0,
+                      height: 60.0,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.grey[200],
+                      ),
                     ),
                   ),
                 ),
@@ -249,7 +418,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                       ),
                       SizedBox(height: 4.0),
                       Text(
-                        '在这里，发现更多~',
+                        _groupDescription.isNotEmpty
+                            ? _groupDescription
+                            : '未设置群公告',
                         style: TextStyle(
                           fontSize: 14.0,
                           color: Colors.grey[600],
@@ -307,7 +478,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                   height: 70.0,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    itemCount: _members.length + 2, // +1 用于邀请按钮, +1 用于移除按钮
+                    itemCount:
+                        _members.length +
+                        (_isOwner ? 2 : 1), // +1 用于邀请按钮, 只有群主才显示移除按钮
                     itemBuilder: (context, index) {
                       if (index < _members.length) {
                         final member = _members[index];
@@ -315,14 +488,54 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                           margin: EdgeInsets.only(right: 16.0),
                           child: Column(
                             children: [
-                              Container(
+                              CachedNetworkImage(
                                 width: 40.0,
                                 height: 40.0,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  image: DecorationImage(
-                                    image: NetworkImage(member['avatar']),
-                                    fit: BoxFit.cover,
+                                imageUrl: _avatarCache.containsKey(member['id'])
+                                    ? _avatarCache[member['id']]!
+                                    : member['avatar'],
+                                imageBuilder: (context, imageProvider) =>
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        image: DecorationImage(
+                                          image: imageProvider,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ),
+                                placeholder: (context, url) => Container(
+                                  width: 40.0,
+                                  height: 40.0,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    image:
+                                        _avatarCache.containsKey(member['id'])
+                                        ? DecorationImage(
+                                            image: NetworkImage(
+                                              _avatarCache[member['id']]!,
+                                            ),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                    color: Colors.grey[200],
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  width: 40.0,
+                                  height: 40.0,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    image:
+                                        _avatarCache.containsKey(member['id'])
+                                        ? DecorationImage(
+                                            image: NetworkImage(
+                                              _avatarCache[member['id']]!,
+                                            ),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                    color: Colors.grey[200],
                                   ),
                                 ),
                               ),
@@ -368,8 +581,8 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                             ),
                           ),
                         );
-                      } else {
-                        // 移除按钮
+                      } else if (_isOwner && index == _members.length + 1) {
+                        // 移除按钮，只有群主才显示
                         return Container(
                           margin: EdgeInsets.only(right: 16.0),
                           child: GestureDetector(
@@ -424,6 +637,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                             ),
                           ),
                         );
+                      } else {
+                        // 其他情况返回空容器
+                        return Container();
                       }
                     },
                   ),
@@ -487,6 +703,35 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+
+                // 创建时间
+                Container(
+                  padding: EdgeInsets.symmetric(vertical: 12.0),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey[100]!, width: 1.0),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '创建时间',
+                        style: TextStyle(
+                          fontSize: 14.0,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                      Text(
+                        _groupCreatedAt.isNotEmpty ? _groupCreatedAt : '加载中...',
+                        style: TextStyle(
+                          fontSize: 14.0,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -634,7 +879,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '我的本群昵称',
+                        '我在本群的昵称',
                         style: TextStyle(
                           fontSize: 14.0,
                           color: Colors.grey[800],
@@ -643,7 +888,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                       Row(
                         children: [
                           Text(
-                            '未设置',
+                            _myNickname.isEmpty ? '未设置' : _myNickname,
                             style: TextStyle(
                               fontSize: 14.0,
                               color: Colors.grey[600],
