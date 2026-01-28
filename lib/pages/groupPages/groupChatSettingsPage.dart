@@ -1,14 +1,17 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dio/dio.dart';
 import 'groupMembersPage.dart';
 import '../../model/groupMemberModel.dart';
 import '../../model/groupInfoModel.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../utils/Gloabl.dart';
+import '../../utils/http.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
@@ -35,8 +38,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   final globalUtil = GlobalUtil();
   // 静态缓存已经加载成功的头像 URL，避免重复加载
   static Map<String, String> _avatarCache = {};
-  // 静态缓存已经加载成功的群头像 URL，避免重复加载
-  static Map<String, String> _groupAvatarCache = {};
+
   // 当前用户是否为群主
   bool _isOwner = false;
   // 当前用户的本群昵称
@@ -45,37 +47,180 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   String _groupCreatedAt = '';
   // 群公告
   String _groupDescription = '';
+  // 群信息模型，用于存储完整的群信息
+  GroupInfoModel? _groupInfoModel;
+  // 上传取消令牌
+  CancelToken? _uploadCancelToken;
 
   Future<void> _pickGroupAvatar() async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
-      setState(() {
-        _groupAvatar = image.path;
-      });
+      // 创建取消令牌
+      _uploadCancelToken = CancelToken();
 
-      // 这里可以添加上传头像的逻辑
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text('提示'),
-            content: Text('群头像已更新'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('确定'),
-              ),
-            ],
+      try {
+        // 读取图片文件为字节数组
+        final bytes = await image.readAsBytes();
+
+        // 生成带时间戳的图片名
+        String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+        String imageName = 'head_$timestamp.jpg';
+
+        // 创建 HttpUtil 实例
+        final httpUtil = HttpUtil();
+
+        // 调用 uploadImage 函数上传图片，使用群 ID 作为 userName
+        bool success = await httpUtil.uploadImage(
+          imageName,
+          bytes,
+          userName: widget.groupId, // 使用群 ID 作为 userName
+          cancelToken: _uploadCancelToken,
+        );
+
+        if (mounted) {
+          if (success) {
+            // 更新群信息中的头像字段
+            try {
+              // 获取当前用户的 userName
+              String? currentUserId = globalUtil.userName;
+              if (currentUserId == null) {
+                throw Exception('当前用户未登录');
+              }
+
+              // 将 groupId 转换为 int 类型
+              int groupIdInt = int.parse(widget.groupId);
+
+              // 获取当前群的信息，用于保持其他字段不变
+              int maxMembers = _groupInfoModel?.maxMembers ?? 200;
+              int isActive = _groupInfoModel?.isActive ?? 1;
+
+              // 准备群公告内容，确保不是 '未设置'
+              String description = _groupDescription == '未设置'
+                  ? ''
+                  : _groupDescription;
+
+              // 调用 API 更新群信息，传入新的头像名
+              int code = await updateGroupInfo(
+                currentUserId,
+                groupIdInt,
+                _groupName, // 保持群名称不变
+                description, // 保持群公告不变
+                maxMembers,
+                isActive,
+                imageName, // 新的头像名
+              );
+
+              if (code == 100) {
+                // 更新成功，重新获取群信息
+                await _fetchGroupInfo();
+
+                // 更新 _groupAvatar 为新的头像 URL
+                try {
+                  String url = globalUtil.getImageURL(
+                    widget.groupId,
+                    imageName,
+                  );
+                  setState(() {
+                    _groupAvatar = url;
+                  });
+                } catch (e) {
+                  print('更新群头像 URL 失败: $e');
+                  setState(() {
+                    _groupAvatar = image.path;
+                  });
+                }
+
+                // 显示成功提示
+                showDialog(
+                  context: context,
+                  builder: (context) {
+                    return AlertDialog(
+                      title: Text('提示'),
+                      content: Text('群头像已更新'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text('确定'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              } else {
+                throw Exception('更新群信息失败，错误码: $code');
+              }
+            } catch (e) {
+              print('更新群头像失败: $e');
+              // 显示错误提示
+              showDialog(
+                context: context,
+                builder: (context) {
+                  return AlertDialog(
+                    title: Text('提示'),
+                    content: Text('更新群头像失败: $e'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text('确定'),
+                      ),
+                    ],
+                  );
+                },
+              );
+            }
+          } else {
+            // 显示失败提示
+            showDialog(
+              context: context,
+              builder: (context) {
+                return AlertDialog(
+                  title: Text('提示'),
+                  content: Text('群头像上传失败'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('确定'),
+                    ),
+                  ],
+                );
+              },
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          // 显示错误提示
+          showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                title: Text('提示'),
+                content: Text('上传失败: $e'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('确定'),
+                  ),
+                ],
+              );
+            },
           );
-        },
-      );
+        }
+      } finally {
+        // 重置取消令牌
+        _uploadCancelToken = null;
+      }
     }
   }
 
   void _inviteMembers() async {
-    final result = await Navigator.pushNamed(context, '/selectContactsPage');
+    final result = await Navigator.pushNamed(
+      context,
+      '/selectContactsPage',
+      arguments: {'groupId': widget.groupId},
+    );
     if (result != null && result is List<dynamic>) {
       // 处理返回的选择结果
       List<dynamic> selectedFriends = result;
@@ -102,6 +247,11 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   void initState() {
     super.initState();
     _groupName = widget.groupName;
+    _groupAnnouncement = '未设置';
+    _groupDescription = '未设置';
+    // 初始化时不需要手动设置群头像 URL，会在 _fetchGroupInfo 中自动设置
+    // 群头像 URL 会根据 GroupInfoModel 中的 groupAvatar 字段动态生成
+    // 只有当 groupAvatar 字段发生变化时，才会重新从网络上获取头像
     // 初始化时获取一次成员列表
     _fetchGroupMembers();
     // 初始化时获取一次群信息
@@ -109,6 +259,10 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     // 设置定时器，每秒获取一次成员列表
     _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       _fetchGroupMembers();
+    });
+    // 设置定时器，每2秒获取一次群信息，以更新群名称
+    Timer.periodic(Duration(seconds: 2), (timer) {
+      _fetchGroupInfo();
     });
   }
 
@@ -129,6 +283,18 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           setState(() {
             _groupCreatedAt = formattedDate;
             _groupDescription = group.description;
+            _groupName = group.groupName; // 更新群名称
+            _groupInfoModel = group; // 存储完整的群信息
+            // 更新群头像 URL 为 groupAvatar 字段对应的 URL
+            try {
+              String avatarName = group.groupAvatar.isNotEmpty
+                  ? group.groupAvatar
+                  : 'head.jpg';
+              String url = globalUtil.getImageURL(widget.groupId, avatarName);
+              _groupAvatar = url;
+            } catch (e) {
+              print('更新群头像 URL 失败: $e');
+            }
           });
           break;
         }
@@ -142,6 +308,10 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   void dispose() {
     // 清理定时器
     _timer.cancel();
+    // 取消上传操作
+    if (_uploadCancelToken != null && !_uploadCancelToken!.isCancelled) {
+      _uploadCancelToken!.cancel('页面已关闭');
+    }
     super.dispose();
   }
 
@@ -178,6 +348,28 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
 
         if (!foundUser) {
           print('未找到当前用户在群成员列表中');
+          // 用户不在群成员列表中，说明已被移除出群聊
+          if (mounted) {
+            // 显示弹窗提示
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                title: Text('提示'),
+                content: Text('您已被移除出群聊'),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      // 退出所有群聊相关界面，返回最上级
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    },
+                    child: Text('确定'),
+                  ),
+                ],
+              ),
+            );
+          }
+          return;
         }
 
         // 在 setState 中更新 UI 相关的变量
@@ -196,15 +388,31 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         _members = members.map((member) {
           String avatarUrl;
           try {
-            // 检查缓存中是否已有该用户的头像
+            // 使用 member.avatar 作为头像文件名
+            String avatarName = member.avatar.isNotEmpty
+                ? member.avatar
+                : 'head.jpg';
+            // 生成新的头像 URL
+            String newAvatarUrl = globalUtil.getImageURL(
+              member.userId,
+              avatarName,
+            );
+
+            // 检查缓存中是否已有该用户的头像，并且 URL 是否相同
             if (_avatarCache.containsKey(member.userId)) {
-              // 使用缓存的头像 URL
-              avatarUrl = _avatarCache[member.userId]!;
+              String cachedUrl = _avatarCache[member.userId]!;
+              if (cachedUrl == newAvatarUrl) {
+                // URL 相同，使用缓存的头像 URL
+                avatarUrl = cachedUrl;
+              } else {
+                // URL 不同，使用新的头像 URL 并更新缓存
+                avatarUrl = newAvatarUrl;
+                _avatarCache[member.userId] = newAvatarUrl;
+              }
             } else {
-              // 尝试获取实际头像
-              avatarUrl = globalUtil.getImageURL(member.userId, 'head.jpg');
-              // 将获取到的头像 URL 存入缓存
-              _avatarCache[member.userId] = avatarUrl;
+              // 缓存中没有，使用新的头像 URL 并加入缓存
+              avatarUrl = newAvatarUrl;
+              _avatarCache[member.userId] = newAvatarUrl;
             }
           } catch (e) {
             // 如果获取失败（例如 token 为 null），使用默认头像
@@ -250,9 +458,63 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     );
 
     if (result != null && result.isNotEmpty) {
-      setState(() {
-        _groupName = result;
-      });
+      try {
+        print('开始更新群名称: $result');
+        print('群名称长度: ${result.length}');
+        print('群名称编码: ${result.runes}');
+        // 获取当前用户的 userName
+        String? currentUserId = globalUtil.userName;
+        if (currentUserId == null) {
+          throw Exception('当前用户未登录');
+        }
+
+        // 将 groupId 转换为 int 类型
+        int groupIdInt = int.parse(widget.groupId);
+
+        // 获取当前群的信息，用于保持 maxMembers 和 isActive 不变
+        int maxMembers = _groupInfoModel?.maxMembers ?? 200;
+        int isActive = _groupInfoModel?.isActive ?? 1;
+
+        // 准备群公告内容，确保不是 '未设置'
+        String description = _groupDescription == '未设置'
+            ? ''
+            : _groupDescription;
+        print('群公告 (发送到服务器): $description');
+
+        // 调用 API 更新群信息
+        print('准备调用 updateGroupInfo');
+        int code = await updateGroupInfo(
+          currentUserId,
+          groupIdInt,
+          result.trim(), // 新的群名称，去除前后空格
+          description, // 保持群公告不变
+          maxMembers,
+          isActive,
+          null, // 不更新头像字段
+        );
+        print('updateGroupInfo 返回码: $code');
+
+        if (code == 100) {
+          setState(() {
+            _groupName = result;
+          });
+
+          // 显示成功提示
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('群名称更新成功')));
+          print('群名称更新成功');
+        } else {
+          throw Exception('更新失败，错误码: $code');
+        }
+      } catch (e) {
+        print('更新群名称失败: $e');
+
+        // 显示错误提示
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('群名称更新失败: $e')));
+      }
     }
   }
 
@@ -267,8 +529,13 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           title: Text('编辑群公告'),
           content: TextField(
             controller: controller,
-            decoration: InputDecoration(hintText: '请输入群公告'),
+            decoration: InputDecoration(
+              hintText: '请输入群公告（最多20字）',
+              counterText: '${controller.text.length}/20',
+            ),
             maxLines: 3,
+            maxLength: 20,
+            inputFormatters: [LengthLimitingTextInputFormatter(20)],
           ),
           actions: [
             TextButton(
@@ -285,9 +552,58 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     );
 
     if (result != null) {
-      setState(() {
-        _groupAnnouncement = result.isEmpty ? '未设置' : result;
-      });
+      try {
+        // 获取当前用户的 userName
+        String? currentUserId = globalUtil.userName;
+        if (currentUserId == null) {
+          throw Exception('当前用户未登录');
+        }
+
+        // 将 groupId 转换为 int 类型
+        int groupIdInt = int.parse(widget.groupId);
+
+        // 获取当前群的信息，用于保持 maxMembers 和 isActive 不变
+        int maxMembers = _groupInfoModel?.maxMembers ?? 200;
+        int isActive = _groupInfoModel?.isActive ?? 1;
+
+        // 准备新的群公告内容
+        String newDescription = result.isEmpty ? '未设置' : result;
+
+        // 准备发送到服务器的群公告内容，确保不是 '未设置'
+        String descriptionForServer = result.isEmpty ? '' : result;
+
+        int code = await updateGroupInfo(
+          currentUserId,
+          groupIdInt,
+          _groupName, // 保持群名称不变
+          descriptionForServer, // 新的群公告
+          maxMembers,
+          isActive,
+          null, // 不更新头像字段
+        );
+
+        if (code == 100) {
+          setState(() {
+            _groupAnnouncement = newDescription;
+            _groupDescription = newDescription; // 同时更新 _groupDescription
+          });
+
+          // 显示成功提示
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('群公告更新成功')));
+          print('群公告更新成功');
+        } else {
+          throw Exception('更新失败，错误码: $code');
+        }
+      } catch (e) {
+        print('更新群公告失败: $e');
+
+        // 显示错误提示
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('群公告更新失败: $e')));
+      }
     }
   }
 
@@ -331,17 +647,74 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     );
   }
 
-  // 获取群头像 URL，使用缓存避免重复加载
-  String _getGroupAvatarUrl() {
-    if (_groupAvatarCache.containsKey(widget.groupId)) {
-      return _groupAvatarCache[widget.groupId]!;
-    } else {
+  void _editMyNickname() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        TextEditingController controller = TextEditingController(
+          text: _myNickname,
+        );
+        return AlertDialog(
+          title: Text('编辑我在本群的昵称'),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(hintText: '请输入昵称'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null) {
       try {
-        String url = globalUtil.getImageURL(widget.groupId, 'head.jpg');
-        _groupAvatarCache[widget.groupId] = url;
-        return url;
+        // 获取当前用户的 userName（userId）
+        String? currentUserId = globalUtil.userName;
+        if (currentUserId == null) {
+          throw Exception('当前用户未登录');
+        }
+
+        // 将 groupId 转换为 int 类型
+        int groupIdInt = int.parse(widget.groupId);
+
+        // 保持当前用户的角色不变（我们只更新昵称）
+        int role = _isOwner ? 2 : 1; // 2 是群主，1 是成员
+
+        // 调用 API 更新信息
+        int code = await updateGroupMemberInfo(
+          currentUserId,
+          groupIdInt,
+          result,
+          role,
+        );
+
+        if (code == 100) {
+          setState(() {
+            _myNickname = result;
+          });
+
+          // 显示成功提示
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('昵称更新成功')));
+        } else {
+          throw Exception('更新失败，错误码: $code');
+        }
       } catch (e) {
-        return 'https://via.placeholder.com/60';
+        print('更新群昵称失败: $e');
+
+        // 显示错误提示
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('昵称更新失败: $e')));
       }
     }
   }
@@ -377,7 +750,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                   child: CachedNetworkImage(
                     width: 60.0,
                     height: 60.0,
-                    imageUrl: _getGroupAvatarUrl(),
+                    imageUrl: _groupAvatar,
                     imageBuilder: (context, imageProvider) => Container(
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -429,7 +802,6 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: Colors.grey[400]),
               ],
             ),
           ),
@@ -587,29 +959,17 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                           margin: EdgeInsets.only(right: 16.0),
                           child: GestureDetector(
                             onTap: () {
-                              // 实现移除成员功能
-                              showDialog(
-                                context: context,
-                                builder: (context) {
-                                  return AlertDialog(
-                                    title: Text('移除成员'),
-                                    content: Text('请选择要移除的成员'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        child: Text('取消'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.pop(context);
-                                          // 这里可以添加移除成员的逻辑
-                                        },
-                                        child: Text('确定'),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              );
+                              // 导航到选择要移除的成员页面
+                              Navigator.pushNamed(
+                                context,
+                                '/selectGroupMembersToRemovePage',
+                                arguments: {'groupId': widget.groupId},
+                              ).then((result) {
+                                if (result != null) {
+                                  // 重新获取群成员列表，确保更新
+                                  _fetchGroupMembers();
+                                }
+                              });
                             },
                             child: Column(
                               children: [
@@ -840,7 +1200,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '群公告',
+                          '群介绍',
                           style: TextStyle(
                             fontSize: 14.0,
                             color: Colors.grey[800],
@@ -868,40 +1228,46 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                 ),
 
                 // 我的本群昵称
-                Container(
-                  padding: EdgeInsets.symmetric(vertical: 12.0),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Colors.grey[100]!, width: 1.0),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '我在本群的昵称',
-                        style: TextStyle(
-                          fontSize: 14.0,
-                          color: Colors.grey[800],
+                GestureDetector(
+                  onTap: _editMyNickname,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.grey[100]!,
+                          width: 1.0,
                         ),
                       ),
-                      Row(
-                        children: [
-                          Text(
-                            _myNickname.isEmpty ? '未设置' : _myNickname,
-                            style: TextStyle(
-                              fontSize: 14.0,
-                              color: Colors.grey[600],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '我在本群的昵称',
+                          style: TextStyle(
+                            fontSize: 14.0,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Text(
+                              _myNickname.isEmpty ? '未设置' : _myNickname,
+                              style: TextStyle(
+                                fontSize: 14.0,
+                                color: Colors.grey[600],
+                              ),
                             ),
-                          ),
-                          Icon(
-                            Icons.chevron_right,
-                            color: Colors.grey[400],
-                            size: 16.0,
-                          ),
-                        ],
-                      ),
-                    ],
+                            Icon(
+                              Icons.chevron_right,
+                              color: Colors.grey[400],
+                              size: 16.0,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],

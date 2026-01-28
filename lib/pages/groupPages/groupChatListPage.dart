@@ -1,15 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../utils/gloabl.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../model/groupInfoModel.dart';
-
-String _addTimestamp(String url) {
-  if (url.isEmpty || !url.startsWith('http')) return url;
-  final ts = DateTime.now().millisecondsSinceEpoch;
-  final sep = url.contains('?') ? '&' : '?';
-  return '$url${sep}_=$ts';
-}
 
 class GroupChat {
   final String groupId;
@@ -48,6 +42,8 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
   TextEditingController _searchController = TextEditingController();
   List<GroupChat> _filteredGroupChats = [];
   late Timer _timer;
+  // 静态缓存已经加载成功的头像 URL，避免重复加载
+  static final Map<String, String> _avatarCache = {};
   @override
   void initState() {
     super.initState();
@@ -93,7 +89,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
       final newGroups = groupInfoModels.map((model) {
         final avatarName = model.groupAvatar; // 默认头像，可根据实际情况修改
         final groupId = model.groupId.toString();
-        String avatarURL = globalUtil.getImageURL(groupId, avatarName);
+        String avatarURL = _getAvatarUrl(groupId, avatarName);
         final previousAvatar = previousAvatars[groupId] ?? '';
         if (avatarURL != previousAvatar && avatarURL.isNotEmpty) {
           previousAvatars[groupId] = avatarURL;
@@ -112,6 +108,29 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
       });
     } catch (e) {
       print('获取群聊列表失败: $e');
+    }
+  }
+
+  // 获取头像 URL，使用缓存避免重复加载
+  String _getAvatarUrl(String groupId, String avatarName) {
+    try {
+      final cacheKey = '$groupId-$avatarName';
+      if (_avatarCache.containsKey(cacheKey)) {
+        return _avatarCache[cacheKey]!;
+      } else {
+        String url = globalUtil.getImageURL(groupId, avatarName);
+
+        _avatarCache[cacheKey] = url;
+        return url;
+      }
+    } catch (e) {
+      print('获取头像 URL 异常: $e');
+      // 尝试使用固定的测试 URL 进行调试
+      String testUrl =
+          'http://45.197.144.95:5555/api/image/download?key=test&userName=$groupId&imageName=$avatarName';
+      'http://45.197.144.95:5555/api/image/download?key=test&userName=$groupId&imageName=$avatarName';
+      print('使用测试头像 URL: $testUrl');
+      return testUrl;
     }
   }
 
@@ -205,29 +224,29 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
                                 color: Colors.grey[200],
                               ),
                               child: ClipOval(
-                                child: Stack(
-                                  children: [
-                                    if (groupChat.previousAvatar.isNotEmpty)
-                                      Positioned.fill(
-                                        child: Image.network(
-                                          groupChat.previousAvatar,
-                                          fit: BoxFit.cover,
-                                        ),
+                                child: CachedNetworkImage(
+                                  imageUrl: groupChat.avatar,
+                                  fit: BoxFit.cover,
+                                  width: 50,
+                                  height: 50,
+                                  placeholder: (context, url) {
+                                    return Container(
+                                      color: Colors.grey[200],
+                                      child: Icon(
+                                        Icons.group,
+                                        color: Colors.grey,
                                       ),
-                                    Positioned.fill(
-                                      child: Image.network(
-                                        _addTimestamp(groupChat.avatar),
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (context, error, stackTrace) {
-                                              return Icon(
-                                                Icons.group,
-                                                color: Colors.grey,
-                                              );
-                                            },
+                                    );
+                                  },
+                                  errorWidget: (context, error, stackTrace) {
+                                    return Container(
+                                      color: Colors.grey[200],
+                                      child: Icon(
+                                        Icons.group,
+                                        color: Colors.grey,
                                       ),
-                                    ),
-                                  ],
+                                    );
+                                  },
                                 ),
                               ),
                             ),

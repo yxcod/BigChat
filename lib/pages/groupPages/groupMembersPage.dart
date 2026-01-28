@@ -52,21 +52,43 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
 
   Future<void> _fetchGroupMembers() async {
     try {
-      print('开始获取群成员，groupId: ${widget.groupId}');
       int groupIdInt = int.parse(widget.groupId);
-      print('转换后的 groupIdInt: $groupIdInt');
+
       List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
-      print('获取群成员成功，数量: ${members.length}');
+
       // 确保成员列表不为空
       if (members.isEmpty) {
         print('获取到的成员列表为空，使用模拟数据');
-        // members = [
-        //   GroupMemberModel(userId: '1', groupNickName: '群主', role: 2),
-        //   GroupMemberModel(userId: '2', groupNickName: '管理员', role: 1),
-        //   GroupMemberModel(userId: '3', groupNickName: '成员1', role: 0),
-        //   GroupMemberModel(userId: '4', groupNickName: '成员2', role: 0),
-        // ];
       }
+
+      // 检查当前用户是否在群成员列表中
+      String? currentUserName = GlobalUtil().userName;
+      if (currentUserName != null &&
+          !members.any((member) => member.userId == currentUserName)) {
+        // 用户不在群成员列表中，说明已被移除出群聊
+        if (mounted) {
+          // 显示弹窗提示
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: Text('提示'),
+              content: Text('您已被移除出群聊'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    // 退出所有群聊相关界面，返回最上级
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  },
+                  child: Text('确定'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
       setState(() {
         _groupMembers = members;
         // 直接设置 _filteredMembers，避免 _filterMembers 方法可能的问题
@@ -162,7 +184,7 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
                       radius: 20,
                       child: ClipOval(
                         child: CachedNetworkImage(
-                          imageUrl: _getAvatarUrl(member.userId),
+                          imageUrl: _getAvatarUrl(member),
                           fit: BoxFit.cover,
                           width: 40,
                           height: 40,
@@ -216,14 +238,29 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
   }
 
   // 获取头像 URL，使用缓存避免重复加载
-  String _getAvatarUrl(String userId) {
+  String _getAvatarUrl(GroupMemberModel member) {
     try {
+      String userId = member.userId;
+      // 使用 member.avatar 作为头像文件名
+      String avatarName = member.avatar.isNotEmpty ? member.avatar : 'head.jpg';
+      // 生成新的头像 URL
+      String newAvatarUrl = globalUtil.getImageURL(userId, avatarName);
+
+      // 检查缓存中是否已有该用户的头像，并且 URL 是否相同
       if (_avatarCache.containsKey(userId)) {
-        return _avatarCache[userId]!;
+        String cachedUrl = _avatarCache[userId]!;
+        if (cachedUrl == newAvatarUrl) {
+          // URL 相同，使用缓存的头像 URL
+          return cachedUrl;
+        } else {
+          // URL 不同，使用新的头像 URL 并更新缓存
+          _avatarCache[userId] = newAvatarUrl;
+          return newAvatarUrl;
+        }
       } else {
-        String url = globalUtil.getImageURL(userId, 'head.jpg');
-        _avatarCache[userId] = url;
-        return url;
+        // 缓存中没有，使用新的头像 URL 并加入缓存
+        _avatarCache[userId] = newAvatarUrl;
+        return newAvatarUrl;
       }
     } catch (e) {
       print('获取头像 URL 失败: $e');

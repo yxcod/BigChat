@@ -9,10 +9,12 @@ import 'package:dio/dio.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../utils/Gloabl.dart';
 import '../../model/groupMemberModel.dart';
+import '../../model/groupInfoModel.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../model/messageModel.dart';
 import '../videoCallPage.dart';
 import '../../utils/http.dart';
+import '../../api/getGroupInfoAPI.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final String groupId;
@@ -34,10 +36,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
+  Timer? _groupInfoTimer; // 定时器，用于定期获取群信息
+  String _currentGroupName = ''; // 当前显示的群名称
 
   @override
   void initState() {
     super.initState();
+
+    // 初始化群名称
+    _currentGroupName = widget.groupName;
 
     // 为滚动控制器添加监听器，实现向上滑动加载更多
     _scrollController.addListener(() {
@@ -52,6 +59,40 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
     // 初始化WebSocket连接
     _ensureWebSocketConnected();
+
+    // 设置定时器，每隔2秒获取一次群信息
+    _groupInfoTimer = Timer.periodic(Duration(seconds: 2), (timer) {
+      _fetchGroupInfo();
+    });
+  }
+
+  // 获取群信息
+  Future<void> _fetchGroupInfo() async {
+    try {
+      final globalUtil = GlobalUtil();
+      String? userName = globalUtil.userName;
+      if (userName == null) {
+        return;
+      }
+
+      // 调用API获取用户的所有群信息
+      List<GroupInfoModel> groups = await getGroups(userName);
+
+      // 找到当前群
+      for (var group in groups) {
+        if (group.groupId.toString() == widget.groupId) {
+          // 检查群名称是否有变化
+          if (group.groupName != _currentGroupName) {
+            setState(() {
+              _currentGroupName = group.groupName;
+            });
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('获取群信息失败: $e');
+    }
   }
 
   // 加载更多聊天记录
@@ -465,7 +506,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         ),
         title: Center(
           child: Text(
-            widget.groupName,
+            _currentGroupName,
             style: TextStyle(color: Colors.black, fontSize: 16),
           ),
         ),
@@ -509,7 +550,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                 '/groupChatSettings',
                 arguments: {
                   'groupId': widget.groupId,
-                  'groupName': widget.groupName,
+                  'groupName': _currentGroupName,
                 },
               );
             },
@@ -841,6 +882,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     _textController.dispose();
     _textFieldFocusNode.dispose();
     _scrollController.dispose();
+
+    // 取消定时器
+    if (_groupInfoTimer != null) {
+      _groupInfoTimer!.cancel();
+    }
 
     // 离开聊天页面时，更新全局聊天状态
     final globalUtil = GlobalUtil();

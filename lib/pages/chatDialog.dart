@@ -1151,6 +1151,8 @@ class MessageBubble extends StatelessWidget {
   final String? currentUserAvatar;
   final globalUtil = GlobalUtil();
   final dio = Dio();
+  // 头像 URL 缓存，用于避免重复加载
+  static Map<String, String> _avatarCache = {};
   MessageBubble({
     required this.message,
     required this.friendInfo,
@@ -1492,6 +1494,68 @@ class MessageBubble extends StatelessWidget {
     }
   }
 
+  // 构建对方头像
+  Widget _buildOtherAvatar() {
+    String userName = friendInfo?.userName ?? "";
+    String avatarName = friendInfo?.avatar ?? "head.jpg";
+    String newAvatarUrl = globalUtil.getImageURL(userName, avatarName);
+
+    // 检查缓存中是否已有该用户的头像，并且 URL 是否相同
+    String avatarUrl;
+    if (_avatarCache.containsKey(userName)) {
+      String cachedUrl = _avatarCache[userName]!;
+      if (cachedUrl == newAvatarUrl) {
+        // URL 相同，使用缓存的头像 URL
+        avatarUrl = cachedUrl;
+      } else {
+        // URL 不同，使用新的头像 URL 并更新缓存
+        avatarUrl = newAvatarUrl;
+        _avatarCache[userName] = newAvatarUrl;
+      }
+    } else {
+      // 缓存中没有，使用新的头像 URL 并加入缓存
+      avatarUrl = newAvatarUrl;
+      _avatarCache[userName] = newAvatarUrl;
+    }
+
+    return CircleAvatar(
+      backgroundImage: NetworkImage(avatarUrl),
+      backgroundColor: Colors.grey[200],
+      radius: 24,
+    );
+  }
+
+  // 构建自己的头像
+  Widget _buildSelfAvatar() {
+    String userName = globalUtil.userInfoModel.userName ?? "";
+    String avatarName = currentUserAvatar ?? "head.jpg";
+    String newAvatarUrl = globalUtil.getImageURL(userName, avatarName);
+
+    // 检查缓存中是否已有该用户的头像，并且 URL 是否相同
+    String avatarUrl;
+    if (_avatarCache.containsKey(userName)) {
+      String cachedUrl = _avatarCache[userName]!;
+      if (cachedUrl == newAvatarUrl) {
+        // URL 相同，使用缓存的头像 URL
+        avatarUrl = cachedUrl;
+      } else {
+        // URL 不同，使用新的头像 URL 并更新缓存
+        avatarUrl = newAvatarUrl;
+        _avatarCache[userName] = newAvatarUrl;
+      }
+    } else {
+      // 缓存中没有，使用新的头像 URL 并加入缓存
+      avatarUrl = newAvatarUrl;
+      _avatarCache[userName] = newAvatarUrl;
+    }
+
+    return CircleAvatar(
+      backgroundImage: NetworkImage(avatarUrl),
+      backgroundColor: Colors.grey[200],
+      radius: 24,
+    );
+  }
+
   // 构建图片消息
   Widget _buildImageMessage() {
     // 获取图片URL：根据消息类型和发送者获取正确的URL
@@ -1573,14 +1637,7 @@ class MessageBubble extends StatelessWidget {
             : MainAxisAlignment.start,
         children: [
           // 对方消息：头像在左
-          if (!message.isMe)
-            CircleAvatar(
-              backgroundImage: NetworkImage(
-                globalUtil.getImageURL(friendInfo?.userName ?? "", "head.jpg"),
-              ),
-              backgroundColor: Colors.grey[200],
-              radius: 24,
-            ),
+          if (!message.isMe) _buildOtherAvatar(),
 
           // 对方消息：头像和消息之间的间距
           if (!message.isMe) SizedBox(width: 8),
@@ -1720,17 +1777,7 @@ class MessageBubble extends StatelessWidget {
           if (message.isMe) SizedBox(width: 8),
 
           // 自己消息：头像在右
-          if (message.isMe)
-            CircleAvatar(
-              backgroundImage: NetworkImage(
-                globalUtil.getImageURL(
-                  globalUtil.userInfoModel.userName ?? "",
-                  "head.jpg",
-                ),
-              ),
-              backgroundColor: Colors.grey[200],
-              radius: 24,
-            ),
+          if (message.isMe) _buildSelfAvatar(),
         ],
       ),
     );

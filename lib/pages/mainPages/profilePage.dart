@@ -16,6 +16,7 @@ class _ProfilePageState extends State<ProfilePage>
   String signature = "有个性,不签名";
   String nickName = "默认昵称";
   Map<String, dynamic> _profileEditInfo = {};
+  String _currentAvatarUrl = '';
 
   @override
   bool get wantKeepAlive => true;
@@ -28,6 +29,17 @@ class _ProfilePageState extends State<ProfilePage>
         signature = userInfo.signature ?? "有个性,不签名";
         _profileEditInfo["nickName"] = nickName;
         _profileEditInfo["signature"] = signature;
+        // 更新头像 URL，使用缓存机制
+        String avatarName = userInfo.avatar ?? "head.jpg";
+        String newAvatarUrl = GlobalUtil().getImageURL(
+          GlobalUtil().userName ?? "",
+          avatarName,
+        );
+
+        // 只有当 URL 发生变化时才更新
+        if (newAvatarUrl != _currentAvatarUrl) {
+          _currentAvatarUrl = newAvatarUrl;
+        }
 
         setState(() {});
       }
@@ -76,19 +88,12 @@ class _ProfilePageState extends State<ProfilePage>
                         backgroundColor: Colors.grey[200],
                         child: ClipOval(
                           child: Image.network(
-                            // 正确构建头像URL，添加时间戳参数
-                            () {
-                              final String baseUrl = GlobalUtil().getImageURL(
-                                GlobalUtil().userName ?? "",
-                                "head.jpg",
-                              );
-                              final String timestamp = DateTime.now()
-                                  .millisecondsSinceEpoch
-                                  .toString();
-                              return baseUrl.contains('?')
-                                  ? '$baseUrl&t=$timestamp'
-                                  : '$baseUrl?t=$timestamp';
-                            }(),
+                            _currentAvatarUrl.isNotEmpty
+                                ? _currentAvatarUrl
+                                : GlobalUtil().getImageURL(
+                                    GlobalUtil().userName ?? "",
+                                    "head.jpg",
+                                  ),
                             fit: BoxFit.cover,
                             width: 80,
                             height: 80,

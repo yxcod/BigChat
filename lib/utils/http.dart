@@ -3,7 +3,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import './Gloabl.dart';
 
-
 class HttpUtil {
   static final HttpUtil _instance = HttpUtil._internal();
   static late Dio _dio;
@@ -137,8 +136,6 @@ class HttpUtil {
     );
   }
 
-
-
   // DELETE请求
   Future<Response> delete(
     String path, {
@@ -183,6 +180,7 @@ class HttpUtil {
   Future<bool> uploadImage(
     String imageName,
     Uint8List imageData, {
+    String? userName,
     Map<String, dynamic>? queryParameters,
     Options? options,
     CancelToken? cancelToken,
@@ -203,15 +201,15 @@ class HttpUtil {
     // 创建FormData
     FormData formData = FormData.fromMap({'file': file});
 
-    // 获取当前用户名
-    String userName = _globalUtil.userName ?? '';
-    if (userName.isEmpty) {
+    // 获取最终的用户名
+    String finalUserName = userName ?? (_globalUtil.userName ?? '');
+    if (finalUserName.isEmpty) {
       throw Exception('无法获取当前用户信息');
     }
 
     // 调用上传接口，URL中带上用户名和图片名
     Response response = await _dio.post(
-      '/api/image/upload?userName=$userName&imageName=$imageName', // 带上用户名和图片名的上传接口路径
+      '/api/image/upload?userName=$finalUserName&imageName=$imageName', // 带上用户名和图片名的上传接口路径
       data: formData,
       queryParameters: queryParameters,
       options: options,

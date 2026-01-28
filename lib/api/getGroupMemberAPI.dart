@@ -49,6 +49,26 @@ Future<int> addGroup(int groupId, List<String> userNames) async {
   }
 }
 
+//移除人员进群
+Future<int> minuGroup(int groupId, List<String> userNames) async {
+  try {
+    final httpUtil = HttpUtil();
+    final response = await httpUtil.post(
+      '/api/group/minuGroup',
+      data: {'groupId': groupId, 'userNames': userNames},
+    );
+
+    if (response.statusCode == 200) {
+      return response.data['code'] ?? 0;
+    } else {
+      throw Exception('移除人员进群失败: ${response.statusCode}');
+    }
+  } catch (e) {
+    debugPrint('移除人员进群失败: $e');
+    throw e;
+  }
+}
+
 // 更新群成员信息
 Future<int> updateGroupMemberInfo(
   String userName,

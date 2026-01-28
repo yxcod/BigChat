@@ -1,27 +1,29 @@
 import 'package:flutter/material.dart';
-import '../../model/friendInfoModel.dart';
+import '../../model/groupMemberModel.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../utils/Gloabl.dart';
 
-class SelectContactsPage extends StatefulWidget {
+class SelectGroupMembersToRemovePage extends StatefulWidget {
   final String groupId;
 
-  const SelectContactsPage({Key? key, required this.groupId}) : super(key: key);
+  const SelectGroupMembersToRemovePage({Key? key, required this.groupId})
+    : super(key: key);
 
   @override
-  _SelectContactsPageState createState() => _SelectContactsPageState();
+  _SelectGroupMembersToRemovePageState createState() =>
+      _SelectGroupMembersToRemovePageState();
 }
 
-class _SelectContactsPageState extends State<SelectContactsPage> {
+class _SelectGroupMembersToRemovePageState
+    extends State<SelectGroupMembersToRemovePage> {
   TextEditingController _searchController = TextEditingController();
   ScrollController _scrollController = ScrollController();
-  List<FriendInfoModel> _allFriends = [];
-  List<FriendInfoModel> _filteredFriends = [];
-  List<FriendInfoModel> _selectedFriends = [];
+  List<GroupMemberModel> _allMembers = [];
+  List<GroupMemberModel> _filteredMembers = [];
+  List<GroupMemberModel> _selectedMembers = [];
   List<String> _alphabetList = [];
-  Map<String, List<FriendInfoModel>> _friendsByAlphabet = {};
+  Map<String, List<GroupMemberModel>> _membersByAlphabet = {};
   Map<String, GlobalKey> _alphabetKeys = {};
-  List<String> _groupMemberUserIds = [];
   bool _isLoading = true;
 
   @override
@@ -31,10 +33,8 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
   }
 
   Future<void> _loadData() async {
-    // 先清空群成员列表，确保每次重新获取最新数据
-    _groupMemberUserIds = [];
     await _fetchGroupMembers();
-    _loadFriends();
+    _loadMembers();
     setState(() {
       _isLoading = false;
     });
@@ -48,47 +48,73 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
         throw Exception('无效的群 ID 格式');
       }
 
-      List<dynamic> members = await getGroupMembers(groupIdInt);
+      List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
+
+      // 检查当前用户是否在群成员列表中
+      String? currentUserName = GlobalUtil().userName;
+      if (currentUserName != null &&
+          !members.any((member) => member.userId == currentUserName)) {
+        // 用户不在群成员列表中，说明已被移除出群聊
+        if (mounted) {
+          // 显示弹窗提示
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: Text('提示'),
+              content: Text('您已被移除出群聊'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    // 退出所有群聊相关界面，返回最上级
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  },
+                  child: Text('确定'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
       setState(() {
-        _groupMemberUserIds = members
-            .map((member) => (member.userId ?? "").toString())
-            .toList();
+        _allMembers = members;
       });
     } catch (e) {
       print('获取群成员列表失败: $e');
-      _groupMemberUserIds = [];
+      _allMembers = [];
     }
   }
 
-  void _loadFriends() {
-    // 从 GlobalUtil 获取真实的好友列表
-    List<FriendInfoModel> allFriends =
-        GlobalUtil().userInfoModel.friendListData ?? [];
+  void _loadMembers() {
+    // 获取当前用户的用户名
+    String? currentUserName = GlobalUtil().userName;
 
-    // 过滤出不在群中的好友
-    _allFriends = allFriends.where((friend) {
-      return !_groupMemberUserIds.contains(friend.userName ?? "");
+    // 过滤出不是当前用户的群成员
+    List<GroupMemberModel> filteredMembers = _allMembers.where((member) {
+      return currentUserName == null || member.userId != currentUserName;
     }).toList();
 
     // 按字母分组
-    _friendsByAlphabet = {};
+    _membersByAlphabet = {};
     _alphabetList = [];
     _alphabetKeys = {};
 
-    for (var friend in _allFriends) {
-      String firstChar = friend.nickName?.isNotEmpty ?? false
-          ? friend.nickName![0].toUpperCase()
+    for (var member in filteredMembers) {
+      String firstChar = member.groupNickName.isNotEmpty
+          ? member.groupNickName[0].toUpperCase()
           : '#';
       if (!RegExp(r'[A-Z]').hasMatch(firstChar)) {
         firstChar = '#';
       }
 
-      if (!_friendsByAlphabet.containsKey(firstChar)) {
-        _friendsByAlphabet[firstChar] = [];
+      if (!_membersByAlphabet.containsKey(firstChar)) {
+        _membersByAlphabet[firstChar] = [];
         _alphabetList.add(firstChar);
         _alphabetKeys[firstChar] = GlobalKey();
       }
-      _friendsByAlphabet[firstChar]!.add(friend);
+      _membersByAlphabet[firstChar]!.add(member);
     }
 
     // 排序字母列表
@@ -98,33 +124,38 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
       return a.compareTo(b);
     });
 
-    _filteredFriends = _allFriends;
+    _filteredMembers = filteredMembers;
   }
 
-  void _filterFriends(String query) {
+  void _filterMembers(String query) {
     if (query.isEmpty) {
       // 恢复原始的按字母分组
-      _friendsByAlphabet = {};
+      _membersByAlphabet = {};
       _alphabetList = [];
       _alphabetKeys = {};
 
-      for (var friend in _allFriends) {
-        // 确保只显示不在群中的好友
-        if (!_groupMemberUserIds.contains(friend.userName ?? "")) {
-          String firstChar = friend.nickName?.isNotEmpty ?? false
-              ? friend.nickName![0].toUpperCase()
-              : '#';
-          if (!RegExp(r'[A-Z]').hasMatch(firstChar)) {
-            firstChar = '#';
-          }
+      // 获取当前用户的用户名
+      String? currentUserName = GlobalUtil().userName;
 
-          if (!_friendsByAlphabet.containsKey(firstChar)) {
-            _friendsByAlphabet[firstChar] = [];
-            _alphabetList.add(firstChar);
-            _alphabetKeys[firstChar] = GlobalKey();
-          }
-          _friendsByAlphabet[firstChar]!.add(friend);
+      // 过滤出不是当前用户的群成员
+      List<GroupMemberModel> filteredMembers = _allMembers.where((member) {
+        return currentUserName == null || member.userId != currentUserName;
+      }).toList();
+
+      for (var member in filteredMembers) {
+        String firstChar = member.groupNickName.isNotEmpty
+            ? member.groupNickName[0].toUpperCase()
+            : '#';
+        if (!RegExp(r'[A-Z]').hasMatch(firstChar)) {
+          firstChar = '#';
         }
+
+        if (!_membersByAlphabet.containsKey(firstChar)) {
+          _membersByAlphabet[firstChar] = [];
+          _alphabetList.add(firstChar);
+          _alphabetKeys[firstChar] = GlobalKey();
+        }
+        _membersByAlphabet[firstChar]!.add(member);
       }
 
       // 排序字母列表
@@ -134,32 +165,31 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
         return a.compareTo(b);
       });
     } else {
-      // 根据搜索结果重新分组，只显示不在群中的好友
-      _filteredFriends = _allFriends.where((friend) {
-        return !_groupMemberUserIds.contains(friend.userName ?? "") &&
-            ((friend.nickName?.toLowerCase().contains(query.toLowerCase()) ??
-                    false) ||
-                (friend.remarks?.contains(query) ?? false));
+      // 根据搜索结果重新分组，只显示不是当前用户的群成员
+      String? currentUserName = GlobalUtil().userName;
+      _filteredMembers = _allMembers.where((member) {
+        return (currentUserName == null || member.userId != currentUserName) &&
+            member.groupNickName.toLowerCase().contains(query.toLowerCase());
       }).toList();
 
-      _friendsByAlphabet = {};
+      _membersByAlphabet = {};
       _alphabetList = [];
       _alphabetKeys = {};
 
-      for (var friend in _filteredFriends) {
-        String firstChar = friend.nickName?.isNotEmpty ?? false
-            ? friend.nickName![0].toUpperCase()
+      for (var member in _filteredMembers) {
+        String firstChar = member.groupNickName.isNotEmpty
+            ? member.groupNickName[0].toUpperCase()
             : '#';
         if (!RegExp(r'[A-Z]').hasMatch(firstChar)) {
           firstChar = '#';
         }
 
-        if (!_friendsByAlphabet.containsKey(firstChar)) {
-          _friendsByAlphabet[firstChar] = [];
+        if (!_membersByAlphabet.containsKey(firstChar)) {
+          _membersByAlphabet[firstChar] = [];
           _alphabetList.add(firstChar);
           _alphabetKeys[firstChar] = GlobalKey();
         }
-        _friendsByAlphabet[firstChar]!.add(friend);
+        _membersByAlphabet[firstChar]!.add(member);
       }
 
       // 排序字母列表
@@ -172,31 +202,26 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
     setState(() {});
   }
 
-  void _toggleFriendSelection(FriendInfoModel friend) {
+  void _toggleMemberSelection(GroupMemberModel member) {
     setState(() {
-      if (_selectedFriends.contains(friend)) {
-        _selectedFriends.remove(friend);
+      if (_selectedMembers.contains(member)) {
+        _selectedMembers.remove(member);
       } else {
-        _selectedFriends.add(friend);
+        _selectedMembers.add(member);
       }
     });
   }
 
   void _confirmSelection() async {
     try {
-      // 从选中的好友中提取 userName 列表，并处理可空值
-      List<String> selectedUserNames = _selectedFriends
-          .map((friend) => friend.userName ?? "")
+      // 从选中的成员中提取 userId 列表
+      List<String> selectedUserIds = _selectedMembers
+          .map((member) => member.userId)
           .toList();
 
-      // 过滤掉空字符串，确保只传递有效的用户名
-      selectedUserNames = selectedUserNames
-          .where((userName) => userName.isNotEmpty)
-          .toList();
-
-      // 检查是否有选中的好友
-      if (selectedUserNames.isEmpty) {
-        throw Exception('请至少选择一个好友');
+      // 检查是否有选中的成员
+      if (selectedUserIds.isEmpty) {
+        throw Exception('请至少选择一个成员');
       }
 
       // 转换 groupId 为 int 类型，处理可能的格式异常
@@ -210,8 +235,8 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
         throw Exception('无效的群 ID 格式: $e');
       }
 
-      // 调用 addGroup 接口
-      int code = await addGroup(groupIdInt, selectedUserNames);
+      // 调用 removeGroupMember 接口
+      int code = await minuGroup(groupIdInt, selectedUserIds);
 
       if (code == 100) {
         // 检查页面是否仍然可见
@@ -219,44 +244,37 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
           // 显示成功提示
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text('邀请好友进群成功')));
+          ).showSnackBar(SnackBar(content: Text('移除群成员成功')));
 
-          // 更新群成员列表，确保下次打开页面时能正确过滤
+          // 更新群成员列表，确保下次打开页面时能正确显示
           setState(() {
-            // 将新邀请的好友添加到群成员列表中
-            for (var friend in _selectedFriends) {
-              if (!_groupMemberUserIds.contains(friend.userName ?? "")) {
-                _groupMemberUserIds.add(friend.userName ?? "");
-              }
-            }
+            // 从所有成员列表中移除已选择的成员
+            _allMembers.removeWhere(
+              (member) => _selectedMembers.contains(member),
+            );
+
+            // 重新加载成员列表，确保正确过滤
+            _loadMembers();
+
+            // 清空选中的成员列表
+            _selectedMembers.clear();
           });
 
-          // 等待状态更新完成后，重新加载好友列表
-          Future.delayed(Duration(milliseconds: 100), () {
-            setState(() {
-              // 重新加载好友列表，确保正确过滤
-              _loadFriends();
-
-              // 清空选中的好友列表
-              _selectedFriends.clear();
-            });
-
-            // 返回上一页
-            Navigator.pop(context, _selectedFriends);
-          });
+          // 返回上一页
+          Navigator.pop(context, _selectedMembers);
         }
       } else {
-        throw Exception('邀请好友进群失败，错误码: $code');
+        throw Exception('移除群成员失败，错误码: $code');
       }
     } catch (e) {
-      print('邀请好友进群失败: $e');
+      print('移除群成员失败: $e');
 
       // 检查页面是否仍然可见
       if (mounted) {
         // 显示错误提示
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('邀请好友进群失败: $e')));
+        ).showSnackBar(SnackBar(content: Text('移除群成员失败: $e')));
       }
     }
   }
@@ -284,7 +302,7 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: Text('选择联系人'),
+        title: Text('选择要移除的成员'),
         leading: IconButton(
           icon: Icon(Icons.close),
           onPressed: () {
@@ -304,7 +322,7 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                   color: Colors.white,
                   child: TextField(
                     controller: _searchController,
-                    onChanged: _filterFriends,
+                    onChanged: _filterMembers,
                     decoration: InputDecoration(
                       hintText: '搜索',
                       prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
@@ -318,7 +336,7 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                   ),
                 ),
 
-                // 好友列表
+                // 成员列表
                 Expanded(
                   child: Stack(
                     children: [
@@ -327,8 +345,8 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                         itemCount: _alphabetList.length,
                         itemBuilder: (context, index) {
                           String alphabet = _alphabetList[index];
-                          List<FriendInfoModel> friends =
-                              _friendsByAlphabet[alphabet]!;
+                          List<GroupMemberModel> members =
+                              _membersByAlphabet[alphabet]!;
 
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,18 +368,18 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                                 ),
                               ),
 
-                              // 好友列表
+                              // 成员列表
                               Column(
-                                children: friends.map((friend) {
+                                children: members.map((member) {
                                   return Container(
                                     color: Colors.white,
                                     child: ListTile(
                                       leading: Checkbox(
-                                        value: _selectedFriends.contains(
-                                          friend,
+                                        value: _selectedMembers.contains(
+                                          member,
                                         ),
                                         onChanged: (value) {
-                                          _toggleFriendSelection(friend);
+                                          _toggleMemberSelection(member);
                                         },
                                       ),
                                       title: Row(
@@ -376,7 +394,10 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                                               shape: BoxShape.circle,
                                               image: DecorationImage(
                                                 image: NetworkImage(
-                                                  friend.avatar ?? '',
+                                                  GlobalUtil().getImageURL(
+                                                    member.userId,
+                                                    'head.jpg',
+                                                  ),
                                                 ),
                                                 fit: BoxFit.cover,
                                               ),
@@ -388,9 +409,16 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 Text(
-                                                  friend.nickName ?? '',
+                                                  member.groupNickName,
                                                   style: TextStyle(
                                                     fontSize: 16.0,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'ID: ${member.userId}',
+                                                  style: TextStyle(
+                                                    fontSize: 12.0,
+                                                    color: Colors.grey[500],
                                                   ),
                                                 ),
                                               ],
@@ -399,7 +427,7 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                                         ],
                                       ),
                                       onTap: () {
-                                        _toggleFriendSelection(friend);
+                                        _toggleMemberSelection(member);
                                       },
                                     ),
                                   );
@@ -453,13 +481,13 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
-                        onPressed: _selectedFriends.isNotEmpty
+                        onPressed: _selectedMembers.isNotEmpty
                             ? _confirmSelection
                             : null,
                         child: Text(
                           '完成',
                           style: TextStyle(
-                            color: _selectedFriends.isNotEmpty
+                            color: _selectedMembers.isNotEmpty
                                 ? Colors.black
                                 : Colors.grey[400],
                           ),

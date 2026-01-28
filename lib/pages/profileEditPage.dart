@@ -47,9 +47,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
 
   // 构建带有时间戳的头像URL
   String _buildAvatarUrl() {
+    String avatarName = GlobalUtil().userInfoModel.avatar ?? "head.jpg";
     final String baseUrl = GlobalUtil().getImageURL(
       GlobalUtil().userName ?? "",
-      "head.jpg",
+      avatarName,
     );
     final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
     return _shouldRefreshAvatar
@@ -66,17 +67,40 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     });
 
     try {
+      // 生成带时间戳的头像文件名
+      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      String avatarFileName = "head_$timestamp.jpg";
+
       // 调用GlobalUtil的selectAndUploadAvatar方法
       final Uint8List? imageData = await GlobalUtil().selectAndUploadAvatar(
-        "head.jpg",
+        avatarFileName,
       );
 
       if (imageData != null) {
-        // 头像上传成功，标记需要刷新头像
-        setState(() {
-          _shouldRefreshAvatar = true;
-        });
-        _showMessage('头像修改成功');
+        // 头像上传成功，更新用户信息中的头像名
+        final UserInfoModel currentUserInfo = GlobalUtil().userInfoModel;
+        final UserInfoModel updatedUserInfo = UserInfoModel(
+          userName: currentUserInfo.userName,
+          nickName: currentUserInfo.nickName,
+          avatar: avatarFileName,
+          signature: currentUserInfo.signature,
+          friendListData: currentUserInfo.friendListData,
+        );
+
+        // 调用保存个人信息API更新头像名
+        final int code = await updateUserInfoApi(updatedUserInfo);
+
+        if (code == 100) {
+          // 保存更新后的用户信息到全局变量
+          GlobalUtil().userInfoModel = updatedUserInfo;
+          // 标记需要刷新头像
+          setState(() {
+            _shouldRefreshAvatar = true;
+          });
+          _showMessage('头像修改成功');
+        } else {
+          _showMessage('头像修改失败，请稍后重试');
+        }
       } else {
         // 用户取消了选择或上传失败
         _showMessage('头像修改取消或失败');

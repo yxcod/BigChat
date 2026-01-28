@@ -59,8 +59,19 @@ Future<int> updateGroupInfo(
   String description,
   int maxMembers,
   int isActive,
+  String? groupAvatar,
 ) async {
   try {
+    debugPrint('updateGroupInfo 被调用:');
+    debugPrint('userName: $userName');
+    debugPrint('groupId: $groupId');
+    debugPrint('groupName: $groupName');
+    debugPrint('groupName 长度: ${groupName.length}');
+    debugPrint('description: $description');
+    debugPrint('maxMembers: $maxMembers');
+    debugPrint('isActive: $isActive');
+    debugPrint('groupAvatar: $groupAvatar');
+
     final httpUtil = HttpUtil();
     final response = await httpUtil.post(
       '/api/group/updateGroupInfo',
@@ -71,10 +82,12 @@ Future<int> updateGroupInfo(
         'description': description,
         'maxMembers': maxMembers,
         'isActive': isActive,
+        'groupAvatar': groupAvatar ?? '',
       },
     );
 
     if (response.statusCode == 200) {
+      debugPrint('updateGroupInfo 响应: ${response.data}');
       return response.data['code'] ?? 0;
     } else {
       throw Exception('更新群信息失败: ${response.statusCode}');

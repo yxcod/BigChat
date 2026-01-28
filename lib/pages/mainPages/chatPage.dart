@@ -65,6 +65,8 @@ class _ChatpageState extends State<Chatpage> {
   Timer? _fetchTimer;
   GlobalUtil globalUtil = GlobalUtil();
   bool _wasChatting = false;
+  // 头像 URL 缓存，用于避免重复加载
+  Map<String, String> _avatarCache = {};
 
   @override
   void initState() {
@@ -204,7 +206,27 @@ class _ChatpageState extends State<Chatpage> {
 
       // 格式化时间
       final formattedTime = GlobalUtil.formatTimestamp(conversation.updateTime);
-      String avatarURL = globalUtil.getImageURL(targetUserName, "head.jpg");
+      // 使用好友的 avatar 字段作为头像文件名，实现缓存机制
+      String avatarName = friend.avatar ?? "head.jpg";
+      String newAvatarUrl = globalUtil.getImageURL(targetUserName, avatarName);
+
+      // 检查缓存中是否已有该用户的头像，并且 URL 是否相同
+      String avatarURL;
+      if (_avatarCache.containsKey(targetUserName)) {
+        String cachedUrl = _avatarCache[targetUserName]!;
+        if (cachedUrl == newAvatarUrl) {
+          // URL 相同，使用缓存的头像 URL
+          avatarURL = cachedUrl;
+        } else {
+          // URL 不同，使用新的头像 URL 并更新缓存
+          avatarURL = newAvatarUrl;
+          _avatarCache[targetUserName] = newAvatarUrl;
+        }
+      } else {
+        // 缓存中没有，使用新的头像 URL 并加入缓存
+        avatarURL = newAvatarUrl;
+        _avatarCache[targetUserName] = newAvatarUrl;
+      }
       // 同时检查null和空字符串
       // String testnickName = (friend.nickName?.isEmpty ?? true)
       //     ? "错误"

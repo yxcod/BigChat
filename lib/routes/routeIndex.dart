@@ -7,6 +7,7 @@ import '../pages/chatDialog.dart';
 import '../pages/groupPages/groupChatDialog.dart';
 import '../pages/groupPages/groupChatSettingsPage.dart';
 import '../pages/groupPages/selectContactsPage.dart';
+import '../pages/groupPages/selectGroupMembersToRemovePage.dart';
 import '../pages/groupPages/groupMembersPage.dart';
 import '../pages/friendManage/searchFriendPage.dart';
 import '../pages/friendManage/friendDetailPage.dart';
@@ -80,6 +81,19 @@ Widget getRootWidget() {
               groupName: groupData['groupName'] ?? '默认群聊',
             ),
           );
+        case '/selectContactsPage':
+          final groupData = settings.arguments as Map<String, dynamic>? ?? {};
+          return MaterialPageRoute(
+            builder: (context) =>
+                SelectContactsPage(groupId: groupData['groupId'] ?? ''),
+          );
+        case '/selectGroupMembersToRemovePage':
+          final groupData = settings.arguments as Map<String, dynamic>? ?? {};
+          return MaterialPageRoute(
+            builder: (context) => SelectGroupMembersToRemovePage(
+              groupId: groupData['groupId'] ?? '',
+            ),
+          );
         default:
           return null;
       }
@@ -93,7 +107,6 @@ Map<String, Widget Function(BuildContext)> getRoutes() {
     '/mainWidget': (context) => BigchatMainPage(),
     '/searchFriendPage': (context) => SearchFriendPage(),
     '/registerPage': (context) => RegisterPage(),
-    '/selectContactsPage': (context) => SelectContactsPage(),
     '/groupMembersPage': (context) =>
         GroupMembersPage(groupId: 'default', groupName: '默认群聊'),
   };

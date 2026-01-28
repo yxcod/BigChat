@@ -18,6 +18,9 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
   final GlobalKey _popupButtonKey = GlobalKey();
   final GlobalUtil _globalUtil = GlobalUtil();
 
+  // 头像 URL 缓存，用于避免重复加载
+  Map<String, String> _avatarCache = {};
+
   // 模拟朋友圈数据
   final List<String> _momentImages = [
     'https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=300&h=300&fit=crop',
@@ -92,13 +95,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
       child: Row(
         children: [
           // 头像
-          CircleAvatar(
-            radius: 30,
-            backgroundImage: NetworkImage(
-              widget.friendData['avatar'] ??
-                  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-            ),
-          ),
+          _buildAvatar(),
 
           SizedBox(width: 16),
 
@@ -445,6 +442,37 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
             VideoCallPage(channelName: channelName, token: token),
       ),
     );
+  }
+
+  // 构建头像，实现缓存机制
+  Widget _buildAvatar() {
+    String userName = widget.friendData['userName'] ?? "";
+    String avatarUrl =
+        widget.friendData['avatar'] ??
+        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop';
+
+    // 检查缓存中是否已有该用户的头像，并且 URL 是否相同
+    if (_avatarCache.containsKey(userName)) {
+      String cachedUrl = _avatarCache[userName]!;
+      if (cachedUrl == avatarUrl) {
+        // URL 相同，使用缓存的头像 URL
+        return CircleAvatar(
+          radius: 30,
+          backgroundImage: NetworkImage(cachedUrl),
+        );
+      } else {
+        // URL 不同，使用新的头像 URL 并更新缓存
+        _avatarCache[userName] = avatarUrl;
+        return CircleAvatar(
+          radius: 30,
+          backgroundImage: NetworkImage(avatarUrl),
+        );
+      }
+    } else {
+      // 缓存中没有，使用新的头像 URL 并加入缓存
+      _avatarCache[userName] = avatarUrl;
+      return CircleAvatar(radius: 30, backgroundImage: NetworkImage(avatarUrl));
+    }
   }
 
   // 显示提示信息

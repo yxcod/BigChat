@@ -5,13 +5,6 @@ import '../../api/getInfoAPI.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../model/friendRequestModel.dart';
 
-String _addTimestamp(String url) {
-  if (url.isEmpty || !url.startsWith('http')) return url;
-  final ts = DateTime.now().millisecondsSinceEpoch;
-  final sep = url.contains('?') ? '&' : '?';
-  return '$url${sep}_=$ts';
-}
-
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
   Friendspage({Key? key, required this.friendListDate}) : super(key: key);
@@ -99,8 +92,10 @@ class _FriendsPage extends State<Friendspage>
           final newFriends = userInfo.friendListData!.map((f) {
             final avatarName = f.avatar ?? '';
             final userName = f.userName ?? '';
+            // 使用 globalUtil.getImageURL 生成头像 URL
             String avatarURL = _globalUtil.getImageURL(userName, avatarName);
             final previousAvatar = previousAvatars[userName] ?? '';
+            // 只有当 URL 不同时才更新缓存
             if (avatarURL != previousAvatar && avatarURL.isNotEmpty) {
               previousAvatars[userName] = avatarURL;
             }
@@ -266,20 +261,9 @@ class _FriendsPage extends State<Friendspage>
                         backgroundColor: Colors.grey[200],
                         radius: 20,
                         child: ClipOval(
-                          child: Stack(
-                            children: [
-                              if (friends[index].previousAvatar.isNotEmpty)
-                                Positioned.fill(
-                                  child: Image.network(
-                                    friends[index].previousAvatar,
-                                    fit: BoxFit.cover,
-                                    width: 40,
-                                    height: 40,
-                                  ),
-                                ),
-                              Positioned.fill(
-                                child: Image.network(
-                                  _addTimestamp(friends[index].avatar),
+                          child: friends[index].avatar != '👤'
+                              ? Image.network(
+                                  friends[index].avatar,
                                   fit: BoxFit.cover,
                                   width: 40,
                                   height: 40,
@@ -289,10 +273,8 @@ class _FriendsPage extends State<Friendspage>
                                       color: Colors.grey,
                                     );
                                   },
-                                ),
-                              ),
-                            ],
-                          ),
+                                )
+                              : Icon(Icons.person, color: Colors.grey),
                         ),
                       ),
                       // 在线状态指示器 - 放置在CircleAvatar外部，避免被裁剪
