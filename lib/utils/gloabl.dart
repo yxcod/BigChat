@@ -127,7 +127,14 @@ class GlobalUtil {
   // 添加消息到聊天记录
   void addMessage(String userName, Message message) {
     _chatRecords.putIfAbsent(userName, () => []);
-    _chatRecords[userName]!.add(message);
+
+    // 检查消息是否已存在（通过msgId判断），避免重复添加
+    bool messageExists = _chatRecords[userName]!.any(
+      (msg) => msg.msgId == message.msgId,
+    );
+    if (!messageExists) {
+      _chatRecords[userName]!.add(message);
+    }
   }
 
   // 获取某个用户的所有聊天记录

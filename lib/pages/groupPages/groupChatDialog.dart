@@ -15,6 +15,7 @@ import '../../model/messageModel.dart';
 import '../videoCallPage.dart';
 import '../../utils/http.dart';
 import '../../api/getGroupInfoAPI.dart';
+import '../../api/getGroupMemberAPI.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final String groupId;
@@ -36,7 +37,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
-  Timer? _groupInfoTimer; // 定时器，用于定期获取群信息
+  late Timer _groupInfoTimer; // 定时器，用于定期获取群信息
+  late Timer _groupMembersTimer; // 定时器，用于定期检查群成员列表
   String _currentGroupName = ''; // 当前显示的群名称
 
   @override
@@ -63,6 +65,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     // 设置定时器，每隔2秒获取一次群信息
     _groupInfoTimer = Timer.periodic(Duration(seconds: 2), (timer) {
       _fetchGroupInfo();
+    });
+
+    // 设置定时器，每隔3秒检查一次群成员列表
+    _groupMembersTimer = Timer.periodic(Duration(seconds: 3), (timer) {
+      _checkGroupMembership();
     });
   }
 
@@ -491,6 +498,62 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     }
   }
 
+  // 检查用户是否在群成员列表中
+  Future<void> _checkGroupMembership() async {
+    try {
+      int groupIdInt = int.parse(widget.groupId);
+      // 导入getGroupMemberAPI.dart中的getGroupMembers函数
+      List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
+
+      // 遍历群成员列表，检查当前用户是否在列表中
+      String? currentUserId = GlobalUtil().userName;
+      bool foundUser = false;
+
+      for (var member in members) {
+        if (currentUserId != null && member.userId == currentUserId) {
+          foundUser = true;
+          break;
+        }
+      }
+
+      if (!foundUser) {
+        print('未找到当前用户在群成员列表中');
+        // 停止所有定时器，防止重复触发
+        _groupInfoTimer.cancel();
+        _groupMembersTimer.cancel();
+        // 用户不在群成员列表中，说明已被移除出群聊
+        if (mounted) {
+          // 导航到主界面并传递被移除群聊的信号，同时清除导航栈
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/mainWidget',
+            (route) => false, // 清除所有路由，使mainWidget成为根页面
+            arguments: {'isRemovedFromGroup': true},
+          );
+        }
+      }
+    } catch (e) {
+      print('检查群成员列表失败: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _textFieldFocusNode.dispose();
+    _scrollController.dispose();
+
+    // 取消定时器
+    _groupInfoTimer.cancel();
+    _groupMembersTimer.cancel();
+
+    // 离开聊天页面时，更新全局聊天状态
+    final globalUtil = GlobalUtil();
+    globalUtil.isChatting = false;
+    globalUtil.currentChatUserName = null;
+
+    super.dispose();
+  }
+
   final TextEditingController _textController = TextEditingController();
   bool _isComposing = false;
 
@@ -875,25 +938,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         );
       },
     );
-  }
-
-  @override
-  void dispose() {
-    _textController.dispose();
-    _textFieldFocusNode.dispose();
-    _scrollController.dispose();
-
-    // 取消定时器
-    if (_groupInfoTimer != null) {
-      _groupInfoTimer!.cancel();
-    }
-
-    // 离开聊天页面时，更新全局聊天状态
-    final globalUtil = GlobalUtil();
-    globalUtil.isChatting = false;
-    globalUtil.currentChatUserName = null;
-
-    super.dispose();
   }
 }
 

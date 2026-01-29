@@ -623,7 +623,10 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
   // 确保WebSocket已连接
   void _ensureWebSocketConnected() {
-    // 无论是否已经连接，都更新回调函数
+    // 先清空所有现有的消息监听器，避免重复注册
+    _wsManager.clearMessageListeners();
+
+    // 连接WebSocket并添加新的监听器
     _wsManager.connect(
       '${GlobalUtil().baseWebSocketURL}/api/chat?userName=${GlobalUtil().userName}',
       onStatusChanged: (status) {
@@ -1110,13 +1113,13 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
   String _getTime() {
     final now = DateTime.now();
-    return '${now.month.toString().padLeft(2, '0')}:${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    return '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
   }
 
-  // 将毫秒级时间戳转换为UI显示的时间格式 (MM:dd HH:MM)
+  // 将毫秒级时间戳转换为UI显示的时间格式 (MM-dd HH:MM)
   String _formatTimestamp(int timestamp) {
     final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    return '${dateTime.month.toString().padLeft(2, '0')}:${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return '${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
   // 生成会话ID，规则：较大的手机号放在前面，用下划线分隔

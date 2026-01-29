@@ -38,7 +38,40 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
     // 在页面构建完成后获取未读消息
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchUnreadMessages();
+
+      // 检查是否有被移除群聊的信号
+      final ModalRoute<dynamic>? route = ModalRoute.of(context);
+      if (route != null && route.settings.arguments != null) {
+        final arguments = route.settings.arguments as Map<String, dynamic>;
+        if (arguments.containsKey('isRemovedFromGroup') &&
+            arguments['isRemovedFromGroup'] == true) {
+          // 显示被移除群聊的弹窗提示
+          _showRemovedFromGroupDialog();
+        }
+      }
     });
+  }
+
+  // 显示被移除群聊的弹窗提示
+  void _showRemovedFromGroupDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('提示'),
+          content: Text('您已被移除出群聊'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // 不再在chatMainWidget中直接加载聊天记录，而是由chatPage在获取会话列表后负责加载

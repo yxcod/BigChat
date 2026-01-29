@@ -34,7 +34,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   String _groupAnnouncement = '未设置';
   String _groupAvatar = 'https://via.placeholder.com/60';
   List<Map<String, dynamic>> _members = [];
+  // 存储所有定时器，便于在需要时停止
   late Timer _timer;
+  late Timer _groupInfoTimer;
   final globalUtil = GlobalUtil();
   // 静态缓存已经加载成功的头像 URL，避免重复加载
   static Map<String, String> _avatarCache = {};
@@ -216,31 +218,11 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   }
 
   void _inviteMembers() async {
-    final result = await Navigator.pushNamed(
+    await Navigator.pushNamed(
       context,
       '/selectContactsPage',
       arguments: {'groupId': widget.groupId},
     );
-    if (result != null && result is List<dynamic>) {
-      // 处理返回的选择结果
-      List<dynamic> selectedFriends = result;
-      // 这里可以添加邀请好友进群的逻辑
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text('提示'),
-            content: Text('已邀请 ${selectedFriends.length} 位好友'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('确定'),
-              ),
-            ],
-          );
-        },
-      );
-    }
   }
 
   @override
@@ -261,7 +243,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
       _fetchGroupMembers();
     });
     // 设置定时器，每2秒获取一次群信息，以更新群名称
-    Timer.periodic(Duration(seconds: 2), (timer) {
+    _groupInfoTimer = Timer.periodic(Duration(seconds: 2), (timer) {
       _fetchGroupInfo();
     });
   }
@@ -306,8 +288,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
 
   @override
   void dispose() {
-    // 清理定时器
+    // 清理所有定时器
     _timer.cancel();
+    _groupInfoTimer.cancel();
     // 取消上传操作
     if (_uploadCancelToken != null && !_uploadCancelToken!.isCancelled) {
       _uploadCancelToken!.cancel('页面已关闭');
@@ -348,25 +331,16 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
 
         if (!foundUser) {
           print('未找到当前用户在群成员列表中');
+          // 停止所有定时器，防止重复触发弹窗
+          _timer.cancel();
+          _groupInfoTimer.cancel();
           // 用户不在群成员列表中，说明已被移除出群聊
           if (mounted) {
-            // 显示弹窗提示
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => AlertDialog(
-                title: Text('提示'),
-                content: Text('您已被移除出群聊'),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      // 退出所有群聊相关界面，返回最上级
-                      Navigator.of(context).popUntil((route) => route.isFirst);
-                    },
-                    child: Text('确定'),
-                  ),
-                ],
-              ),
+            // 导航到主界面并传递被移除群聊的信号，同时清除导航栈
+            Navigator.of(context).pushNamedAndRemoveUntil(
+              '/mainWidget',
+              (route) => false, // 清除所有路由，使mainWidget成为根页面
+              arguments: {'isRemovedFromGroup': true},
             );
           }
           return;
@@ -634,10 +608,47 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
               child: Text('取消'),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(context);
-                Navigator.pop(context); // 退出群聊设置页面
-                // 这里可以添加退出群聊的逻辑
+
+                try {
+                  // 获取当前用户的 userName
+                  String? currentUserId = globalUtil.userName;
+                  if (currentUserId == null) {
+                    throw Exception('当前用户未登录');
+                  }
+
+                  // 将 groupId 转换为 int 类型
+                  int groupIdInt = int.parse(widget.groupId);
+
+                  // 调用 minuGroup 函数，将用户自身从群聊中移除
+                  int code = await minuGroup(groupIdInt, [currentUserId]);
+
+                  if (code == 100) {
+                    // 退出群聊设置页面
+                    Navigator.pop(context);
+                  } else {
+                    throw Exception('退出群聊失败，错误码: $code');
+                  }
+                } catch (e) {
+                  print('退出群聊失败: $e');
+                  // 显示错误提示
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        title: Text('提示'),
+                        content: Text('退出群聊失败: $e'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text('确定'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                }
               },
               child: Text('确定', style: TextStyle(color: Colors.red)),
             ),

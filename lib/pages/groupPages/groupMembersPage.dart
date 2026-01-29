@@ -60,35 +60,6 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
       if (members.isEmpty) {
         print('获取到的成员列表为空，使用模拟数据');
       }
-
-      // 检查当前用户是否在群成员列表中
-      String? currentUserName = GlobalUtil().userName;
-      if (currentUserName != null &&
-          !members.any((member) => member.userId == currentUserName)) {
-        // 用户不在群成员列表中，说明已被移除出群聊
-        if (mounted) {
-          // 显示弹窗提示
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              title: Text('提示'),
-              content: Text('您已被移除出群聊'),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    // 退出所有群聊相关界面，返回最上级
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                  },
-                  child: Text('确定'),
-                ),
-              ],
-            ),
-          );
-        }
-        return;
-      }
-
       setState(() {
         _groupMembers = members;
         // 直接设置 _filteredMembers，避免 _filterMembers 方法可能的问题
