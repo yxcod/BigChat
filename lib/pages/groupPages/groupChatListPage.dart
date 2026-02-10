@@ -6,7 +6,7 @@ import '../../api/getGroupInfoAPI.dart';
 import '../../model/groupInfoModel.dart';
 
 class GroupChat {
-  final String groupId;
+  final int groupId;
   final String name;
   final String avatar;
   final String previousAvatar;
@@ -20,7 +20,7 @@ class GroupChat {
 
   factory GroupChat.fromGroupInfoModel(GroupInfoModel model) {
     return GroupChat(
-      groupId: model.groupId.toString(),
+      groupId: model.groupId,
       name: model.groupName,
       avatar: model.groupAvatar, // 默认头像，可根据实际情况修改
       previousAvatar: '',
@@ -88,11 +88,15 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
       );
       final newGroups = groupInfoModels.map((model) {
         final avatarName = model.groupAvatar; // 默认头像，可根据实际情况修改
-        final groupId = model.groupId.toString();
-        String avatarURL = _getAvatarUrl(groupId, avatarName);
-        final previousAvatar = previousAvatars[groupId] ?? '';
+        final groupId = model.groupId; // 保持整数类型
+        String avatarURL = _getAvatarUrl(
+          groupId.toString(),
+          avatarName,
+        ); // 获取头像URL时转换为字符串
+        final groupIdStr = groupId.toString(); // 用于缓存键
+        final previousAvatar = previousAvatars[groupIdStr] ?? '';
         if (avatarURL != previousAvatar && avatarURL.isNotEmpty) {
-          previousAvatars[groupId] = avatarURL;
+          previousAvatars[groupIdStr] = avatarURL;
         }
         return GroupChat(
           groupId: groupId,
@@ -199,6 +203,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
                       context,
                       '/groupChatDialog',
                       arguments: {
+                        //groupChat.groupId
                         'groupId': groupChat.groupId,
                         'groupName': groupChat.name,
                       },

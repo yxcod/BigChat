@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 import '../../model/groupMemberModel.dart';
 import '../../model/groupInfoModel.dart';
 import '../../utils/WebSocketManager.dart';
@@ -18,7 +18,7 @@ import '../../api/getGroupInfoAPI.dart';
 import '../../api/getGroupMemberAPI.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
-  final String groupId;
+  final int groupId;
   final String groupName;
 
   GroupChatDialogPage({
@@ -87,7 +87,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
       // 找到当前群
       for (var group in groups) {
-        if (group.groupId.toString() == widget.groupId) {
+        if (group.groupId == widget.groupId) {
           // 检查群名称是否有变化
           if (group.groupName != _currentGroupName) {
             setState(() {
@@ -114,7 +114,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
       // 记录当前聊天记录
       List<Message> currentMessages = List.from(
-        globalUtil.getChatRecords(widget.groupId),
+        globalUtil.getChatRecords(widget.groupId.toString()),
       );
 
       // 记录当前可见区域的关键消息
@@ -134,10 +134,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       }
 
       // 调用API加载更多记录
-      await globalUtil.loadMoreChatRecords(widget.groupId);
+      await globalUtil.loadMoreChatRecords(widget.groupId.toString());
 
       // 获取新的聊天记录列表
-      List<Message> newMessages = globalUtil.getChatRecords(widget.groupId);
+      List<Message> newMessages = globalUtil.getChatRecords(
+        widget.groupId.toString(),
+      );
 
       // 更新UI
       setState(() {});
@@ -191,7 +193,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       // 获取当前时间和消息ID
       String time = _getTime();
       int msgId = DateTime.now().millisecondsSinceEpoch;
-      String conversationId = widget.groupId;
+      String conversationId = widget.groupId.toString();
 
       // 生成图片文件名
       String imageName = '${globalUtil.userName}_${widget.groupId}_$msgId.jpg';
@@ -207,10 +209,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         conversationId: conversationId,
         messageType: MessageType.image,
         status: MessageStatus.failed,
+        senderId: globalUtil.userName,
       );
 
       // 添加消息到全局聊天记录
-      globalUtil.addMessage(widget.groupId, newMessage);
+      globalUtil.addMessage(widget.groupId.toString(), newMessage);
 
       // 更新UI并滚动到底部
       setState(() {});
@@ -228,7 +231,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         );
 
         // 更新消息状态为发送中
-        List<Message> groupMessages = globalUtil.getChatRecords(widget.groupId);
+        List<Message> groupMessages = globalUtil.getChatRecords(
+          widget.groupId.toString(),
+        );
         for (var message in groupMessages) {
           if (message.msgId == msgId && message.isMe) {
             message.status = MessageStatus.sent;
@@ -287,10 +292,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       String messageType = message['type'] ?? '';
 
       switch (messageType) {
-        case 'chat':
+        case 'groupChat':
           _handleChatMessage(message);
           break;
-        case 'chatCallback':
+        case 'groupChatCallback':
           _handleChatCallback(message);
           break;
         case 'videoCallInvite':
@@ -321,7 +326,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     if (sender.isNotEmpty && content.isNotEmpty) {
       // 检查消息是否已存在
       List<Message> existingMessages = globalUtil.getChatRecords(
-        widget.groupId,
+        widget.groupId.toString(),
       );
       bool messageExists = existingMessages.any((msg) => msg.msgId == msgId);
 
@@ -333,20 +338,21 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           isMe: sender == globalUtil.userName,
           time: sendTime,
           isRead: false,
-          conversationId: widget.groupId,
+          conversationId: widget.groupId.toString(),
           messageType: msgType == 2 ? MessageType.image : MessageType.text,
           status: MessageStatus.sent,
+          senderId: sender,
         );
 
         // 添加消息到全局聊天记录
-        globalUtil.addMessage(widget.groupId, newMessage);
+        globalUtil.addMessage(widget.groupId.toString(), newMessage);
 
         // 更新UI并滚动到底部
         setState(() {});
         _scrollToBottom();
 
         // 发送已读确认
-        _sendReadAck(msgId);
+        _sendReadAck(msgId, sender);
       }
     }
   }
@@ -359,7 +365,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     String sender = messageData['sender'] ?? '';
 
     // 更新消息状态
-    List<Message> groupMessages = globalUtil.getChatRecords(widget.groupId);
+    List<Message> groupMessages = globalUtil.getChatRecords(
+      widget.groupId.toString(),
+    );
     for (var message in groupMessages) {
       if (message.msgId == msgId) {
         if (status == 'success' && message.isMe) {
@@ -437,14 +445,14 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   // 发送已读确认
-  void _sendReadAck(int msgId) {
+  void _sendReadAck(int msgId, String receiveId) {
     if (_wsManager.isConnected) {
       _wsManager.send({
-        'type': 'chatCallback',
+        'type': 'groupChatCallback',
         'msgId': msgId,
-        'receiveId': widget.groupId,
+        'receiveId': receiveId,
         'sender': GlobalUtil().userName,
-        'sessionId': widget.groupId,
+        'sessionId': widget.groupId.toString(),
         'status': 'read',
       });
     }
@@ -469,7 +477,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   // 滚动到底部的辅助方法
   void _scrollToBottom() {
-    if (GlobalUtil().getChatRecords(widget.groupId).isNotEmpty) {
+    if (GlobalUtil().getChatRecords(widget.groupId.toString()).isNotEmpty) {
       // 使用SchedulerBinding确保在适当的时间执行滚动
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
@@ -501,12 +509,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   // 检查用户是否在群成员列表中
   Future<void> _checkGroupMembership() async {
     try {
-      int groupIdInt = int.parse(widget.groupId);
       // 导入getGroupMemberAPI.dart中的getGroupMembers函数
-      List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
+      List<GroupMemberModel> members = await getGroupMembers(widget.groupId);
+
+      // 更新全局群成员列表
+      final globalUtil = GlobalUtil();
+      globalUtil.addGroupMembers(widget.groupId, members);
 
       // 遍历群成员列表，检查当前用户是否在列表中
-      String? currentUserId = GlobalUtil().userName;
+      String? currentUserId = globalUtil.userName;
       bool foundUser = false;
 
       for (var member in members) {
@@ -588,7 +599,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                   'type': 'groupVideoCallInvite',
                   'receiver': widget.groupId,
                   'sender': GlobalUtil().userName,
-                  'channelName': widget.groupId,
+                  'channelName': widget.groupId.toString(),
                   'token': token,
                   'time': DateTime.now().millisecondsSinceEpoch,
                 });
@@ -598,8 +609,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      VideoCallPage(channelName: widget.groupId, token: token),
+                  builder: (context) => VideoCallPage(
+                    channelName: widget.groupId.toString(),
+                    token: token,
+                  ),
                 ),
               );
             },
@@ -612,7 +625,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                 context,
                 '/groupChatSettings',
                 arguments: {
-                  'groupId': widget.groupId,
+                  'groupId': widget.groupId.toString(),
                   'groupName': _currentGroupName,
                 },
               );
@@ -645,12 +658,14 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                   reverse: false,
                   controller: _scrollController,
                   // 使用当前聊天群的全局消息列表，如果不存在则使用空列表
-                  itemCount: GlobalUtil().getChatRecords(widget.groupId).length,
+                  itemCount: GlobalUtil()
+                      .getChatRecords(widget.groupId.toString())
+                      .length,
                   itemBuilder: (context, index) {
                     // 获取当前聊天群的全局消息列表
                     final globalUtil = GlobalUtil();
                     final groupMessages = globalUtil.getChatRecords(
-                      widget.groupId,
+                      widget.groupId.toString(),
                     );
                     final message = groupMessages[index];
                     // 获取消息的未读人数
@@ -671,6 +686,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                         _showReadStatusList(message.msgId);
                       },
                       unreadCount: unreadCount,
+                      groupMembers: globalUtil.getGroupMembers(widget.groupId),
                     );
                   },
                 ),
@@ -751,7 +767,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     // 获取当前时间和消息ID
     String time = _getTime();
     int msgId = DateTime.now().millisecondsSinceEpoch;
-    String conversationId = widget.groupId;
+    String conversationId = widget.groupId.toString();
 
     final globalUtil = GlobalUtil();
 
@@ -769,10 +785,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       conversationId: conversationId,
       messageType: MessageType.text,
       status: MessageStatus.failed, // 初始状态为失败，等待WebSocket确认
+      senderId: globalUtil.userName,
     );
 
     // 添加消息到全局聊天记录
-    globalUtil.addMessage(widget.groupId, newMessage);
+    globalUtil.addMessage(widget.groupId.toString(), newMessage);
 
     // 初始化消息的已读状态
     _messageReadStatus.add({
@@ -799,7 +816,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       );
 
       // 更新消息状态为发送中
-      List<Message> groupMessages = globalUtil.getChatRecords(widget.groupId);
+      List<Message> groupMessages = globalUtil.getChatRecords(
+        widget.groupId.toString(),
+      );
       for (var message in groupMessages) {
         if (message.msgId == msgId && message.isMe) {
           message.status = MessageStatus.sent;
@@ -820,7 +839,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   void _sendWebSocketMessage({
     required int msgId,
     required String content,
-    required String receiver,
+    required int receiver,
     required String conversationId,
     required MessageType messageType,
   }) {
@@ -849,13 +868,13 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   String _getTime() {
     final now = DateTime.now();
-    return '${now.month.toString().padLeft(2, '0')}:${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    return '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
   }
 
-  // 将毫秒级时间戳转换为UI显示的时间格式 (MM:dd HH:MM)
+  // 将毫秒级时间戳转换为UI显示的时间格式 (MM-dd HH:MM)
   String _formatTimestamp(int timestamp) {
     final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    return '${dateTime.month.toString().padLeft(2, '0')}:${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return '${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
   // 显示已读状态列表
@@ -863,16 +882,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     // 查找消息的已读状态
     final msgStatus = _messageReadStatus.firstWhere(
       (status) => status['msgId'] == msgId,
-      orElse: () => {
-        'msgId': msgId,
-        'readCount': 0,
-        'unreadCount': 0,
-        'readMembers': [],
-        'unreadMembers': [], // 默认值
-      },
+      orElse: () => {'msgId': msgId, 'readCount': 0, 'readMembers': []},
     );
 
-    // 显示已读/未读成员列表
+    // 显示已读成员列表
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -905,34 +918,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                   },
                 ),
               ),
-              SizedBox(height: 10),
-              Text(
-                '未读 (${msgStatus['unreadCount']})',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              SizedBox(height: 10),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: msgStatus['unreadMembers'].length,
-                  itemBuilder: (context, index) {
-                    final memberName = msgStatus['unreadMembers'][index];
-                    final member = GroupMemberModel(
-                      userId: memberName,
-                      groupNickName: memberName,
-                    );
-                    return ListTile(
-                      leading: CircleAvatar(
-                        child: Text(member.groupNickName.substring(0, 1)),
-                        backgroundColor: Colors.grey[300],
-                      ),
-                      title: Text(
-                        member.groupNickName,
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    );
-                  },
-                ),
-              ),
             ],
           ),
         );
@@ -946,14 +931,24 @@ class GroupMessageBubble extends StatelessWidget {
   final String? currentUserAvatar;
   final VoidCallback onReadStatusTap;
   final int unreadCount;
+  final List<GroupMemberModel> groupMembers;
   final globalUtil = GlobalUtil();
   final dio = Dio();
+  // 静态缓存自己的头像 URL，用于避免重复加载
+  static String? _selfAvatarCache;
+  // 缓存自己的头像文件名，用于判断是否需要更新头像
+  static String? _selfAvatarNameCache;
+  // 静态缓存发送者的头像 URL，使用Map存储，键为发送者ID
+  static Map<String, String?> _senderAvatarCache = {};
+  // 静态缓存发送者的头像文件名，使用Map存储，键为发送者ID
+  static Map<String, String?> _senderAvatarNameCache = {};
 
   GroupMessageBubble({
     required this.message,
     required this.currentUserAvatar,
     required this.onReadStatusTap,
     required this.unreadCount,
+    required this.groupMembers,
   });
 
   // 获取未读人数
@@ -1167,10 +1162,10 @@ class GroupMessageBubble extends StatelessWidget {
                   margin: EdgeInsets.only(left: 8.0),
                   child: CircleAvatar(
                     radius: 20,
-                    backgroundImage: currentUserAvatar != null
-                        ? NetworkImage(currentUserAvatar!)
+                    backgroundImage: _getSelfAvatar() != null
+                        ? NetworkImage(_getSelfAvatar()!)
                         : null,
-                    child: currentUserAvatar == null
+                    child: _getSelfAvatar() == null
                         ? Text(
                             globalUtil.userName?.substring(0, 1) ?? '?',
                             style: TextStyle(fontSize: 16),
@@ -1317,20 +1312,92 @@ class GroupMessageBubble extends StatelessWidget {
 
   // 获取发送者名称
   String _getSenderName() {
-    // 这里简化处理，实际应该从消息中获取发送者ID，然后查找对应的群成员信息
     if (message.isMe) {
       return globalUtil.userName ?? '我';
     } else {
-      // 由于Message类中没有存储发送者信息，这里返回默认值
-      // 实际应用中应该从消息中获取发送者ID并查找对应的群成员
+      // 从消息中获取发送者ID
+      String? senderId = message.senderId;
+      if (senderId == null) {
+        return '群成员';
+      }
+
+      // 从群成员列表中查找发送者的群昵称
+      for (var member in groupMembers) {
+        if (member.userId == senderId) {
+          return member.groupNickName;
+        }
+      }
+
+      // 未找到发送者，返回默认值
       return '群成员';
     }
   }
 
   // 获取发送者头像
   String? _getSenderAvatar() {
-    // 这里简化处理，实际应该从消息中获取发送者ID，然后查找对应的群成员信息
-    // GroupMemberModel 没有 avatar 字段，这里返回 null
-    return null;
+    // 从消息中获取发送者ID
+    String? senderId = message.senderId;
+    if (senderId == null) {
+      return null;
+    }
+
+    // 从群成员列表中查找发送者的头像文件名
+    String? senderAvatarName;
+    for (var member in groupMembers) {
+      if (member.userId == senderId) {
+        senderAvatarName = member.avatar;
+        break;
+      }
+    }
+
+    if (senderAvatarName == null) {
+      return null;
+    }
+
+    // 检查发送者的头像文件名是否发生变化
+    if (_senderAvatarNameCache[senderId] != senderAvatarName) {
+      // 头像文件名发生变化，重新获取头像URL
+      _senderAvatarNameCache[senderId] = senderAvatarName;
+      _senderAvatarCache[senderId] = globalUtil.getImageURL(
+        senderId,
+        senderAvatarName,
+      );
+    } else if (_senderAvatarCache[senderId] == null) {
+      // 缓存中没有头像URL，获取头像URL
+      _senderAvatarCache[senderId] = globalUtil.getImageURL(
+        senderId,
+        senderAvatarName,
+      );
+    }
+
+    return _senderAvatarCache[senderId];
+  }
+
+  // 获取自己的头像URL，使用缓存机制
+  String? _getSelfAvatar() {
+    if (globalUtil.userName == null) {
+      return null;
+    }
+
+    // 获取当前用户的头像文件名
+    String avatarName = globalUtil.userInfoModel.avatar ?? 'head.jpg';
+
+    // 检查头像文件名是否发生变化
+    if (_selfAvatarNameCache != avatarName) {
+      // 头像文件名发生变化，重新获取头像URL
+      _selfAvatarNameCache = avatarName;
+      _selfAvatarCache = globalUtil.getImageURL(
+        globalUtil.userName!,
+        avatarName,
+      );
+    } else if (_selfAvatarCache == null) {
+      // 缓存中没有头像URL，获取头像URL
+      _selfAvatarCache = globalUtil.getImageURL(
+        globalUtil.userName!,
+        avatarName,
+      );
+    }
+
+    return _selfAvatarCache;
   }
 }

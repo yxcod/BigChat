@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import './Gloabl.dart';
+import './gloabl.dart';
 
 class HttpUtil {
   static final HttpUtil _instance = HttpUtil._internal();

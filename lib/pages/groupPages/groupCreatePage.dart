@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 import '../../api/getGroupInfoAPI.dart';
 
 class GroupCreatePage extends StatefulWidget {

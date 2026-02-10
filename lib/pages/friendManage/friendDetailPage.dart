@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../api/getFriendRequestsAPI.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 import '../../utils/WebSocketManager.dart';
 import '../videoCallPage.dart';
 

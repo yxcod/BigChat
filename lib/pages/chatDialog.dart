@@ -8,7 +8,7 @@ import 'package:image_picker/image_picker.dart';
 // import 'package:image_gallery_saver/image_gallery_saver.dart'; // 暂时禁用，等待修复兼容性问题
 import 'package:dio/dio.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../utils/Gloabl.dart';
+import '../utils/gloabl.dart';
 import '../model/friendInfoModel.dart';
 import '../utils/WebSocketManager.dart';
 import '../model/messageModel.dart';

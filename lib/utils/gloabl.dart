@@ -8,6 +8,7 @@ import '../utils/storageUtil.dart';
 import '../model/userInfoModel.dart';
 import '../model/friendInfoModel.dart';
 import '../model/messageModel.dart';
+import '../model/groupMemberModel.dart';
 import '../utils/http.dart';
 import '../api/getChatMessagesAPI.dart';
 
@@ -33,6 +34,9 @@ class GlobalUtil {
 
   // 存储所有聊天记录，以userName为key
   final Map<String, List<Message>> _chatRecords = {};
+
+  // 存储所有群的成员列表，以groupId为key
+  final Map<int, List<GroupMemberModel>> _groupMembers = {};
 
   static final GlobalUtil _instance = GlobalUtil._internal();
   factory GlobalUtil() {
@@ -265,6 +269,28 @@ class GlobalUtil {
       List<Message> messages = _chatRecords[userName]!;
       messages.removeWhere((message) => message.msgId == msgId);
     }
+  }
+
+  // 群成员列表管理方法
+
+  // 添加群成员列表
+  void addGroupMembers(int groupId, List<GroupMemberModel> members) {
+    _groupMembers[groupId] = members;
+  }
+
+  // 获取群成员列表
+  List<GroupMemberModel> getGroupMembers(int groupId) {
+    return _groupMembers[groupId] ?? [];
+  }
+
+  // 清除群成员列表
+  void clearGroupMembers(int groupId) {
+    _groupMembers.remove(groupId);
+  }
+
+  // 清除所有群成员列表
+  void clearAllGroupMembers() {
+    _groupMembers.clear();
   }
 
   //根据图片名生成图片的URL

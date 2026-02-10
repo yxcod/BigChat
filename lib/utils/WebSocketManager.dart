@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../pages/videoCallInviteWaitingPage.dart';
-import 'Gloabl.dart';
+import 'gloabl.dart';
 import 'GlobalNavigatorKey.dart';
 
 enum WebSocketStatus {

@@ -3,9 +3,15 @@ import 'dart:async';
 import '../../model/conversationModel.dart';
 import '../../api/getConversationAPI.dart';
 import '../../api/getChatMessagesAPI.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 import '../../model/friendInfoModel.dart';
 import '../../model/messageModel.dart';
+import '../../model/groupConversationModel.dart';
+import '../../api/groupChatRecordAPI.dart';
+import '../../api/getGroupInfoAPI.dart';
+import '../../api/getGroupMemberAPI.dart';
+import '../../model/groupInfoModel.dart';
+import '../../model/groupMemberModel.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
@@ -20,46 +26,22 @@ class Chatpage extends StatefulWidget {
 
 class _ChatpageState extends State<Chatpage> {
   final List<Chat> _chats = [
-    Chat(
-      name: '张三',
-      avatar: 'https://via.placeholder.com/40',
-      lastMessage: '你好！',
-      time: '10:30',
-      unreadCount: 2,
-      userName: 'zhangsan',
-    ),
-    Chat(
-      name: '李四',
-      avatar: 'https://via.placeholder.com/40',
-      lastMessage: '最近怎么样？',
-      time: '昨天',
-      unreadCount: 0,
-      userName: 'lisi',
-    ),
-    Chat(
-      name: '王五',
-      avatar: 'https://via.placeholder.com/40',
-      lastMessage: '谢谢！',
-      time: '前天',
-      unreadCount: 1,
-      userName: 'wangwu',
-    ),
-    Chat(
-      name: '赵六',
-      avatar: 'https://via.placeholder.com/40',
-      lastMessage: '好的，明天见',
-      time: '3天前',
-      unreadCount: 0,
-      userName: 'zhaoliu',
-    ),
-    Chat(
-      name: '孙七',
-      avatar: 'https://via.placeholder.com/40',
-      lastMessage: '收到',
-      time: '1周前',
-      unreadCount: 0,
-      userName: 'sunqi',
-    ),
+    // Chat(
+    //   name: '赵六',
+    //   avatar: 'https://via.placeholder.com/40',
+    //   lastMessage: '好的，明天见',
+    //   time: '3天前',
+    //   unreadCount: 0,
+    //   userName: 'zhaoliu',
+    // ),
+    // Chat(
+    //   name: '孙七',
+    //   avatar: 'https://via.placeholder.com/40',
+    //   lastMessage: '收到',
+    //   time: '1周前',
+    //   unreadCount: 0,
+    //   userName: 'sunqi',
+    // ),
   ];
 
   Timer? _fetchTimer;
@@ -187,12 +169,17 @@ class _ChatpageState extends State<Chatpage> {
     widget.onUnreadCountChanged?.call(totalUnreadCount);
   }
 
-  List<Chat> _convertToChatList(List<ConversationModel> conversations) {
+  Future<List<Chat>> _convertToChatList(
+    List<ConversationModel> conversations,
+    List<GroupConversationModel> groupConversations,
+  ) async {
     final globalUtil = GlobalUtil();
     final currentUserName = globalUtil.userName;
     final friendList = globalUtil.userInfoModel.friendListData ?? [];
+    final List<Chat> chatList = [];
 
-    return conversations.map((conversation) {
+    // 转换单聊会话
+    for (final conversation in conversations) {
       // 确定目标用户的 userName
       final targetUserName = conversation.user1Id == currentUserName
           ? conversation.user2Id
@@ -227,28 +214,159 @@ class _ChatpageState extends State<Chatpage> {
         avatarURL = newAvatarUrl;
         _avatarCache[targetUserName] = newAvatarUrl;
       }
-      // 同时检查null和空字符串
-      // String testnickName = (friend.nickName?.isEmpty ?? true)
-      //     ? "错误"
-      //     : friend.nickName!;
-      // debugPrint("testNickName === $testnickName");
 
       // 创建 Chat 对象
-      return Chat(
-        name: (friend.remarks?.isEmpty ?? true)
-            ? (friend.nickName?.isEmpty ?? true)
-                  ? (friend.userName?.isEmpty ?? true)
-                        ? '未知用户'
-                        : friend.userName!
-                  : friend.nickName!
-            : friend.remarks!,
-        avatar: avatarURL,
-        lastMessage: conversation.lastMsg ?? '',
-        time: formattedTime.substring(11, 16), // 只显示时分
-        unreadCount: conversation.unreadCount,
-        userName: targetUserName,
+      chatList.add(
+        Chat(
+          name: (friend.remarks?.isEmpty ?? true)
+              ? (friend.nickName?.isEmpty ?? true)
+                    ? (friend.userName?.isEmpty ?? true)
+                          ? '未知用户'
+                          : friend.userName!
+                    : friend.nickName!
+              : friend.remarks!,
+          avatar: avatarURL,
+          lastMessage: conversation.lastMsg ?? '',
+          time: formattedTime.substring(11, 16), // 只显示时分
+          unreadCount: conversation.unreadCount,
+          userName: targetUserName,
+          isGroup: false,
+        ),
       );
-    }).toList();
+    }
+
+    // 转换群聊会话
+    try {
+      // 获取所有群聊信息
+      final allGroups = await getGroups(currentUserName!);
+
+      for (final groupConversation in groupConversations) {
+        try {
+          // 查找对应的群聊信息
+          final groupInfo = allGroups.firstWhere(
+            (g) => g.groupId == groupConversation.groupId,
+            orElse: () => GroupInfoModel(
+              groupId: groupConversation.groupId,
+              groupName: '未知群聊',
+              creatorId: '',
+            ),
+          );
+          final groupIdStr = groupConversation.groupId.toString();
+
+          // 格式化时间
+          final formattedTime = GlobalUtil.formatTimestamp(
+            groupConversation.updateTime,
+          );
+
+          // 构建群聊头像 URL
+          String avatarName = groupInfo.groupAvatar;
+          String newAvatarUrl = globalUtil.getImageURL(groupIdStr, avatarName);
+
+          // 检查缓存中是否已有该群聊的头像，并且 URL 是否相同
+          String avatarURL;
+          if (_avatarCache.containsKey(groupIdStr)) {
+            String cachedUrl = _avatarCache[groupIdStr]!;
+            if (cachedUrl == newAvatarUrl) {
+              // URL 相同，使用缓存的头像 URL
+              avatarURL = cachedUrl;
+            } else {
+              // URL 不同，使用新的头像 URL 并更新缓存
+              avatarURL = newAvatarUrl;
+              _avatarCache[groupIdStr] = newAvatarUrl;
+            }
+          } else {
+            // 缓存中没有，使用新的头像 URL 并加入缓存
+            avatarURL = newAvatarUrl;
+            _avatarCache[groupIdStr] = newAvatarUrl;
+          }
+
+          // 查找最后发送者的名称
+          String? lastSenderName;
+          if (groupConversation.lastSenderId.isNotEmpty) {
+            // 如果发送者是自身，显示为"我"
+            if (groupConversation.lastSenderId == currentUserName) {
+              lastSenderName = '我';
+            } else {
+              try {
+                // 获取群成员列表
+                final groupMembers = await getGroupMembers(
+                  groupConversation.groupId,
+                );
+                // 从群成员列表中查找发送者的群昵称
+                final senderMember = groupMembers.firstWhere(
+                  (member) => member.userId == groupConversation.lastSenderId,
+                  orElse: () => GroupMemberModel(
+                    userId: groupConversation.lastSenderId,
+                    groupNickName: '',
+                    avatar: '',
+                  ),
+                );
+                // 如果有群昵称，使用群昵称；否则使用用户名
+                if (senderMember.groupNickName.isNotEmpty) {
+                  lastSenderName = senderMember.groupNickName;
+                } else {
+                  // 如果没有群昵称，从好友列表中查找
+                  final sender = friendList.firstWhere(
+                    (f) => f.userName == groupConversation.lastSenderId,
+                    orElse: () => FriendInfoModel.formJSON({
+                      'userName': groupConversation.lastSenderId,
+                    }),
+                  );
+                  lastSenderName = (sender.remarks?.isEmpty ?? true)
+                      ? (sender.nickName?.isEmpty ?? true)
+                            ? sender.userName!
+                            : sender.nickName!
+                      : sender.remarks!;
+                }
+              } catch (e) {
+                debugPrint('获取群成员信息失败：$e');
+                // 如果获取群成员失败，从好友列表中查找
+                final sender = friendList.firstWhere(
+                  (f) => f.userName == groupConversation.lastSenderId,
+                  orElse: () => FriendInfoModel.formJSON({
+                    'userName': groupConversation.lastSenderId,
+                  }),
+                );
+                lastSenderName = (sender.remarks?.isEmpty ?? true)
+                    ? (sender.nickName?.isEmpty ?? true)
+                          ? sender.userName!
+                          : sender.nickName!
+                    : sender.remarks!;
+              }
+            }
+          }
+
+          // 创建群聊 Chat 对象
+          chatList.add(
+            Chat(
+              name: groupInfo.groupName,
+              avatar: avatarURL,
+              lastMessage: groupConversation.lastMsg,
+              time: formattedTime.substring(11, 16), // 只显示时分
+              unreadCount: groupConversation.unreadCount,
+              userName: groupIdStr,
+              isGroup: true,
+              lastSenderName: lastSenderName,
+            ),
+          );
+        } catch (e) {
+          debugPrint('转换群聊会话失败：$e');
+          // 继续处理其他群聊会话，不中断整个流程
+        }
+      }
+    } catch (e) {
+      debugPrint('获取群聊信息失败：$e');
+      // 继续处理，不中断整个流程
+    }
+
+    // 按更新时间排序，最新的在前面
+    chatList.sort((a, b) {
+      // 这里简化处理，实际应该根据会话的更新时间排序
+      // 由于我们没有在 Chat 对象中存储更新时间，这里暂时不做排序
+      return 0;
+    });
+
+    return chatList;
   }
 
   Future<void> fetchConversations() async {
@@ -260,11 +378,16 @@ class _ChatpageState extends State<Chatpage> {
         return;
       }
 
-      // 调用 API 获取会话列表
+      // 调用 API 获取单聊会话列表
       final conversations = await getConversationApi(currentUserName);
+      // 调用 API 获取群聊会话列表
+      final groupConversations = await getGroupConversations(currentUserName);
 
       // 转换为 Chat 列表并更新 UI
-      final chatList = _convertToChatList(conversations);
+      final chatList = await _convertToChatList(
+        conversations,
+        groupConversations,
+      );
 
       // 检查是否有新的会话ID添加
       final existingUserNames = _chats.map((chat) => chat.userName).toSet();
@@ -282,7 +405,7 @@ class _ChatpageState extends State<Chatpage> {
       // 1. 有新的会话添加（会话列表长度增加）
       // 2. 有新的会话ID添加
       if (hasNewConversationsAdded) {
-        // 筛选出新增的会话
+        // 筛选出新增的单聊会话
         final addedConversations = conversations.where((conversation) {
           final targetUserName = conversation.user1Id == currentUserName
               ? conversation.user2Id
@@ -290,9 +413,23 @@ class _ChatpageState extends State<Chatpage> {
           return addedUserNames.contains(targetUserName);
         }).toList();
 
-        // 只为新增的会话加载最近100条聊天记录
+        // 只为新增的单聊会话加载最近100条聊天记录
         await _loadChatRecordsForConversations(
           addedConversations,
+          currentUserName,
+        );
+
+        // 筛选出新增的群聊会话
+        final addedGroupConversations = groupConversations.where((
+          conversation,
+        ) {
+          final groupIdStr = conversation.groupId.toString();
+          return addedUserNames.contains(groupIdStr);
+        }).toList();
+
+        // 只为新增的群聊会话加载最近100条聊天记录
+        await _loadGroupChatRecordsForConversations(
+          addedGroupConversations,
           currentUserName,
         );
       }
@@ -365,6 +502,71 @@ class _ChatpageState extends State<Chatpage> {
     }
   }
 
+  // 为每个群聊会话加载最近100条聊天记录
+  Future<void> _loadGroupChatRecordsForConversations(
+    List<GroupConversationModel> groupConversations,
+    String currentUserName,
+  ) async {
+    try {
+      final globalUtil = GlobalUtil();
+      debugPrint('开始为${groupConversations.length}个群聊会话加载聊天记录...');
+
+      // 遍历所有群聊会话
+      for (var groupConversation in groupConversations) {
+        final groupId = groupConversation.groupId;
+        final groupIdStr = groupId.toString();
+
+        try {
+          // 获取最近100条群聊记录
+          final groupMessageModel = await getGroupChatRecord(groupId, 100);
+
+          // 转换为Message对象并保存到_chatRecords
+          final messages = groupMessageModel.messages.map((model) {
+            // 转换消息类型：0 -> text, 1 -> image
+            MessageType messageType;
+            switch (model.msgType) {
+              case 0:
+                messageType = MessageType.text;
+                break;
+              case 1:
+                messageType = MessageType.image;
+                break;
+              default:
+                messageType = MessageType.text;
+                break;
+            }
+
+            return Message(
+              msgId: model.msgId,
+              content: model.msgContent,
+              isMe: model.senderId == currentUserName,
+              time: GlobalUtil.formatTimestamp(model.sendTime),
+              isRead: true,
+              conversationId: groupIdStr,
+              messageType: messageType,
+              status: MessageStatus.sent, // 简化处理，使用默认值
+            );
+          }).toList();
+
+          // 保存到_chatRecords
+          globalUtil.clearChatRecords(groupIdStr);
+          messages.forEach((msg) {
+            globalUtil.addMessage(groupIdStr, msg);
+          });
+
+          debugPrint('成功为群聊$groupId加载${messages.length}条聊天记录');
+        } catch (e) {
+          debugPrint('为群聊$groupId加载聊天记录失败：$e');
+          // 继续处理其他群聊会话，不中断整个流程
+        }
+      }
+
+      debugPrint('所有群聊会话聊天记录加载完成');
+    } catch (e) {
+      debugPrint('加载群聊会话聊天记录失败：$e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -418,11 +620,19 @@ class _ChatpageState extends State<Chatpage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      _chats[index].lastMessage,
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: _chats[index].isGroup
+                        ? Text(
+                            _chats[index].lastSenderName != null
+                                ? '${_chats[index].lastSenderName}: ${_chats[index].lastMessage}'
+                                : _chats[index].lastMessage,
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        : Text(
+                            _chats[index].lastMessage,
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                   ),
                   if (_chats[index].unreadCount > 0)
                     Container(
@@ -443,11 +653,24 @@ class _ChatpageState extends State<Chatpage> {
                 //String testUserName = _chats[index].userName;
                 //debugPrint("聊天项点击：name=$testName, userName=$testUserName");
                 // 使用命名路由跳转到聊天详情页面
-                Navigator.pushNamed(
-                  context,
-                  '/chatDialog',
-                  arguments: _chats[index].userName,
-                );
+                if (_chats[index].isGroup) {
+                  // 跳转到群聊对话框页面
+                  Navigator.pushNamed(
+                    context,
+                    '/groupChatDialog',
+                    arguments: {
+                      'groupId': _chats[index].userName,
+                      'groupName': _chats[index].name,
+                    },
+                  );
+                } else {
+                  // 跳转到单聊对话框页面
+                  Navigator.pushNamed(
+                    context,
+                    '/chatDialog',
+                    arguments: _chats[index].userName,
+                  );
+                }
               },
             );
           },
@@ -465,6 +688,8 @@ class Chat {
   final String time;
   final int unreadCount;
   final String userName;
+  final bool isGroup; // 是否为群聊
+  final String? lastSenderName; // 群聊最后一条消息的发送者名称
 
   Chat({
     required this.name,
@@ -473,5 +698,7 @@ class Chat {
     required this.time,
     required this.unreadCount,
     required this.userName,
+    this.isGroup = false,
+    this.lastSenderName,
   });
 }

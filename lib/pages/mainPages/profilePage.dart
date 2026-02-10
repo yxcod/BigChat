@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-//必须加载是大写的Gloabl.dart
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 import '../../api/getInfoAPI.dart';
 
 class ProfilePage extends StatefulWidget {

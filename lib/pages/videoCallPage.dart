@@ -2,7 +2,7 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_base/utils/agoraManager.dart';
 import 'package:flutter_base/utils/WebSocketManager.dart';
-import 'package:flutter_base/utils/Gloabl.dart';
+import 'package:flutter_base/utils/gloabl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:developer' as dev;
 

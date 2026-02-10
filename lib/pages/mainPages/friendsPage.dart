@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 import '../../api/getInfoAPI.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../model/friendRequestModel.dart';

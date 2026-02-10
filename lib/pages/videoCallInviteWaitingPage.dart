@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_base/utils/WebSocketManager.dart';
-import 'package:flutter_base/utils/Gloabl.dart';
+import 'package:flutter_base/utils/gloabl.dart';
 import 'videoCallPage.dart';
 
 class VideoCallInviteWaitingPage extends StatefulWidget {

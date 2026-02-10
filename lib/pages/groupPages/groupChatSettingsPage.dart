@@ -10,7 +10,7 @@ import '../../model/groupMemberModel.dart';
 import '../../model/groupInfoModel.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../api/getGroupInfoAPI.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 import '../../utils/http.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {

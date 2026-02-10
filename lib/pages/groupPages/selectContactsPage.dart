@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../model/friendInfoModel.dart';
 import '../../api/getGroupMemberAPI.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 
 class SelectContactsPage extends StatefulWidget {
   final String groupId;

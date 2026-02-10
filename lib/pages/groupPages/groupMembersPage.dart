@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../model/groupMemberModel.dart';
 import '../../api/getGroupMemberAPI.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 
 class GroupMembersPage extends StatefulWidget {
   final String groupId;

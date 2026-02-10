@@ -3,7 +3,7 @@ import 'friendsPage.dart';
 import 'chatPage.dart';
 import 'ProfilePage.dart';
 import '../../api/getChatMessagesAPI.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 import '../../model/messageModel.dart';
 
 class BigchatMainPage extends StatefulWidget {

@@ -93,6 +93,7 @@ class Message {
   bool isRead;
   MessageStatus status;
   final String conversationId;
+  final String? senderId;
 
   Message({
     required this.msgId,
@@ -103,6 +104,7 @@ class Message {
     required this.conversationId,
     this.messageType = MessageType.text,
     this.status = MessageStatus.sent,
+    this.senderId,
   });
 
   // 序列化方法：将Message对象转换为Map<String, dynamic>
@@ -116,6 +118,7 @@ class Message {
       'isRead': isRead,
       'status': status.index,
       'conversationId': conversationId,
+      'senderId': senderId,
     };
   }
 
@@ -130,6 +133,7 @@ class Message {
       conversationId: json['conversationId'] ?? '',
       messageType: MessageType.values[json['messageType'] ?? 0],
       status: MessageStatus.values[json['status'] ?? 0],
+      senderId: json['senderId'],
     );
   }
 }

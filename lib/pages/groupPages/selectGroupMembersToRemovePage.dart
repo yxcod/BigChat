@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../model/groupMemberModel.dart';
 import '../../api/getGroupMemberAPI.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 
 class SelectGroupMembersToRemovePage extends StatefulWidget {
   final String groupId;
