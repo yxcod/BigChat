@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../model/friendRequestModel.dart';
-import '../../utils/gloabl.dart';
+import '../../utils/Gloabl.dart';
 import '../../api/getFriendRequestsAPI.dart';
 
 class FriendAddManagerPage extends StatefulWidget {

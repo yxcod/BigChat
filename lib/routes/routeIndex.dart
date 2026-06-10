@@ -54,13 +54,9 @@ Widget getRootWidget() {
           );
         case '/groupChatDialog':
           final groupData = settings.arguments as Map<String, dynamic>;
-          var groupId = groupData['groupId'] ?? 0;
-          if (groupId is String) {
-            groupId = int.tryParse(groupId) ?? 0;
-          }
           return MaterialPageRoute(
             builder: (context) => GroupChatDialogPage(
-              groupId: groupId,
+              groupId: groupData['groupId'] ?? '',
               groupName: groupData['groupName'] ?? '',
             ),
           );

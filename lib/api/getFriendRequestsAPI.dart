@@ -9,7 +9,7 @@ Future<List<FriendRequestModel>> getFriendRequestsApi(String userName) async {
       '/api/friend/requests',
       data: {'userName': userName},
     );
-    debugPrint('获取好友申请列表成功：${response.data}');
+    //debugPrint('获取好友申请列表成功：${response.data}');
     final mapData = response.data as Map<String, dynamic>;
     final friendRequests = mapData['applyFriendList'] as List<dynamic>;
     return friendRequests

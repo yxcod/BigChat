@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/foundation.dart';
@@ -67,10 +68,16 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       _fetchGroupInfo();
     });
 
+    // 立即获取群成员列表，确保在聊天记录加载之前获取
+    _checkGroupMembership();
+
     // 设置定时器，每隔3秒检查一次群成员列表
     _groupMembersTimer = Timer.periodic(Duration(seconds: 3), (timer) {
       _checkGroupMembership();
     });
+
+    // 页面初始化时自动滚动到聊天记录底部
+    _scrollToBottom();
   }
 
   // 获取群信息
@@ -288,40 +295,105 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   // 处理WebSocket消息
   void _handleWebSocketMessage(dynamic message) {
-    if (message is Map<String, dynamic>) {
-      String messageType = message['type'] ?? '';
+    debugPrint('=== 收到WebSocket消息 ===');
+    debugPrint('原始消息: $message');
+    debugPrint('消息运行时类型: ${message.runtimeType}');
+
+    // 处理不同类型的消息格式
+    dynamic parsedMessage;
+    if (message is String) {
+      debugPrint('消息是字符串类型，尝试解析为JSON');
+      try {
+        parsedMessage = json.decode(message);
+        debugPrint('JSON解析成功: $parsedMessage');
+      } catch (e) {
+        debugPrint('JSON解析失败: $e');
+        return;
+      }
+    } else if (message is Map) {
+      debugPrint('消息是Map类型');
+      parsedMessage = message;
+    } else {
+      debugPrint('未知消息类型: ${message.runtimeType}');
+      return;
+    }
+
+    // 确保消息是Map<String, dynamic>类型
+    if (parsedMessage is Map<String, dynamic>) {
+      String messageType = parsedMessage['type'] ?? '';
+      debugPrint('消息类型: $messageType');
 
       switch (messageType) {
         case 'groupChat':
-          _handleChatMessage(message);
+          debugPrint('处理群聊消息...');
+          _handleChatMessage(parsedMessage);
           break;
         case 'groupChatCallback':
-          _handleChatCallback(message);
+          debugPrint('处理群聊回调...');
+          _handleChatCallback(parsedMessage);
           break;
         case 'videoCallInvite':
-          _handleVideoCallInvite(message);
+          _handleVideoCallInvite(parsedMessage);
           break;
         case 'videoCallAccept':
-          _handleVideoCallAccept(message);
+          _handleVideoCallAccept(parsedMessage);
           break;
         case 'videoCallReject':
-          _handleVideoCallReject(message);
+          _handleVideoCallReject(parsedMessage);
           break;
         case 'videoCallHangup':
-          _handleVideoCallHangup(message);
+          _handleVideoCallHangup(parsedMessage);
           break;
+        default:
+          debugPrint('未知消息类型: $messageType');
       }
+    } else {
+      debugPrint(
+        '消息格式不正确，不是Map<String, dynamic>类型: ${parsedMessage.runtimeType}',
+      );
     }
   }
 
   // 处理聊天消息
   void _handleChatMessage(Map<String, dynamic> messageData) {
     final globalUtil = GlobalUtil();
+
+    // 添加调试日志，打印接收到的完整消息数据
+    debugPrint('=== 收到群聊消息 ===');
+    debugPrint('消息数据: $messageData');
+    debugPrint('当前群ID: ${widget.groupId}');
+    debugPrint('当前用户: ${globalUtil.userName}');
+
     String sender = messageData['sendUserId'] ?? '';
     String content = messageData['msgContent'] ?? '';
     int msgId = messageData['msgId'] ?? 0;
     int msgType = messageData['msgType'] ?? 1;
-    String sendTime = _formatTimestamp(messageData['sendTime'] ?? 0);
+    int receiveId = messageData['receiveId'] ?? 0;
+    int receiveType = messageData['receiveType'] ?? 2;
+
+    // 处理时间戳，支持多种格式
+    var rawSendTime = messageData['sendTime'];
+    int timestamp = 0;
+    if (rawSendTime is int) {
+      timestamp = rawSendTime;
+    } else if (rawSendTime is String) {
+      timestamp = int.tryParse(rawSendTime) ?? 0;
+    }
+    String sendTime = _formatTimestamp(timestamp);
+
+    debugPrint('解析后的数据:');
+    debugPrint('  发送者: $sender');
+    debugPrint('  内容: $content');
+    debugPrint('  消息ID: $msgId');
+    debugPrint('  接收者ID: $receiveId');
+    debugPrint('  接收类型: $receiveType');
+    debugPrint('  时间戳: $timestamp');
+
+    // 检查消息是否属于当前群聊
+    if (receiveId != widget.groupId) {
+      debugPrint('消息不属于当前群聊，忽略。消息接收者: $receiveId, 当前群ID: ${widget.groupId}');
+      return;
+    }
 
     if (sender.isNotEmpty && content.isNotEmpty) {
       // 检查消息是否已存在
@@ -329,6 +401,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         widget.groupId.toString(),
       );
       bool messageExists = existingMessages.any((msg) => msg.msgId == msgId);
+
+      debugPrint('消息是否已存在: $messageExists');
+      debugPrint('现有消息数量: ${existingMessages.length}');
 
       if (!messageExists) {
         // 创建新消息
@@ -344,25 +419,42 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           senderId: sender,
         );
 
+        debugPrint(
+          '创建新消息: msgId=$msgId, isMe=${sender == globalUtil.userName}, sender=$sender',
+        );
+
         // 添加消息到全局聊天记录
         globalUtil.addMessage(widget.groupId.toString(), newMessage);
 
-        // 更新UI并滚动到底部
-        setState(() {});
-        _scrollToBottom();
+        debugPrint('消息已添加到聊天记录');
 
-        // 发送已读确认
-        _sendReadAck(msgId, sender);
+        // 更新UI并滚动到底部
+        if (mounted) {
+          setState(() {});
+          _scrollToBottom();
+          debugPrint('UI已更新');
+        }
+
+        // 发送已读确认（只发送给发送者，不发送给自己发的消息）
+        if (sender != globalUtil.userName) {
+          _sendReadAck(msgId, sender);
+        }
       }
+    } else {
+      debugPrint('消息数据无效: sender=$sender, content=$content');
     }
   }
 
-  // 处理聊天回调
+  // 处理聊天确认回调
   void _handleChatCallback(Map<String, dynamic> messageData) {
     final globalUtil = GlobalUtil();
     int msgId = messageData['msgId'] ?? 0;
     String status = messageData['status'] ?? '';
     String sender = messageData['sender'] ?? '';
+    String sessionId = messageData['sessionId'] ?? '';
+    if (sessionId != widget.groupId.toString()) {
+      return;
+    }
 
     // 更新消息状态
     List<Message> groupMessages = globalUtil.getChatRecords(
@@ -460,19 +552,26 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   // 确保WebSocket已连接
   void _ensureWebSocketConnected() {
-    // 无论是否已经连接，都更新回调函数
-    _wsManager.connect(
-      '${GlobalUtil().baseWebSocketURL}/api/chat?userName=${GlobalUtil().userName}',
-      onStatusChanged: (status) {
-        debugPrint('WebSocket状态: $status');
-      },
-      onMessageReceived: (message) {
-        _handleWebSocketMessage(message);
-      },
-      onError: (error) {
-        debugPrint('WebSocket错误: $error');
-      },
-    );
+    // 先移除旧的监听器，避免重复添加
+    _wsManager.removeMessageListener(_handleWebSocketMessage);
+
+    // 添加新的监听器
+    _wsManager.setMessageListener(_handleWebSocketMessage);
+
+    // 确保WebSocket连接已建立
+    if (!_wsManager.isConnected) {
+      _wsManager.connect(
+        '${GlobalUtil().baseWebSocketURL}/api/chat?userName=${GlobalUtil().userName}',
+        onStatusChanged: (status) {
+          debugPrint('WebSocket状态: $status');
+        },
+        onError: (error) {
+          debugPrint('WebSocket错误: $error');
+        },
+      );
+    } else {
+      debugPrint('WebSocket已连接，只更新监听器');
+    }
   }
 
   // 滚动到底部的辅助方法
@@ -516,6 +615,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       final globalUtil = GlobalUtil();
       globalUtil.addGroupMembers(widget.groupId, members);
 
+      // 触发UI重建，确保聊天记录显示最新的群成员信息（头像和昵称）
+      if (mounted) {
+        setState(() {});
+      }
+
       // 遍历群成员列表，检查当前用户是否在列表中
       String? currentUserId = globalUtil.userName;
       bool foundUser = false;
@@ -556,6 +660,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     // 取消定时器
     _groupInfoTimer.cancel();
     _groupMembersTimer.cancel();
+
+    // 移除WebSocket消息监听器，避免内存泄漏和重复处理
+    _wsManager.removeMessageListener(_handleWebSocketMessage);
+    debugPrint('群聊页面销毁，已移除WebSocket监听器');
 
     // 离开聊天页面时，更新全局聊天状态
     final globalUtil = GlobalUtil();
@@ -862,8 +970,14 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       'msgStatus': 1, //1 发送成功  3 已读
     };
 
+    // 添加调试日志
+    debugPrint('=== 发送群聊消息 ===');
+    debugPrint('消息数据: $messageData');
+    debugPrint('WebSocket连接状态: ${_wsManager.isConnected}');
+
     // 发送WebSocket消息
     _wsManager.send(messageData);
+    debugPrint('消息已发送');
   }
 
   String _getTime() {
@@ -1112,13 +1226,10 @@ class GroupMessageBubble extends StatelessWidget {
           // 消息发送者昵称
           if (!message.isMe) ...[
             Padding(
-              padding: EdgeInsets.only(
-                left: message.messageType == MessageType.text ? 60.0 : 70.0,
-                bottom: 4.0,
-              ),
+              padding: EdgeInsets.only(left: 48.0, bottom: 4.0),
               child: Text(
                 _getSenderName(),
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(fontSize: 12, color: Colors.black),
               ),
             ),
           ],

@@ -9,7 +9,7 @@ Future<List<ConversationModel>> getConversationApi(String userName) async {
       '/api/chat/conversation',
       data: {'userName': userName},
     );
-    debugPrint('POST请求成功：${response.data}');
+    //debugPrint('POST请求成功：${response.data}');
     final mapData = response.data as Map<String, dynamic>;
     final conversationList = mapData['conversationList'] as List<dynamic>?;
     if (conversationList != null) {

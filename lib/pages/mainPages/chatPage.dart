@@ -525,10 +525,10 @@ class _ChatpageState extends State<Chatpage> {
             // 转换消息类型：0 -> text, 1 -> image
             MessageType messageType;
             switch (model.msgType) {
-              case 0:
+              case 1:
                 messageType = MessageType.text;
                 break;
-              case 1:
+              case 2:
                 messageType = MessageType.image;
                 break;
               default:
@@ -545,6 +545,7 @@ class _ChatpageState extends State<Chatpage> {
               conversationId: groupIdStr,
               messageType: messageType,
               status: MessageStatus.sent, // 简化处理，使用默认值
+              senderId: model.senderId,
             );
           }).toList();
 

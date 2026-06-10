@@ -19,11 +19,10 @@ class HttpExample {
   // 示例2：POST请求
   static Future<void> postExample() async {
     try {
-      Response response = await HttpUtil().post(
+      await HttpUtil().post(
         '/login',
         data: {'username': 'test', 'password': '123456'},
       );
-      print('POST请求成功：${response.data}');
     } on DioException catch (e) {
       print('POST请求失败：${e.error}');
     }

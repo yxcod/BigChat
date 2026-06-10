@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'addFriendRequestPage.dart';
 import '../../api/getInfoAPI.dart';
-import '../../utils/gloabl.dart';
+import '../../utils/Gloabl.dart';
 
 class SearchFriendPage extends StatefulWidget {
   @override

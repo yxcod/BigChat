@@ -10,7 +10,7 @@ Future<UserInfoModel> getUserInfoApi(String userName) async {
       '/api/user/userInfo',
       data: {'userName': userName},
     );
-    debugPrint('POST请求成功：${response.data}');
+    //debugPrint('POST请求成功：${response.data}');
     final mapData = response.data as Map<String, dynamic>;
 
     // 检查后端返回的code值

@@ -23,7 +23,7 @@ class _RegisterPageState extends State<RegisterPage> {
         '/api/user/register',
         data: {'userName': userName, 'password': password},
       );
-      debugPrint('POST请求成功：${response.data}');
+      //debugPrint('POST请求成功：${response.data}');
       // 返回response.data（已经是JSON格式）
       return response.data;
     } on DioException catch (e) {

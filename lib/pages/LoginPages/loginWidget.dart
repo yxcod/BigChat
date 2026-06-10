@@ -26,7 +26,7 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
         '/api/user/login',
         data: {'userName': userName, 'password': password},
       );
-      debugPrint('POST请求成功：${response.data}');
+      //debugPrint('POST请求成功：${response.data}');
       // 返回response.data（已经是JSON格式）
       return response.data;
     } on DioException catch (e) {
@@ -55,14 +55,11 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
     String wsUrl =
         '${GlobalUtil().baseWebSocketURL}/api/chat?userName=$userName';
 
-    // 连接WebSocket
+    // 连接WebSocket，不添加消息监听器（由具体页面添加）
     wsManager.connect(
       wsUrl,
       onStatusChanged: (status) {
         print('WebSocket状态变化: $status');
-      },
-      onMessageReceived: (message) {
-        print('接收到WebSocket消息: $message');
       },
       onError: (error) {
         print('WebSocket错误: $error');
