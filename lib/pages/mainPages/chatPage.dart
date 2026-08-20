@@ -12,6 +12,7 @@ import '../../api/getGroupInfoAPI.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../model/groupInfoModel.dart';
 import '../../model/groupMemberModel.dart';
+import '../../utils/chat_search_util.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
@@ -47,6 +48,8 @@ class _ChatpageState extends State<Chatpage> {
   Timer? _fetchTimer;
   GlobalUtil globalUtil = GlobalUtil();
   bool _wasChatting = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   // 头像 URL 缓存，用于避免重复加载
   Map<String, String> _avatarCache = {};
 
@@ -92,6 +95,7 @@ class _ChatpageState extends State<Chatpage> {
   void dispose() {
     // 清理定时器
     _stopFetchTimer();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -432,10 +436,158 @@ class _ChatpageState extends State<Chatpage> {
           addedGroupConversations,
           currentUserName,
         );
+
+        // 搜索过程中聊天记录加载完成后立即刷新结果。
+        if (mounted && _searchQuery.isNotEmpty) {
+          setState(() {});
+        }
       }
     } catch (e) {
       debugPrint('获取会话列表失败：$e');
     }
+  }
+
+  List<_ChatSearchResult> _getSearchResults() {
+    final keyword = _searchQuery.trim();
+    if (keyword.isEmpty) {
+      return const [];
+    }
+
+    final results = <_ChatSearchResult>[];
+    for (final chat in _chats) {
+      final matches = globalUtil
+          .getChatRecords(chat.userName)
+          .where(
+            (message) =>
+                message.messageType == MessageType.text &&
+                ChatSearchUtil.matches(message.content, keyword),
+          )
+          .toList();
+      if (matches.isNotEmpty) {
+        results.add(
+          _ChatSearchResult(
+            chat: chat,
+            latestMatch: matches.last,
+            matchCount: matches.length,
+          ),
+        );
+      }
+    }
+    return results;
+  }
+
+  void _openChat(Chat chat) {
+    if (chat.isGroup) {
+      Navigator.pushNamed(
+        context,
+        '/groupChatDialog',
+        arguments: {'groupId': chat.userName, 'groupName': chat.name},
+      );
+    } else {
+      Navigator.pushNamed(context, '/chatDialog', arguments: chat.userName);
+    }
+  }
+
+  Widget _buildHighlightedMessage(String content) {
+    final preview = ChatSearchUtil.buildPreview(content, _searchQuery);
+    return Text.rich(
+      TextSpan(
+        children: ChatSearchUtil.buildHighlightedSpans(
+          content: preview,
+          keyword: _searchQuery,
+          normalStyle: TextStyle(color: Colors.grey[600], fontSize: 13),
+          highlightedStyle: const TextStyle(
+            color: Color(0xFF07C160),
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildSearchResults() {
+    final results = _getSearchResults();
+    if (results.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off, size: 52, color: Colors.grey[300]),
+            const SizedBox(height: 12),
+            Text('没有找到相关聊天记录', style: TextStyle(color: Colors.grey[500])),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.only(top: 8),
+      itemCount: results.length + 1,
+      separatorBuilder: (_, index) => index == 0
+          ? const SizedBox.shrink()
+          : const Divider(height: 1, indent: 72),
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+            child: Text(
+              '聊天记录（${results.length}）',
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+            ),
+          );
+        }
+
+        final result = results[index - 1];
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 5,
+          ),
+          leading: CircleAvatar(
+            backgroundImage: NetworkImage(result.chat.avatar),
+            backgroundColor: Colors.grey[200],
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  result.chat.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                result.latestMatch.time,
+                style: TextStyle(color: Colors.grey[400], fontSize: 11),
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHighlightedMessage(result.latestMatch.content),
+                if (result.matchCount > 1) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    '共 ${result.matchCount} 条相关聊天记录',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          onTap: () => _openChat(result.chat),
+        );
+      },
+    );
   }
 
   // 为每个会话加载最近100条聊天记录
@@ -582,103 +734,123 @@ class _ChatpageState extends State<Chatpage> {
             borderRadius: BorderRadius.circular(20),
           ),
           child: TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _searchQuery = value),
+            textInputAction: TextInputAction.search,
             decoration: InputDecoration(
-              hintText: '搜索',
+              hintText: '搜索聊天记录',
               prefixIcon: Icon(Icons.search, color: Colors.grey),
+              suffixIcon: _searchQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: '清除',
+                      icon: Icon(
+                        Icons.cancel,
+                        color: Colors.grey[400],
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    ),
               border: InputBorder.none,
               contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 8),
             ),
           ),
         ),
       ),
-      body: Padding(
-        padding: EdgeInsets.only(top: 8),
-        child: ListView.builder(
-          itemCount: _chats.length,
-          itemBuilder: (context, index) {
-            return ListTile(
-              leading: CircleAvatar(
-                backgroundImage: NetworkImage(_chats[index].avatar),
-                backgroundColor: Colors.grey[200],
-              ),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _chats[index].name,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
-                    ), // 确保文本颜色可见
-                  ),
-                  Text(
-                    _chats[index].time,
-                    style: TextStyle(color: Colors.grey, fontSize: 10),
-                  ),
-                ],
-              ),
-              subtitle: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: _chats[index].isGroup
-                        ? Text(
-                            _chats[index].lastSenderName != null
-                                ? '${_chats[index].lastSenderName}: ${_chats[index].lastMessage}'
-                                : _chats[index].lastMessage,
-                            style: TextStyle(color: Colors.grey, fontSize: 12),
-                            overflow: TextOverflow.ellipsis,
-                          )
-                        : Text(
-                            _chats[index].lastMessage,
-                            style: TextStyle(color: Colors.grey, fontSize: 12),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                  ),
-                  if (_chats[index].unreadCount > 0)
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        _chats[index].unreadCount.toString(),
-                        style: TextStyle(color: Colors.white, fontSize: 10),
-                      ),
+      body: _searchQuery.trim().isNotEmpty
+          ? _buildSearchResults()
+          : Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: ListView.builder(
+                itemCount: _chats.length,
+                itemBuilder: (context, index) {
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage: NetworkImage(_chats[index].avatar),
+                      backgroundColor: Colors.grey[200],
                     ),
-                ],
+                    title: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _chats[index].name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black,
+                          ), // 确保文本颜色可见
+                        ),
+                        Text(
+                          _chats[index].time,
+                          style: TextStyle(color: Colors.grey, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                    subtitle: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: _chats[index].isGroup
+                              ? Text(
+                                  _chats[index].lastSenderName != null
+                                      ? '${_chats[index].lastSenderName}: ${_chats[index].lastMessage}'
+                                      : _chats[index].lastMessage,
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                )
+                              : Text(
+                                  _chats[index].lastMessage,
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                        ),
+                        if (_chats[index].unreadCount > 0)
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              _chats[index].unreadCount.toString(),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    onTap: () => _openChat(_chats[index]),
+                  );
+                },
               ),
-              onTap: () {
-                //String testName = _chats[index].name;
-                //String testUserName = _chats[index].userName;
-                //debugPrint("聊天项点击：name=$testName, userName=$testUserName");
-                // 使用命名路由跳转到聊天详情页面
-                if (_chats[index].isGroup) {
-                  // 跳转到群聊对话框页面
-                  Navigator.pushNamed(
-                    context,
-                    '/groupChatDialog',
-                    arguments: {
-                      'groupId': _chats[index].userName,
-                      'groupName': _chats[index].name,
-                    },
-                  );
-                } else {
-                  // 跳转到单聊对话框页面
-                  Navigator.pushNamed(
-                    context,
-                    '/chatDialog',
-                    arguments: _chats[index].userName,
-                  );
-                }
-              },
-            );
-          },
-        ),
-      ),
+            ),
     );
   }
+}
+
+class _ChatSearchResult {
+  final Chat chat;
+  final Message latestMatch;
+  final int matchCount;
+
+  const _ChatSearchResult({
+    required this.chat,
+    required this.latestMatch,
+    required this.matchCount,
+  });
 }
 
 // 聊天数据模型
