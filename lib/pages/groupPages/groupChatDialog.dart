@@ -19,6 +19,7 @@ import '../../utils/http.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../api/groupChatRecordAPI.dart';
+import '../../utils/user_profile_navigator.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -1492,19 +1493,24 @@ class GroupMessageBubble extends StatelessWidget {
             children: [
               // 对方头像
               if (!message.isMe) ...[
-                Container(
-                  margin: EdgeInsets.only(right: 8.0),
-                  child: CircleAvatar(
-                    radius: 20,
-                    backgroundImage: _getSenderAvatar() != null
-                        ? NetworkImage(_getSenderAvatar()!)
-                        : null,
-                    child: _getSenderAvatar() == null
-                        ? Text(
-                            _getSenderName().substring(0, 1),
-                            style: TextStyle(fontSize: 16),
-                          )
-                        : null,
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _openSenderProfile(context),
+                  child: Container(
+                    margin: EdgeInsets.only(right: 8.0),
+                    padding: const EdgeInsets.all(2),
+                    child: CircleAvatar(
+                      radius: 20,
+                      backgroundImage: _getSenderAvatar() != null
+                          ? NetworkImage(_getSenderAvatar()!)
+                          : null,
+                      child: _getSenderAvatar() == null
+                          ? Text(
+                              _getSenderName().characters.first,
+                              style: TextStyle(fontSize: 16),
+                            )
+                          : null,
+                    ),
                   ),
                 ),
               ],
@@ -1685,13 +1691,42 @@ class GroupMessageBubble extends StatelessWidget {
       // 从群成员列表中查找发送者的群昵称
       for (var member in groupMembers) {
         if (member.userId == senderId) {
-          return member.groupNickName;
+          return member.groupNickName.trim().isEmpty
+              ? member.userId
+              : member.groupNickName.trim();
         }
       }
 
       // 未找到发送者，返回默认值
-      return '群成员';
+      return senderId;
     }
+  }
+
+  GroupMemberModel? _getSenderMember() {
+    final senderId = message.senderId;
+    if (senderId == null || senderId.isEmpty) {
+      return null;
+    }
+    for (final member in groupMembers) {
+      if (member.userId == senderId) {
+        return member;
+      }
+    }
+    return null;
+  }
+
+  void _openSenderProfile(BuildContext context) {
+    final senderId = message.senderId;
+    if (senderId == null || senderId.isEmpty) {
+      return;
+    }
+    final member = _getSenderMember();
+    openUserProfile(
+      context,
+      userName: senderId,
+      fallbackNickname: member?.groupNickName,
+      fallbackAvatarName: member?.avatar,
+    );
   }
 
   // 获取发送者头像

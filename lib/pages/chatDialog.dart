@@ -13,6 +13,7 @@ import '../model/friendInfoModel.dart';
 import '../utils/WebSocketManager.dart';
 import '../model/messageModel.dart';
 import '../utils/http.dart';
+import '../utils/user_profile_navigator.dart';
 import 'videoCallPage.dart';
 
 class ChatDialogPage extends StatefulWidget {
@@ -1498,7 +1499,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   // 构建对方头像
-  Widget _buildOtherAvatar() {
+  Widget _buildOtherAvatar(BuildContext context) {
     String userName = friendInfo?.userName ?? "";
     String avatarName = friendInfo?.avatar ?? "head.jpg";
     String newAvatarUrl = globalUtil.getImageURL(userName, avatarName);
@@ -1521,10 +1522,24 @@ class MessageBubble extends StatelessWidget {
       _avatarCache[userName] = newAvatarUrl;
     }
 
-    return CircleAvatar(
-      backgroundImage: NetworkImage(avatarUrl),
-      backgroundColor: Colors.grey[200],
-      radius: 24,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: userName.isEmpty
+          ? null
+          : () => openUserProfile(
+              context,
+              userName: userName,
+              fallbackNickname: friendInfo?.nickName,
+              fallbackAvatarName: avatarName,
+            ),
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: CircleAvatar(
+          backgroundImage: NetworkImage(avatarUrl),
+          backgroundColor: Colors.grey[200],
+          radius: 24,
+        ),
+      ),
     );
   }
 
@@ -1640,7 +1655,7 @@ class MessageBubble extends StatelessWidget {
             : MainAxisAlignment.start,
         children: [
           // 对方消息：头像在左
-          if (!message.isMe) _buildOtherAvatar(),
+          if (!message.isMe) _buildOtherAvatar(context),
 
           // 对方消息：头像和消息之间的间距
           if (!message.isMe) SizedBox(width: 8),

@@ -62,6 +62,8 @@ class _AddFriendRequestPageState extends State<AddFriendRequestPage> {
 
   // 构建目标用户信息
   Widget _buildTargetUserInfo() {
+    final avatarUrl = widget.targetUser['avatar']?.toString() ?? '';
+    final nickname = widget.targetUser['nickname']?.toString() ?? '';
     return Container(
       width: double.infinity,
       margin: EdgeInsets.all(16),
@@ -83,8 +85,15 @@ class _AddFriendRequestPageState extends State<AddFriendRequestPage> {
           // 用户头像
           CircleAvatar(
             radius: 25,
-            backgroundImage: NetworkImage(widget.targetUser['avatar'] ?? ''),
+            backgroundImage: avatarUrl.isEmpty ? null : NetworkImage(avatarUrl),
             backgroundColor: Colors.grey[200],
+            child: avatarUrl.isEmpty
+                ? Text(
+                    nickname.trim().isEmpty
+                        ? '?'
+                        : nickname.trim().characters.first,
+                  )
+                : null,
           ),
 
           SizedBox(width: 12),

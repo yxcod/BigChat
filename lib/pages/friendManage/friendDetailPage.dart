@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../api/getFriendRequestsAPI.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 import '../../utils/WebSocketManager.dart';
 import '../videoCallPage.dart';
 
@@ -31,6 +31,16 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
     'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&h=300&fit=crop',
   ];
 
+  bool get _isFriend {
+    final explicitValue = widget.friendData['isFriend'];
+    if (explicitValue is bool) {
+      return explicitValue;
+    }
+    final userName = widget.friendData['userName']?.toString() ?? '';
+    final friendList = _globalUtil.userInfoModel.friendListData;
+    return friendList?.any((friend) => friend.userName == userName) ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -40,27 +50,35 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
         elevation: 0,
         automaticallyImplyLeading: true,
         toolbarHeight: 50,
-        actions: [
-          PopupMenuButton<String>(
-            key: _popupButtonKey,
-            icon: Icon(Icons.more_horiz, color: Colors.black),
-            offset: Offset(0, 50),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            itemBuilder: (BuildContext context) => [
-              PopupMenuItem<String>(value: 'editRemark', child: Text('修改备注')),
-              PopupMenuItem<String>(value: 'deleteFriend', child: Text('删除好友')),
-            ],
-            onSelected: (String value) {
-              if (value == 'editRemark') {
-                _showEditRemarkDialog();
-              } else if (value == 'deleteFriend') {
-                _showDeleteFriendDialog();
-              }
-            },
-          ),
-        ],
+        actions: _isFriend
+            ? [
+                PopupMenuButton<String>(
+                  key: _popupButtonKey,
+                  icon: Icon(Icons.more_horiz, color: Colors.black),
+                  offset: Offset(0, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  itemBuilder: (BuildContext context) => [
+                    PopupMenuItem<String>(
+                      value: 'editRemark',
+                      child: Text('修改备注'),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'deleteFriend',
+                      child: Text('删除好友'),
+                    ),
+                  ],
+                  onSelected: (String value) {
+                    if (value == 'editRemark') {
+                      _showEditRemarkDialog();
+                    } else if (value == 'deleteFriend') {
+                      _showDeleteFriendDialog();
+                    }
+                  },
+                ),
+              ]
+            : null,
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.symmetric(horizontal: 16),
@@ -72,8 +90,8 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
 
             SizedBox(height: 32),
 
-            // 朋友圈区域
-            _buildMomentsSection(),
+            // 非好友只能看到基础资料，不能查看动态详情。
+            _isFriend ? _buildMomentsSection() : _buildPrivateMomentsSection(),
 
             SizedBox(height: 40),
 
@@ -89,6 +107,12 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
 
   // 构建好友信息区域
   Widget _buildFriendInfoSection() {
+    final remark = widget.friendData['remark']?.toString().trim() ?? '';
+    final nickname = widget.friendData['nickname']?.toString().trim() ?? '';
+    final signature = widget.friendData['signature']?.toString().trim() ?? '';
+    final displayName = _isFriend && remark.isNotEmpty
+        ? remark
+        : (nickname.isEmpty ? '未知用户' : nickname);
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white),
@@ -105,12 +129,12 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.friendData['remark'] ?? '暂无备注',
+                  displayName,
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 4),
                 Text(
-                  '昵称: ${widget.friendData['nickname'] ?? '未知'}',
+                  '昵称: ${nickname.isEmpty ? '未知' : nickname}',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
                 SizedBox(height: 2),
@@ -118,6 +142,15 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                   '帐号: ${widget.friendData['userName'] ?? 'unknown'}',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
+                if (signature.isNotEmpty) ...[
+                  SizedBox(height: 2),
+                  Text(
+                    '签名: $signature',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ],
               ],
             ),
           ),
@@ -206,8 +239,48 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
     );
   }
 
+  Widget _buildPrivateMomentsSection() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.lock_outline, color: Colors.grey[500], size: 28),
+          SizedBox(height: 8),
+          Text(
+            '添加好友后可查看动态',
+            style: TextStyle(color: Colors.grey[600], fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
   // 构建操作按钮区域
   Widget _buildActionButtons() {
+    if (!_isFriend) {
+      return SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: _addFriend,
+          icon: Icon(Icons.person_add_alt_1),
+          label: Text('添加好友'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+          ),
+        ),
+      );
+    }
     return Row(
       children: [
         // 音视频通信按钮
@@ -250,6 +323,19 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
           ),
         ),
       ],
+    );
+  }
+
+  void _addFriend() {
+    Navigator.pushNamed(
+      context,
+      '/addFriendRequestPage',
+      arguments: {
+        'avatar': widget.friendData['avatar'] ?? '',
+        'nickname': widget.friendData['nickname'] ?? '',
+        'phone': widget.friendData['userName'] ?? '',
+        'signature': widget.friendData['signature'] ?? '',
+      },
     );
   }
 
@@ -447,9 +533,25 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
   // 构建头像，实现缓存机制
   Widget _buildAvatar() {
     String userName = widget.friendData['userName'] ?? "";
-    String avatarUrl =
-        widget.friendData['avatar'] ??
-        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop';
+    String avatarUrl = widget.friendData['avatar'] ?? '';
+    if (avatarUrl.isNotEmpty &&
+        !avatarUrl.startsWith('http://') &&
+        !avatarUrl.startsWith('https://')) {
+      try {
+        avatarUrl = _globalUtil.getImageURL(userName, avatarUrl);
+      } catch (error) {
+        debugPrint('生成资料页头像地址失败: $error');
+        avatarUrl = '';
+      }
+    }
+
+    if (avatarUrl.isEmpty) {
+      final nickname = widget.friendData['nickname']?.toString() ?? '';
+      final initial = nickname.trim().isEmpty
+          ? '?'
+          : nickname.trim().characters.first;
+      return CircleAvatar(radius: 30, child: Text(initial));
+    }
 
     // 检查缓存中是否已有该用户的头像，并且 URL 是否相同
     if (_avatarCache.containsKey(userName)) {
