@@ -17,6 +17,16 @@ import '../pages/profileEditPage.dart';
 import '../pages/LoginPages/registerPage.dart';
 import '../model/friendRequestModel.dart';
 
+int _parseIntRouteArgument(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
 Widget getRootWidget() {
   return MaterialApp(
     initialRoute: "/login",
@@ -56,8 +66,8 @@ Widget getRootWidget() {
           final groupData = settings.arguments as Map<String, dynamic>;
           return MaterialPageRoute(
             builder: (context) => GroupChatDialogPage(
-              groupId: groupData['groupId'] ?? '',
-              groupName: groupData['groupName'] ?? '',
+              groupId: _parseIntRouteArgument(groupData['groupId']),
+              groupName: groupData['groupName']?.toString() ?? '',
             ),
           );
         case '/groupChatListPage':
