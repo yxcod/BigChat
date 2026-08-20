@@ -44,6 +44,8 @@ class MessageDetailModel {
   int isDeleted; // 是否删除
   int isRead; // 是否已读
   List<ReaderModel> readers; // 已读用户列表
+  List<ReaderModel> unreaders; // 未读用户列表
+  bool hasUnreadersField; // 后端是否明确返回未读列表
 
   MessageDetailModel({
     this.msgId = 0,
@@ -56,12 +58,21 @@ class MessageDetailModel {
     this.isDeleted = 0,
     this.isRead = 0,
     this.readers = const [],
+    this.unreaders = const [],
+    this.hasUnreadersField = false,
   });
 
   factory MessageDetailModel.fromJson(Map<String, dynamic> json) {
     List<ReaderModel> readersList = [];
     if (json['readers'] != null && json['readers'] is List) {
       readersList = (json['readers'] as List)
+          .map((reader) => ReaderModel.fromJson(reader))
+          .toList();
+    }
+
+    List<ReaderModel> unreadersList = [];
+    if (json['unreaders'] != null && json['unreaders'] is List) {
+      unreadersList = (json['unreaders'] as List)
           .map((reader) => ReaderModel.fromJson(reader))
           .toList();
     }
@@ -77,6 +88,8 @@ class MessageDetailModel {
       isDeleted: json['isDeleted'] ?? 0,
       isRead: json['isRead'] ?? 0,
       readers: readersList,
+      unreaders: unreadersList,
+      hasUnreadersField: json.containsKey('unreaders'),
     );
   }
 
@@ -92,6 +105,7 @@ class MessageDetailModel {
       'isDeleted': isDeleted,
       'isRead': isRead,
       'readers': readers.map((reader) => reader.toJson()).toList(),
+      'unreaders': unreaders.map((reader) => reader.toJson()).toList(),
     };
   }
 }

@@ -13,10 +13,12 @@ import '../../model/groupMemberModel.dart';
 import '../../model/groupInfoModel.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../model/messageModel.dart';
+import '../../model/groupMessageModel.dart';
 import '../videoCallPage.dart';
 import '../../utils/http.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../api/getGroupMemberAPI.dart';
+import '../../api/groupChatRecordAPI.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -38,6 +40,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
+  final Set<int> _sentReadAckMessageIds = {};
+  int _loadedMessageLimit = 100;
   late Timer _groupInfoTimer; // 定时器，用于定期获取群信息
   late Timer _groupMembersTimer; // 定时器，用于定期检查群成员列表
   String _currentGroupName = ''; // 当前显示的群名称
@@ -68,8 +72,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       _fetchGroupInfo();
     });
 
-    // 立即获取群成员列表，确保在聊天记录加载之前获取
-    _checkGroupMembership();
+    // 先加载群成员，再加载带已读状态的群聊记录。
+    _initializeGroupChatData();
 
     // 设置定时器，每隔3秒检查一次群成员列表
     _groupMembersTimer = Timer.periodic(Duration(seconds: 3), (timer) {
@@ -78,6 +82,189 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
     // 页面初始化时自动滚动到聊天记录底部
     _scrollToBottom();
+  }
+
+  Future<void> _initializeGroupChatData() async {
+    await _checkGroupMembership();
+    if (!mounted) {
+      return;
+    }
+    await _loadGroupChatRecords(limit: _loadedMessageLimit);
+  }
+
+  int _parseInt(dynamic value, {int fallback = 0}) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
+  MessageType _parseMessageType(int value) {
+    return value == 2 ? MessageType.image : MessageType.text;
+  }
+
+  Future<void> _loadGroupChatRecords({
+    required int limit,
+    bool scrollToBottom = true,
+  }) async {
+    try {
+      final groupRecord = await getGroupChatRecord(widget.groupId, limit);
+      final globalUtil = GlobalUtil();
+      final currentUserId = globalUtil.userName ?? '';
+      final existingMessages = List<Message>.from(
+        globalUtil.getChatRecords(widget.groupId.toString()),
+      );
+      final existingById = {
+        for (final message in existingMessages) message.msgId: message,
+      };
+
+      final messages = groupRecord.messages.map((record) {
+        final readUserIds = record.readers
+            .map((reader) => reader.userId)
+            .where((userId) => userId.isNotEmpty)
+            .toSet();
+        final isMe = record.senderId == currentUserId;
+        final isReadByCurrentUser = readUserIds.contains(currentUserId);
+        return Message(
+          msgId: record.msgId,
+          content: record.msgContent,
+          isMe: isMe,
+          time: GlobalUtil.formatTimestamp(record.sendTime),
+          isRead: isMe ? readUserIds.isNotEmpty : isReadByCurrentUser,
+          conversationId: widget.groupId.toString(),
+          messageType: _parseMessageType(record.msgType),
+          status: MessageStatus.sent,
+          senderId: record.senderId,
+        );
+      }).toList();
+
+      final loadedMessageIds = messages.map((message) => message.msgId).toSet();
+      for (final entry in existingById.entries) {
+        if (!loadedMessageIds.contains(entry.key)) {
+          messages.add(entry.value);
+        }
+      }
+      messages.sort((left, right) => left.msgId.compareTo(right.msgId));
+
+      globalUtil.clearChatRecords(widget.groupId.toString());
+      for (final message in messages) {
+        globalUtil.addMessage(widget.groupId.toString(), message);
+      }
+
+      _replaceReadStatuses(groupRecord.messages);
+      _loadedMessageLimit = limit;
+
+      if (mounted) {
+        setState(() {});
+        if (scrollToBottom) {
+          _scrollToBottom();
+        }
+      }
+      _sendReadAcksForLoadedMessages();
+    } catch (e) {
+      debugPrint('加载群聊记录及已读状态失败: $e');
+    }
+  }
+
+  void _replaceReadStatuses(List<MessageDetailModel> records) {
+    final members = GlobalUtil().getGroupMembers(widget.groupId);
+    final previousStatuses = {
+      for (final status in _messageReadStatus) status['msgId'] as int: status,
+    };
+    final newStatuses = <Map<String, dynamic>>[];
+
+    for (final record in records) {
+      final readUserIds = record.readers
+          .map((reader) => reader.userId)
+          .where((userId) => userId.isNotEmpty)
+          .toSet();
+      final backendUnreadUserIds = record.unreaders
+          .map((reader) => reader.userId)
+          .where((userId) => userId.isNotEmpty)
+          .toSet();
+      final eligibleMemberIds = members
+          .where(
+            (member) =>
+                member.userId.isNotEmpty && member.userId != record.senderId,
+          )
+          .map((member) => member.userId)
+          .toSet();
+
+      // 兼容尚未升级、未返回 unreaders 的后端。
+      final unreadUserIds = record.hasUnreadersField
+          ? backendUnreadUserIds
+          : eligibleMemberIds.difference(readUserIds);
+
+      newStatuses.add({
+        'msgId': record.msgId,
+        'readCount': readUserIds.length,
+        'unreadCount': unreadUserIds.length,
+        'readMembers': readUserIds.toList(),
+        'unreadMembers': unreadUserIds.toList(),
+      });
+      previousStatuses.remove(record.msgId);
+    }
+
+    newStatuses.addAll(previousStatuses.values);
+    _messageReadStatus = newStatuses;
+  }
+
+  void _initializeOutgoingReadStatus(int msgId) {
+    final currentUserId = GlobalUtil().userName;
+    final unreadUserIds = GlobalUtil()
+        .getGroupMembers(widget.groupId)
+        .where(
+          (member) =>
+              member.userId.isNotEmpty && member.userId != currentUserId,
+        )
+        .map((member) => member.userId)
+        .toSet()
+        .toList();
+
+    _messageReadStatus.removeWhere((status) => status['msgId'] == msgId);
+    _messageReadStatus.add({
+      'msgId': msgId,
+      'readCount': 0,
+      'unreadCount': unreadUserIds.length,
+      'readMembers': <String>[],
+      'unreadMembers': unreadUserIds,
+    });
+  }
+
+  void _sendReadAcksForLoadedMessages() {
+    if (!_wsManager.isConnected) {
+      return;
+    }
+    final globalUtil = GlobalUtil();
+    final currentUserId = globalUtil.userName;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return;
+    }
+
+    for (final message in globalUtil.getChatRecords(
+      widget.groupId.toString(),
+    )) {
+      if (message.isMe ||
+          message.senderId == null ||
+          message.senderId!.isEmpty) {
+        continue;
+      }
+      final statusIndex = _messageReadStatus.indexWhere(
+        (status) => status['msgId'] == message.msgId,
+      );
+      final readMembers = statusIndex == -1
+          ? <String>[]
+          : List<String>.from(
+              _messageReadStatus[statusIndex]['readMembers'] ?? const [],
+            );
+      if (!readMembers.contains(currentUserId) &&
+          _sentReadAckMessageIds.add(message.msgId)) {
+        _sendReadAck(message.msgId, message.senderId!);
+      }
+    }
   }
 
   // 获取群信息
@@ -140,8 +327,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         keyMessage = currentMessages[middleIndex];
       }
 
-      // 调用API加载更多记录
-      await globalUtil.loadMoreChatRecords(widget.groupId.toString());
+      // 群聊必须使用群聊记录接口，不能复用单聊记录接口。
+      await _loadGroupChatRecords(
+        limit: currentMessages.length + 100,
+        scrollToBottom: false,
+      );
 
       // 获取新的聊天记录列表
       List<Message> newMessages = globalUtil.getChatRecords(
@@ -221,6 +411,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
       // 添加消息到全局聊天记录
       globalUtil.addMessage(widget.groupId.toString(), newMessage);
+      _initializeOutgoingReadStatus(msgId);
 
       // 更新UI并滚动到底部
       setState(() {});
@@ -364,12 +555,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     debugPrint('当前群ID: ${widget.groupId}');
     debugPrint('当前用户: ${globalUtil.userName}');
 
-    String sender = messageData['sendUserId'] ?? '';
-    String content = messageData['msgContent'] ?? '';
-    int msgId = messageData['msgId'] ?? 0;
-    int msgType = messageData['msgType'] ?? 1;
-    int receiveId = messageData['receiveId'] ?? 0;
-    int receiveType = messageData['receiveType'] ?? 2;
+    String sender = messageData['sendUserId']?.toString() ?? '';
+    String content = messageData['msgContent']?.toString() ?? '';
+    int msgId = _parseInt(messageData['msgId']);
+    int msgType = _parseInt(messageData['msgType'], fallback: 1);
+    int receiveId = _parseInt(messageData['receiveId']);
+    int receiveType = _parseInt(messageData['receiveType'], fallback: 2);
 
     // 处理时间戳，支持多种格式
     var rawSendTime = messageData['sendTime'];
@@ -437,6 +628,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
         // 发送已读确认（只发送给发送者，不发送给自己发的消息）
         if (sender != globalUtil.userName) {
+          _sentReadAckMessageIds.add(msgId);
           _sendReadAck(msgId, sender);
         }
       }
@@ -448,10 +640,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   // 处理聊天确认回调
   void _handleChatCallback(Map<String, dynamic> messageData) {
     final globalUtil = GlobalUtil();
-    int msgId = messageData['msgId'] ?? 0;
-    String status = messageData['status'] ?? '';
-    String sender = messageData['sender'] ?? '';
-    String sessionId = messageData['sessionId'] ?? '';
+    int msgId = _parseInt(messageData['msgId']);
+    String status = messageData['status']?.toString() ?? '';
+    String sender = messageData['sender']?.toString() ?? '';
+    String sessionId = messageData['sessionId']?.toString() ?? '';
     if (sessionId != widget.groupId.toString()) {
       return;
     }
@@ -466,7 +658,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           message.status = MessageStatus.sent;
         } else if (status == 'failed' && message.isMe) {
           message.status = MessageStatus.failed;
-        } else if (status == 'read' && !message.isMe) {
+        } else if (status == 'read' && message.isMe) {
           // 更新消息已读状态
           message.isRead = true;
           // 更新消息的已读人数
@@ -477,31 +669,43 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     }
 
     // 更新UI
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   // 更新消息的已读状态
   void _updateMessageReadStatus(int msgId, String reader) {
-    final msgStatusIndex = _messageReadStatus.indexWhere(
+    var msgStatusIndex = _messageReadStatus.indexWhere(
       (status) => status['msgId'] == msgId,
     );
-    if (msgStatusIndex != -1) {
-      final msgStatus = _messageReadStatus[msgStatusIndex];
-      List<dynamic> readMembers = msgStatus['readMembers'] ?? [];
-      List<dynamic> unreadMembers = msgStatus['unreadMembers'] ?? [];
+    if (msgStatusIndex == -1) {
+      _initializeOutgoingReadStatus(msgId);
+      msgStatusIndex = _messageReadStatus.indexWhere(
+        (status) => status['msgId'] == msgId,
+      );
+    }
+    if (msgStatusIndex == -1 || reader.isEmpty) {
+      return;
+    }
 
-      if (!readMembers.contains(reader)) {
-        readMembers.add(reader);
-        unreadMembers.remove(reader);
+    final msgStatus = _messageReadStatus[msgStatusIndex];
+    final readMembers = List<String>.from(msgStatus['readMembers'] ?? const []);
+    final unreadMembers = List<String>.from(
+      msgStatus['unreadMembers'] ?? const [],
+    );
 
-        _messageReadStatus[msgStatusIndex] = {
-          ...msgStatus,
-          'readMembers': readMembers,
-          'unreadMembers': unreadMembers,
-          'readCount': readMembers.length,
-          'unreadCount': unreadMembers.length,
-        };
-      }
+    if (!readMembers.contains(reader)) {
+      readMembers.add(reader);
+      unreadMembers.remove(reader);
+
+      _messageReadStatus[msgStatusIndex] = {
+        ...msgStatus,
+        'readMembers': readMembers,
+        'unreadMembers': unreadMembers,
+        'readCount': readMembers.length,
+        'unreadCount': unreadMembers.length,
+      };
     }
   }
 
@@ -564,6 +768,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         '${GlobalUtil().baseWebSocketURL}/api/chat?userName=${GlobalUtil().userName}',
         onStatusChanged: (status) {
           debugPrint('WebSocket状态: $status');
+          if (status == WebSocketStatus.connected) {
+            _sendReadAcksForLoadedMessages();
+          }
         },
         onError: (error) {
           debugPrint('WebSocket错误: $error');
@@ -571,6 +778,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       );
     } else {
       debugPrint('WebSocket已连接，只更新监听器');
+      _sendReadAcksForLoadedMessages();
     }
   }
 
@@ -899,14 +1107,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     // 添加消息到全局聊天记录
     globalUtil.addMessage(widget.groupId.toString(), newMessage);
 
-    // 初始化消息的已读状态
-    _messageReadStatus.add({
-      'msgId': msgId,
-      'readCount': 0,
-      'unreadCount': 0, // 减去自己
-      'readMembers': [],
-      'unreadMembers': [], // 默认值
-    });
+    // 新消息默认由除发送者外的当前群成员组成未读名单。
+    _initializeOutgoingReadStatus(msgId);
 
     // 更新UI并滚动到底部
     setState(() {});
@@ -993,46 +1195,94 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   // 显示已读状态列表
   void _showReadStatusList(int msgId) {
-    // 查找消息的已读状态
     final msgStatus = _messageReadStatus.firstWhere(
       (status) => status['msgId'] == msgId,
-      orElse: () => {'msgId': msgId, 'readCount': 0, 'readMembers': []},
+      orElse: () => {
+        'msgId': msgId,
+        'readCount': 0,
+        'unreadCount': 0,
+        'readMembers': <String>[],
+        'unreadMembers': <String>[],
+      },
     );
+    final readUserIds = List<String>.from(msgStatus['readMembers'] ?? const []);
+    final unreadCount = _parseInt(msgStatus['unreadCount']);
+    final membersById = {
+      for (final member in GlobalUtil().getGroupMembers(widget.groupId))
+        member.userId: member,
+    };
 
-    // 显示已读成员列表
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
       builder: (context) {
-        return Container(
-          height: 300,
-          padding: EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '已读 (${msgStatus['readCount']})',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.55,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '消息阅读情况',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${readUserIds.length}人已读 · $unreadCount人未读',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  Text(
+                    '已读人员',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: readUserIds.isEmpty
+                        ? Center(
+                            child: Text(
+                              '暂时还没有人已读',
+                              style: TextStyle(color: Colors.grey[500]),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: readUserIds.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1, indent: 52),
+                            itemBuilder: (context, index) {
+                              final userId = readUserIds[index];
+                              final member = membersById[userId];
+                              final displayName =
+                                  member?.groupNickName.trim().isNotEmpty ==
+                                      true
+                                  ? member!.groupNickName.trim()
+                                  : userId;
+                              final initial = displayName.isEmpty
+                                  ? '?'
+                                  : displayName.characters.first;
+                              return ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: CircleAvatar(child: Text(initial)),
+                                title: Text(displayName),
+                                subtitle: displayName == userId
+                                    ? null
+                                    : Text(userId),
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
-              SizedBox(height: 10),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: msgStatus['readMembers'].length,
-                  itemBuilder: (context, index) {
-                    final memberName = msgStatus['readMembers'][index];
-                    final member = GroupMemberModel(
-                      userId: memberName,
-                      groupNickName: memberName,
-                    );
-                    return ListTile(
-                      leading: CircleAvatar(
-                        child: Text(member.groupNickName.substring(0, 1)),
-                      ),
-                      title: Text(member.groupNickName),
-                    );
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
