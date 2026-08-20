@@ -260,52 +260,6 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
                 ),
               ],
             ),
-            SizedBox(height: 80),
-            Column(
-              children: [
-                Text(
-                  '其他登录方式',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 14.0),
-                ),
-                SizedBox(height: 30),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.account_circle_outlined,
-                        size: 40.0,
-                        color: Colors.blue,
-                      ),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('其它登录方式功能开发中'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                    ),
-                    SizedBox(width: 60),
-                    IconButton(
-                      icon: Icon(
-                        Icons.phone_android_outlined,
-                        size: 40.0,
-                        color: Colors.green,
-                      ),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('手机号登录功能开发中'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
           ],
         ),
       ),
