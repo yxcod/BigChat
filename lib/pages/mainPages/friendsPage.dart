@@ -4,6 +4,7 @@ import '../../utils/gloabl.dart';
 import '../../api/getInfoAPI.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../model/friendRequestModel.dart';
+import '../../utils/friend_search_util.dart';
 
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
@@ -20,6 +21,8 @@ class _FriendsPage extends State<Friendspage>
   final GlobalUtil _globalUtil = GlobalUtil();
   int _friendRequestCount = 0;
   List<FriendRequestModel> _pendingRequests = [];
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   bool get wantKeepAlive => true;
@@ -33,6 +36,7 @@ class _FriendsPage extends State<Friendspage>
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -132,6 +136,135 @@ class _FriendsPage extends State<Friendspage>
     Navigator.pushNamed(context, '/groupCreatePage');
   }
 
+  List<Friend> get _filteredFriends {
+    final keyword = _searchQuery.trim();
+    if (keyword.isEmpty) {
+      return friends;
+    }
+    return friends
+        .where(
+          (friend) => FriendSearchUtil.matches(
+            keyword: keyword,
+            displayName: friend.name,
+            nickname: friend.nickName,
+          ),
+        )
+        .toList();
+  }
+
+  void _openFriendDetail(Friend friend) {
+    Navigator.pushNamed(
+      context,
+      '/friendDetailPage',
+      arguments: {
+        'avatar': friend.avatar,
+        'remark': friend.name,
+        'nickname': friend.nickName,
+        'userName': friend.userName,
+        'signature': friend.signature,
+        'isFriend': true,
+      },
+    );
+  }
+
+  Widget _buildHighlightedText(String text, {required TextStyle normalStyle}) {
+    return Text.rich(
+      TextSpan(
+        children: FriendSearchUtil.buildHighlightedSpans(
+          text: text,
+          keyword: _searchQuery,
+          normalStyle: normalStyle,
+          highlightedStyle: normalStyle.copyWith(
+            color: const Color(0xFF07C160),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildFriendTile(Friend friend, {required bool isSearching}) {
+    final hasDistinctNickname =
+        friend.nickName.isNotEmpty &&
+        friend.nickName.trim() != friend.name.trim();
+    return ListTile(
+      leading: Stack(
+        children: [
+          CircleAvatar(
+            backgroundColor: Colors.grey[200],
+            radius: 20,
+            child: ClipOval(
+              child: friend.avatar != '👤'
+                  ? Image.network(
+                      friend.avatar,
+                      fit: BoxFit.cover,
+                      width: 40,
+                      height: 40,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(Icons.person, color: Colors.grey);
+                      },
+                    )
+                  : Icon(Icons.person, color: Colors.grey),
+            ),
+          ),
+          if (friend.isOnline)
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+            ),
+        ],
+      ),
+      title: isSearching
+          ? _buildHighlightedText(
+              friend.name,
+              normalStyle: const TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.black,
+              ),
+            )
+          : Text(
+              friend.name,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+      subtitle: isSearching && hasDistinctNickname
+          ? Row(
+              children: [
+                Text(
+                  '昵称：',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                ),
+                Expanded(
+                  child: _buildHighlightedText(
+                    friend.nickName,
+                    normalStyle: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Text(
+              friend.signature,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+      onTap: () => _openFriendDetail(friend),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -147,9 +280,26 @@ class _FriendsPage extends State<Friendspage>
             borderRadius: BorderRadius.circular(18),
           ),
           child: TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _searchQuery = value),
+            textInputAction: TextInputAction.search,
             decoration: InputDecoration(
-              hintText: '搜索',
+              hintText: '搜索好友昵称或备注',
               prefixIcon: Icon(Icons.search, color: Colors.grey),
+              suffixIcon: _searchQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: '清除',
+                      icon: Icon(
+                        Icons.cancel,
+                        color: Colors.grey[400],
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    ),
               border: InputBorder.none,
               contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 3),
             ),
@@ -180,155 +330,138 @@ class _FriendsPage extends State<Friendspage>
       body: Column(
         children: [
           // 顶部按钮
-          Container(
-            color: Colors.white,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(Icons.person_add, color: Colors.green),
-                  title: Text('新的朋友'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_friendRequestCount > 0)
-                        Container(
-                          margin: EdgeInsets.only(right: 8),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '$_friendRequestCount',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+          if (_searchQuery.trim().isEmpty)
+            Container(
+              color: Colors.white,
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(Icons.person_add, color: Colors.green),
+                    title: Text('新的朋友'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_friendRequestCount > 0)
+                          Container(
+                            margin: EdgeInsets.only(right: 8),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$_friendRequestCount',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          color: Colors.grey,
+                          size: 16,
                         ),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        color: Colors.grey,
-                        size: 16,
-                      ),
-                    ],
-                  ),
-                  onTap: () {
-                    // 进入好友验证页面
-                    Navigator.pushNamed(
-                      context,
-                      '/friendAddManagerPage',
-                      arguments: _pendingRequests,
-                    ).then((_) {
-                      // 返回后只清除红点提示，不清除好友申请数据
-                      setState(() {
-                        _friendRequestCount = 0;
+                      ],
+                    ),
+                    onTap: () {
+                      // 进入好友验证页面
+                      Navigator.pushNamed(
+                        context,
+                        '/friendAddManagerPage',
+                        arguments: _pendingRequests,
+                      ).then((_) {
+                        // 返回后只清除红点提示，不清除好友申请数据
+                        setState(() {
+                          _friendRequestCount = 0;
+                        });
                       });
-                    });
-                  },
-                ),
-                Divider(height: 1, color: Colors.grey[200]),
-                ListTile(
-                  leading: Icon(Icons.group, color: Colors.green),
-                  title: Text('我的群聊'),
-                  trailing: Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.grey,
-                    size: 16,
+                    },
                   ),
-                  onTap: () {
-                    Navigator.pushNamed(context, '/groupChatListPage');
-                  },
-                ),
-              ],
+                  Divider(height: 1, color: Colors.grey[200]),
+                  ListTile(
+                    leading: Icon(Icons.group, color: Colors.green),
+                    title: Text('我的群聊'),
+                    trailing: Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.grey,
+                      size: 16,
+                    ),
+                    onTap: () {
+                      Navigator.pushNamed(context, '/groupChatListPage');
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-          SizedBox(height: 10),
+          if (_searchQuery.trim().isEmpty) SizedBox(height: 10),
 
           // 好友列表
           Expanded(
-            child: ListView.builder(
-              itemCount: friends.length,
-              itemBuilder: (context, index) {
-                Widget item = ListTile(
-                  leading: Stack(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: Colors.grey[200],
-                        radius: 20,
-                        child: ClipOval(
-                          child: friends[index].avatar != '👤'
-                              ? Image.network(
-                                  friends[index].avatar,
-                                  fit: BoxFit.cover,
-                                  width: 40,
-                                  height: 40,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Icon(
-                                      Icons.person,
-                                      color: Colors.grey,
-                                    );
-                                  },
-                                )
-                              : Icon(Icons.person, color: Colors.grey),
+            child: _filteredFriends.isEmpty && _searchQuery.trim().isNotEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.person_search,
+                          size: 52,
+                          color: Colors.grey[300],
                         ),
-                      ),
-                      // 在线状态指示器 - 放置在CircleAvatar外部，避免被裁剪
-                      if (friends[index].isOnline) ...[
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                          ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '没有找到匹配的好友',
+                          style: TextStyle(color: Colors.grey[500]),
                         ),
                       ],
-                    ],
-                  ),
-                  title: Text(
-                    friends[index].name,
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  subtitle: Text(
-                    friends[index].signature,
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                  onTap: () {
-                    Map<String, dynamic> friendData = {
-                      'avatar': friends[index].avatar,
-                      'remark': friends[index].name,
-                      'nickname': friends[index].nickName,
-                      'userName': friends[index].userName,
-                    };
-                    Navigator.pushNamed(
-                      context,
-                      '/friendDetailPage',
-                      arguments: friendData,
-                    );
-                  },
-                );
+                    ),
+                  )
+                : ListView.builder(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    itemCount:
+                        _filteredFriends.length +
+                        (_searchQuery.trim().isNotEmpty ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (_searchQuery.trim().isNotEmpty && index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                          child: Text(
+                            '好友（${_filteredFriends.length}）',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                          ),
+                        );
+                      }
+                      final friendIndex =
+                          index - (_searchQuery.trim().isNotEmpty ? 1 : 0);
+                      final friend = _filteredFriends[friendIndex];
+                      final item = _buildFriendTile(
+                        friend,
+                        isSearching: _searchQuery.trim().isNotEmpty,
+                      );
 
-                if (index < friends.length - 1) {
-                  return Column(
-                    children: [
-                      item,
-                      Divider(height: 1, color: Colors.grey[300], indent: 70),
-                    ],
-                  );
-                }
-                return item;
-              },
-            ),
+                      if (friendIndex < _filteredFriends.length - 1) {
+                        return Column(
+                          children: [
+                            item,
+                            Divider(
+                              height: 1,
+                              color: Colors.grey[300],
+                              indent: 70,
+                            ),
+                          ],
+                        );
+                      }
+                      return item;
+                    },
+                  ),
           ),
         ],
       ),
