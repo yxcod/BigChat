@@ -190,7 +190,7 @@ class GlobalUtil {
           content: model.content ?? '',
           isMe: model.senderName == currentUserName,
           time: model.timestamp != null
-              ? GlobalUtil.formatTimestamp(model.timestamp!)
+              ? GlobalUtil.formatChatTimestamp(model.timestamp!)
               : '',
           isRead: true,
           conversationId: model.conversationId ?? '',
@@ -403,6 +403,32 @@ class GlobalUtil {
     final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
     final formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
     return formatter.format(dateTime);
+  }
+
+  /// 聊天消息时间：当天显示时分，今年显示月日时分，往年显示年月日时分。
+  static String formatChatTimestamp(int timestamp, {DateTime? referenceTime}) {
+    if (timestamp <= 0) {
+      return '';
+    }
+
+    // 兼容后端可能返回的秒级和毫秒级时间戳。
+    final normalizedTimestamp = timestamp < 1000000000000
+        ? timestamp * 1000
+        : timestamp;
+    final dateTime = DateTime.fromMillisecondsSinceEpoch(normalizedTimestamp);
+    final now = referenceTime ?? DateTime.now();
+    final isToday =
+        dateTime.year == now.year &&
+        dateTime.month == now.month &&
+        dateTime.day == now.day;
+
+    if (isToday) {
+      return DateFormat('HH:mm').format(dateTime);
+    }
+    if (dateTime.year == now.year) {
+      return DateFormat('MM-dd HH:mm').format(dateTime);
+    }
+    return DateFormat('yyyy-MM-dd HH:mm').format(dateTime);
   }
 
   //根据userName查找FriendInfoModel

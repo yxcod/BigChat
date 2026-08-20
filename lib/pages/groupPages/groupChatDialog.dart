@@ -133,7 +133,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           msgId: record.msgId,
           content: record.msgContent,
           isMe: isMe,
-          time: GlobalUtil.formatTimestamp(record.sendTime),
+          time: GlobalUtil.formatChatTimestamp(record.sendTime),
           isRead: isMe ? readUserIds.isNotEmpty : isReadByCurrentUser,
           conversationId: widget.groupId.toString(),
           messageType: _parseMessageType(record.msgType),
@@ -1246,14 +1246,14 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   String _getTime() {
-    final now = DateTime.now();
-    return '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    return GlobalUtil.formatChatTimestamp(
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
-  // 将毫秒级时间戳转换为UI显示的时间格式 (MM-dd HH:MM)
+  // 将时间戳转换为聊天消息时间格式。
   String _formatTimestamp(int timestamp) {
-    final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    return '${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return GlobalUtil.formatChatTimestamp(timestamp);
   }
 
   String _formatReadTime(int timestamp) {

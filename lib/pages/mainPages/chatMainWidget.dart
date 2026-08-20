@@ -110,7 +110,7 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
             msgId: message.msgId!,
             content: message.content ?? '',
             isMe: false,
-            time: GlobalUtil.formatTimestamp(
+            time: GlobalUtil.formatChatTimestamp(
               message.timestamp ?? DateTime.now().millisecondsSinceEpoch,
             ),
             isRead: true, // 未读消息

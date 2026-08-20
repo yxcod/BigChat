@@ -474,7 +474,7 @@ class _ChatpageState extends State<Chatpage> {
               content: model.content ?? '',
               isMe: model.senderName == currentUserName,
               time: model.timestamp != null
-                  ? GlobalUtil.formatTimestamp(model.timestamp!)
+                  ? GlobalUtil.formatChatTimestamp(model.timestamp!)
                   : '',
               isRead: true,
               conversationId: model.conversationId ?? '',
@@ -540,7 +540,7 @@ class _ChatpageState extends State<Chatpage> {
               msgId: model.msgId,
               content: model.msgContent,
               isMe: model.senderId == currentUserName,
-              time: GlobalUtil.formatTimestamp(model.sendTime),
+              time: GlobalUtil.formatChatTimestamp(model.sendTime),
               isRead: true,
               conversationId: groupIdStr,
               messageType: messageType,

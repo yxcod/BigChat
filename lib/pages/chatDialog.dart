@@ -1113,14 +1113,14 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   String _getTime() {
-    final now = DateTime.now();
-    return '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    return GlobalUtil.formatChatTimestamp(
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
-  // 将毫秒级时间戳转换为UI显示的时间格式 (MM-dd HH:MM)
+  // 将时间戳转换为聊天消息时间格式。
   String _formatTimestamp(int timestamp) {
-    final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    return '${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return GlobalUtil.formatChatTimestamp(timestamp);
   }
 
   // 生成会话ID，规则：较大的手机号放在前面，用下划线分隔
