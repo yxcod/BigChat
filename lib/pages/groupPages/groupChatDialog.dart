@@ -182,6 +182,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           .map((reader) => reader.userId)
           .where((userId) => userId.isNotEmpty)
           .toSet();
+      final readTimes = <String, int>{
+        for (final reader in record.readers)
+          if (reader.userId.isNotEmpty) reader.userId: reader.readTime,
+      };
       final backendUnreadUserIds = record.unreaders
           .map((reader) => reader.userId)
           .where((userId) => userId.isNotEmpty)
@@ -193,9 +197,16 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           )
           .map((member) => member.userId)
           .toSet();
+      final backendStatusUserIds = <String>{
+        ...readUserIds,
+        ...backendUnreadUserIds,
+      };
+      final hasCompleteServerReadState =
+          record.hasUnreadersField &&
+          eligibleMemberIds.difference(backendStatusUserIds).isEmpty;
 
-      // 兼容尚未升级、未返回 unreaders 的后端。
-      final unreadUserIds = record.hasUnreadersField
+      // 老消息可能没有初始化阅读记录，此时按当前群成员补算，避免显示虚假的 0 人未读。
+      final unreadUserIds = hasCompleteServerReadState
           ? backendUnreadUserIds
           : eligibleMemberIds.difference(readUserIds);
 
@@ -205,6 +216,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         'unreadCount': unreadUserIds.length,
         'readMembers': readUserIds.toList(),
         'unreadMembers': unreadUserIds.toList(),
+        'readTimes': readTimes,
+        'hasCompleteServerReadState': hasCompleteServerReadState,
       });
       previousStatuses.remove(record.msgId);
     }
@@ -232,7 +245,47 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       'unreadCount': unreadUserIds.length,
       'readMembers': <String>[],
       'unreadMembers': unreadUserIds,
+      'readTimes': <String, int>{},
+      'hasCompleteServerReadState': false,
     });
+  }
+
+  void _reconcileIncompleteReadStatuses() {
+    final globalUtil = GlobalUtil();
+    final currentUserId = globalUtil.userName;
+    final eligibleMemberIds = globalUtil
+        .getGroupMembers(widget.groupId)
+        .where(
+          (member) =>
+              member.userId.isNotEmpty && member.userId != currentUserId,
+        )
+        .map((member) => member.userId)
+        .toSet();
+    final ownMessageIds = globalUtil
+        .getChatRecords(widget.groupId.toString())
+        .where((message) => message.isMe)
+        .map((message) => message.msgId)
+        .toSet();
+
+    for (var index = 0; index < _messageReadStatus.length; index++) {
+      final status = _messageReadStatus[index];
+      final msgId = _parseInt(status['msgId']);
+      if (!ownMessageIds.contains(msgId) ||
+          status['hasCompleteServerReadState'] == true) {
+        continue;
+      }
+      final readMembers = List<String>.from(
+        status['readMembers'] ?? const [],
+      ).toSet();
+      final unreadMembers = eligibleMemberIds.difference(readMembers).toList();
+      _messageReadStatus[index] = {
+        ...status,
+        'readCount': readMembers.length,
+        'unreadCount': unreadMembers.length,
+        'readMembers': readMembers.toList(),
+        'unreadMembers': unreadMembers,
+      };
+    }
   }
 
   void _sendReadAcksForLoadedMessages() {
@@ -645,6 +698,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     String status = messageData['status']?.toString() ?? '';
     String sender = messageData['sender']?.toString() ?? '';
     String sessionId = messageData['sessionId']?.toString() ?? '';
+    int readTime = _parseInt(
+      messageData['readTime'],
+      fallback: DateTime.now().millisecondsSinceEpoch,
+    );
     if (sessionId != widget.groupId.toString()) {
       return;
     }
@@ -663,7 +720,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           // 更新消息已读状态
           message.isRead = true;
           // 更新消息的已读人数
-          _updateMessageReadStatus(msgId, sender);
+          _updateMessageReadStatus(msgId, sender, readTime);
         }
         break;
       }
@@ -676,7 +733,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   // 更新消息的已读状态
-  void _updateMessageReadStatus(int msgId, String reader) {
+  void _updateMessageReadStatus(int msgId, String reader, int readTime) {
     var msgStatusIndex = _messageReadStatus.indexWhere(
       (status) => status['msgId'] == msgId,
     );
@@ -695,19 +752,23 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     final unreadMembers = List<String>.from(
       msgStatus['unreadMembers'] ?? const [],
     );
+    final readTimes = Map<String, int>.from(
+      msgStatus['readTimes'] ?? const <String, int>{},
+    );
 
     if (!readMembers.contains(reader)) {
       readMembers.add(reader);
       unreadMembers.remove(reader);
-
-      _messageReadStatus[msgStatusIndex] = {
-        ...msgStatus,
-        'readMembers': readMembers,
-        'unreadMembers': unreadMembers,
-        'readCount': readMembers.length,
-        'unreadCount': unreadMembers.length,
-      };
     }
+    readTimes[reader] = readTime;
+    _messageReadStatus[msgStatusIndex] = {
+      ...msgStatus,
+      'readMembers': readMembers,
+      'unreadMembers': unreadMembers,
+      'readTimes': readTimes,
+      'readCount': readMembers.length,
+      'unreadCount': unreadMembers.length,
+    };
   }
 
   // 处理视频通话邀请
@@ -823,6 +884,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       // 更新全局群成员列表
       final globalUtil = GlobalUtil();
       globalUtil.addGroupMembers(widget.groupId, members);
+      _reconcileIncompleteReadStatuses();
 
       // 触发UI重建，确保聊天记录显示最新的群成员信息（头像和昵称）
       if (mounted) {
@@ -1194,6 +1256,19 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     return '${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
+  String _formatReadTime(int timestamp) {
+    if (timestamp <= 0) {
+      return '--:--:--';
+    }
+    final normalizedTimestamp = timestamp < 1000000000000
+        ? timestamp * 1000
+        : timestamp;
+    final dateTime = DateTime.fromMillisecondsSinceEpoch(normalizedTimestamp);
+    return '${dateTime.hour.toString().padLeft(2, '0')}:'
+        '${dateTime.minute.toString().padLeft(2, '0')}:'
+        '${dateTime.second.toString().padLeft(2, '0')}';
+  }
+
   // 显示已读状态列表
   void _showReadStatusList(int msgId) {
     final msgStatus = _messageReadStatus.firstWhere(
@@ -1204,10 +1279,14 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         'unreadCount': 0,
         'readMembers': <String>[],
         'unreadMembers': <String>[],
+        'readTimes': <String, int>{},
       },
     );
     final readUserIds = List<String>.from(msgStatus['readMembers'] ?? const []);
     final unreadCount = _parseInt(msgStatus['unreadCount']);
+    final readTimes = Map<String, int>.from(
+      msgStatus['readTimes'] ?? const <String, int>{},
+    );
     final membersById = {
       for (final member in GlobalUtil().getGroupMembers(widget.groupId))
         member.userId: member,
@@ -1277,6 +1356,13 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                                 subtitle: displayName == userId
                                     ? null
                                     : Text(userId),
+                                trailing: Text(
+                                  _formatReadTime(readTimes[userId] ?? 0),
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 13,
+                                  ),
+                                ),
                               );
                             },
                           ),
