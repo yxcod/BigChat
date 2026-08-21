@@ -25,23 +25,22 @@ class VideoCallInviteWaitingPage extends StatefulWidget {
 class _VideoCallInviteWaitingPageState
     extends State<VideoCallInviteWaitingPage> {
   late WebSocketManager _wsManager;
-  late Function(dynamic) _messageListener;
+  WebSocketMessageSubscription? _messageSubscription;
 
   @override
   void initState() {
     super.initState();
     _wsManager = WebSocketManager();
     // 添加WebSocket消息监听器
-    _messageListener = (message) {
-      _handleWebSocketMessage(message);
-    };
-    _wsManager.setMessageListener(_messageListener);
+    _messageSubscription = _wsManager.addMessageListener(
+      _handleWebSocketMessage,
+    );
   }
 
   @override
   void dispose() {
     // 移除WebSocket消息监听器
-    _wsManager.removeMessageListener(_messageListener);
+    _messageSubscription?.cancel();
     super.dispose();
   }
 

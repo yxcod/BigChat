@@ -14,6 +14,9 @@ class _WebSocketExampleState extends State<WebSocketExample> {
   WebSocketStatus _status = WebSocketStatus.disconnected;
   List<String> _messages = [];
   String _wsUrl = 'ws://your-websocket-server-url';
+  WebSocketMessageSubscription? _messageSubscription;
+  WebSocketStatusSubscription? _statusSubscription;
+  WebSocketErrorSubscription? _errorSubscription;
 
   @override
   void initState() {
@@ -24,29 +27,32 @@ class _WebSocketExampleState extends State<WebSocketExample> {
   @override
   void dispose() {
     _wsManager.disconnect();
+    _messageSubscription?.cancel();
+    _statusSubscription?.cancel();
+    _errorSubscription?.cancel();
     _messageController.dispose();
     super.dispose();
   }
 
   void _connectToWebSocket() {
+    _statusSubscription = _wsManager.addStatusListener((status) {
+      setState(() {
+        _status = status;
+        _addMessage('Status changed: ${status.name}');
+      });
+    });
+    _messageSubscription = _wsManager.addMessageListener((message) {
+      setState(() {
+        _addMessage('Received: $message');
+      });
+    });
+    _errorSubscription = _wsManager.addErrorListener((error) {
+      setState(() {
+        _addMessage('Error: $error');
+      });
+    });
     _wsManager.connect(
       _wsUrl,
-      onStatusChanged: (status) {
-        setState(() {
-          _status = status;
-          _addMessage('Status changed: ${status.name}');
-        });
-      },
-      onMessageReceived: (message) {
-        setState(() {
-          _addMessage('Received: $message');
-        });
-      },
-      onError: (error) {
-        setState(() {
-          _addMessage('Error: $error');
-        });
-      },
       heartbeatInterval: const Duration(seconds: 30),
       maxReconnectAttempts: 5,
       reconnectDelay: const Duration(seconds: 2),

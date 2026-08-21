@@ -56,15 +56,7 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
         '${GlobalUtil().baseWebSocketURL}/api/chat?userName=$userName';
 
     // 连接WebSocket，不添加消息监听器（由具体页面添加）
-    wsManager.connect(
-      wsUrl,
-      onStatusChanged: (status) {
-        print('WebSocket状态变化: $status');
-      },
-      onError: (error) {
-        print('WebSocket错误: $error');
-      },
-    );
+    wsManager.connect(wsUrl);
   }
 
   void _login() {

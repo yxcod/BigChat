@@ -37,6 +37,8 @@ class GroupChatDialogPage extends StatefulWidget {
 
 class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   WebSocketManager _wsManager = WebSocketManager();
+  WebSocketMessageSubscription? _messageSubscription;
+  WebSocketStatusSubscription? _statusSubscription;
   FocusNode _textFieldFocusNode = FocusNode();
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
@@ -818,25 +820,22 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   // 确保WebSocket已连接
   void _ensureWebSocketConnected() {
-    // 先移除旧的监听器，避免重复添加
-    _wsManager.removeMessageListener(_handleWebSocketMessage);
-
-    // 添加新的监听器
-    _wsManager.setMessageListener(_handleWebSocketMessage);
+    _messageSubscription?.cancel();
+    _messageSubscription = _wsManager.addMessageListener(
+      _handleWebSocketMessage,
+    );
+    _statusSubscription?.cancel();
+    _statusSubscription = _wsManager.addStatusListener((status) {
+      debugPrint('WebSocket状态: $status');
+      if (status == WebSocketStatus.connected) {
+        _sendReadAcksForLoadedMessages();
+      }
+    });
 
     // 确保WebSocket连接已建立
     if (!_wsManager.isConnected) {
       _wsManager.connect(
         '${GlobalUtil().baseWebSocketURL}/api/chat?userName=${GlobalUtil().userName}',
-        onStatusChanged: (status) {
-          debugPrint('WebSocket状态: $status');
-          if (status == WebSocketStatus.connected) {
-            _sendReadAcksForLoadedMessages();
-          }
-        },
-        onError: (error) {
-          debugPrint('WebSocket错误: $error');
-        },
       );
     } else {
       debugPrint('WebSocket已连接，只更新监听器');
@@ -932,8 +931,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     _groupInfoTimer.cancel();
     _groupMembersTimer.cancel();
 
-    // 移除WebSocket消息监听器，避免内存泄漏和重复处理
-    _wsManager.removeMessageListener(_handleWebSocketMessage);
+    // 移除本页面自己的消息订阅，不影响其他页面。
+    _messageSubscription?.cancel();
+    _statusSubscription?.cancel();
     debugPrint('群聊页面销毁，已移除WebSocket监听器');
 
     // 离开聊天页面时，更新全局聊天状态

@@ -22,7 +22,7 @@ class VideoCallPage extends StatefulWidget {
 
 class _VideoCallPageState extends State<VideoCallPage> {
   final AgoraManager _agoraManager = AgoraManager();
-  late Function(dynamic) _messageListener;
+  WebSocketMessageSubscription? _messageSubscription;
 
   @override
   void initState() {
@@ -36,8 +36,7 @@ class _VideoCallPageState extends State<VideoCallPage> {
   @override
   void dispose() {
     // 移除WebSocket消息监听器
-    final wsManager = WebSocketManager();
-    wsManager.removeMessageListener(_messageListener);
+    _messageSubscription?.cancel();
     super.dispose();
   }
 
@@ -96,10 +95,9 @@ class _VideoCallPageState extends State<VideoCallPage> {
     final wsManager = WebSocketManager();
     // 不重新连接，只设置消息监听器
     // 因为WebSocketManager是单例，应该已经在应用启动时连接了
-    _messageListener = (message) {
-      _handleWebSocketMessage(message);
-    };
-    wsManager.setMessageListener(_messageListener);
+    _messageSubscription = wsManager.addMessageListener(
+      _handleWebSocketMessage,
+    );
   }
 
   // 处理WebSocket消息

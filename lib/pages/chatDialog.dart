@@ -26,6 +26,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   String? id;
   FriendInfoModel? friendInfo;
   WebSocketManager _wsManager = WebSocketManager();
+  WebSocketMessageSubscription? _messageSubscription;
   FocusNode _textFieldFocusNode = FocusNode();
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
@@ -624,22 +625,16 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
   // 确保WebSocket已连接
   void _ensureWebSocketConnected() {
-    // 先清空所有现有的消息监听器，避免重复注册
-    _wsManager.clearMessageListeners();
-
-    // 连接WebSocket并添加新的监听器
-    _wsManager.connect(
-      '${GlobalUtil().baseWebSocketURL}/api/chat?userName=${GlobalUtil().userName}',
-      onStatusChanged: (status) {
-        debugPrint('WebSocket状态: $status');
-      },
-      onMessageReceived: (message) {
-        _handleWebSocketMessage(message);
-      },
-      onError: (error) {
-        debugPrint('WebSocket错误: $error');
-      },
+    _messageSubscription?.cancel();
+    _messageSubscription = _wsManager.addMessageListener(
+      _handleWebSocketMessage,
     );
+
+    if (!_wsManager.isConnected) {
+      _wsManager.connect(
+        '${GlobalUtil().baseWebSocketURL}/api/chat?userName=${GlobalUtil().userName}',
+      );
+    }
   }
 
   void _fetchFriendInfo() {
@@ -1133,6 +1128,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
   @override
   void dispose() {
+    _messageSubscription?.cancel();
     _textController.dispose();
     _textFieldFocusNode.dispose();
     _scrollController.dispose();
@@ -1141,9 +1137,6 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     final globalUtil = GlobalUtil();
     globalUtil.isChatting = false;
     globalUtil.currentChatUserName = null;
-
-    // WebSocketManager是单例，不应该在这里重置或关闭
-    // 回调会在下次connect时被新的回调覆盖
 
     super.dispose();
   }

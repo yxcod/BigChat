@@ -15,6 +15,58 @@ enum WebSocketStatus {
   error,
 }
 
+typedef WebSocketMessageListener = void Function(dynamic message);
+typedef WebSocketStatusListener = void Function(WebSocketStatus status);
+typedef WebSocketErrorListener = void Function(Object error);
+
+class WebSocketMessageSubscription {
+  WebSocketMessageSubscription._(this._manager, this._listener);
+
+  final WebSocketManager _manager;
+  WebSocketMessageListener? _listener;
+
+  void cancel() {
+    final listener = _listener;
+    if (listener == null) {
+      return;
+    }
+    _manager.removeMessageListener(listener);
+    _listener = null;
+  }
+}
+
+class WebSocketStatusSubscription {
+  WebSocketStatusSubscription._(this._manager, this._listener);
+
+  final WebSocketManager _manager;
+  WebSocketStatusListener? _listener;
+
+  void cancel() {
+    final listener = _listener;
+    if (listener == null) {
+      return;
+    }
+    _manager.removeStatusListener(listener);
+    _listener = null;
+  }
+}
+
+class WebSocketErrorSubscription {
+  WebSocketErrorSubscription._(this._manager, this._listener);
+
+  final WebSocketManager _manager;
+  WebSocketErrorListener? _listener;
+
+  void cancel() {
+    final listener = _listener;
+    if (listener == null) {
+      return;
+    }
+    _manager.removeErrorListener(listener);
+    _listener = null;
+  }
+}
+
 class WebSocketManager {
   static final WebSocketManager _instance = WebSocketManager._internal();
   factory WebSocketManager() => _instance;
@@ -24,9 +76,9 @@ class WebSocketManager {
   String? _url;
   WebSocketStatus _status = WebSocketStatus.disconnected;
   WebSocketStatus get status => _status;
-  Function(WebSocketStatus)? _onStatusChanged;
-  List<Function(dynamic)> _onMessageReceivedListeners = [];
-  Function(Object)? _onError;
+  final Set<WebSocketStatusListener> _statusListeners = {};
+  final Set<WebSocketMessageListener> _onMessageReceivedListeners = {};
+  final Set<WebSocketErrorListener> _errorListeners = {};
 
   WebSocket? _socket;
   Timer? _heartbeatTimer;
@@ -35,6 +87,7 @@ class WebSocketManager {
   int _maxReconnectAttempts = 50;
   Duration _reconnectDelay = const Duration(seconds: 2);
   Duration _heartbeatInterval = const Duration(seconds: 15);
+  bool _shouldReconnect = true;
 
   bool get isConnected => _status == WebSocketStatus.connected;
 
@@ -48,12 +101,17 @@ class WebSocketManager {
     int? maxReconnectAttempts,
     Duration? reconnectDelay,
   }) async {
+    _shouldReconnect = true;
     _url = url;
-    _onStatusChanged = onStatusChanged;
+    if (onStatusChanged != null) {
+      _statusListeners.add(onStatusChanged);
+    }
     if (onMessageReceived != null) {
       _onMessageReceivedListeners.add(onMessageReceived);
     }
-    _onError = onError;
+    if (onError != null) {
+      _errorListeners.add(onError);
+    }
 
     if (heartbeatInterval != null) _heartbeatInterval = heartbeatInterval;
     if (maxReconnectAttempts != null)
@@ -63,21 +121,42 @@ class WebSocketManager {
     await _connect();
   }
 
-  /// 设置消息监听器
-  void setMessageListener(Function(dynamic)? onMessageReceived) {
-    if (onMessageReceived != null) {
-      _onMessageReceivedListeners.add(onMessageReceived);
-    }
+  /// 添加独立的消息订阅。页面销毁时必须调用返回对象的 cancel。
+  WebSocketMessageSubscription addMessageListener(
+    WebSocketMessageListener listener,
+  ) {
+    _onMessageReceivedListeners.add(listener);
+    return WebSocketMessageSubscription._(this, listener);
+  }
+
+  WebSocketStatusSubscription addStatusListener(
+    WebSocketStatusListener listener,
+  ) {
+    _statusListeners.add(listener);
+    return WebSocketStatusSubscription._(this, listener);
+  }
+
+  WebSocketErrorSubscription addErrorListener(WebSocketErrorListener listener) {
+    _errorListeners.add(listener);
+    return WebSocketErrorSubscription._(this, listener);
   }
 
   /// 移除消息监听器
-  void removeMessageListener(Function(dynamic) onMessageReceived) {
+  void removeMessageListener(WebSocketMessageListener onMessageReceived) {
     _onMessageReceivedListeners.remove(onMessageReceived);
   }
 
   /// 清空所有消息监听器
   void clearMessageListeners() {
     _onMessageReceivedListeners.clear();
+  }
+
+  void removeStatusListener(WebSocketStatusListener listener) {
+    _statusListeners.remove(listener);
+  }
+
+  void removeErrorListener(WebSocketErrorListener listener) {
+    _errorListeners.remove(listener);
   }
 
   /// 内部连接方法
@@ -217,7 +296,7 @@ class WebSocketManager {
       }
 
       // 调用所有消息监听器
-      for (final listener in _onMessageReceivedListeners) {
+      for (final listener in List.of(_onMessageReceivedListeners)) {
         try {
           listener(data);
         } catch (e) {
@@ -238,8 +317,12 @@ class WebSocketManager {
     }
 
     _setStatus(WebSocketStatus.error);
-    _onError?.call(error);
-    _attemptReconnect();
+    for (final listener in List.of(_errorListeners)) {
+      listener(error);
+    }
+    if (_shouldReconnect) {
+      _attemptReconnect();
+    }
   }
 
   /// 处理连接关闭
@@ -249,11 +332,16 @@ class WebSocketManager {
     }
 
     _setStatus(WebSocketStatus.disconnected);
-    _attemptReconnect();
+    if (_shouldReconnect) {
+      _attemptReconnect();
+    }
   }
 
   /// 尝试重连
   void _attemptReconnect() {
+    if (!_shouldReconnect || _reconnectTimer?.isActive == true) {
+      return;
+    }
     if (_reconnectAttempts >= _maxReconnectAttempts) {
       if (kDebugMode) {
         print('Max reconnect attempts reached');
@@ -283,6 +371,7 @@ class WebSocketManager {
 
   /// 断开连接
   void disconnect() {
+    _shouldReconnect = false;
     _stopHeartbeat();
     _stopReconnectTimer();
     _socket?.close();
@@ -293,9 +382,10 @@ class WebSocketManager {
   /// 重置WebSocket
   void reset() {
     disconnect();
+    clearMessageListeners();
+    _statusListeners.clear();
+    _errorListeners.clear();
     _url = null;
-    _onStatusChanged = null;
-    _onError = null;
     _reconnectAttempts = 0;
   }
 
@@ -303,7 +393,9 @@ class WebSocketManager {
   void _setStatus(WebSocketStatus newStatus) {
     if (_status != newStatus) {
       _status = newStatus;
-      _onStatusChanged?.call(newStatus);
+      for (final listener in List.of(_statusListeners)) {
+        listener(newStatus);
+      }
     }
   }
 }
