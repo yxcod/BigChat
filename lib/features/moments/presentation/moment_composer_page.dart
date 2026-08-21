@@ -112,15 +112,17 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
   }
 
   Future<void> _editLocation() async {
-    final controller = TextEditingController(text: _location);
+    var editedLocation = _location ?? '';
     final location = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('所在位置'),
-        content: TextField(
-          controller: controller,
+        content: TextFormField(
+          key: const Key('moment_location_field'),
+          initialValue: editedLocation,
           autofocus: true,
           maxLength: 30,
+          onChanged: (value) => editedLocation = value,
           decoration: const InputDecoration(hintText: '例如：上海·徐家汇'),
         ),
         actions: [
@@ -129,13 +131,12 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
             child: const Text('不显示'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            onPressed: () => Navigator.pop(context, editedLocation.trim()),
             child: const Text('确定'),
           ),
         ],
       ),
     );
-    controller.dispose();
     if (location != null && mounted) {
       setState(() => _location = location.isEmpty ? null : location);
     }
@@ -202,6 +203,7 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
           const SizedBox(height: 24),
           const Divider(height: 1),
           ListTile(
+            key: const Key('moment_location_button'),
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.location_on_outlined),
             title: const Text('所在位置'),

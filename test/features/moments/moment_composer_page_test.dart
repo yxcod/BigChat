@@ -43,4 +43,31 @@ void main() {
     expect(moments.single.content, '今天完成了动态页面');
     expect(find.text('打开编辑器'), findsOneWidget);
   });
+
+  testWidgets('choosing a location does not retain a disposed controller', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MomentComposerPage(
+          repository: LocalMomentsRepository(),
+          authorId: 'me',
+          authorName: '小明',
+          authorAvatarUrl: '',
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('moment_location_button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('moment_location_field')),
+      '上海·徐家汇',
+    );
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('上海·徐家汇'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
