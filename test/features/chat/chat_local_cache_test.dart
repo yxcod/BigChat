@@ -1,0 +1,74 @@
+import 'package:flutter_base/features/chat/data/chat_local_cache.dart';
+import 'package:flutter_base/model/messageModel.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('persists chat records per owner and conversation', () async {
+    final storage = <String, String>{};
+    final cache = ChatLocalCache(
+      readString: (key) => storage[key],
+      writeString: (key, value) async {
+        storage[key] = value;
+        return true;
+      },
+    );
+    final message = Message(
+      msgId: 7,
+      content: 'cached message',
+      isMe: false,
+      time: '10:00',
+      isRead: true,
+      conversationId: 'alice_me',
+      senderId: 'alice',
+      timestamp: 1787277600000,
+    );
+
+    await cache.save('me', 'alice', [message]);
+
+    final restored = cache.load('me', 'alice');
+    expect(restored, hasLength(1));
+    expect(restored.single.msgId, 7);
+    expect(restored.single.timestamp, 1787277600000);
+    expect(cache.load('other-account', 'alice'), isEmpty);
+  });
+
+  test('returns an empty list for corrupt cached JSON', () {
+    final cache = ChatLocalCache(
+      readString: (_) => '{invalid',
+      writeString: (_, _) async => true,
+    );
+
+    expect(cache.load('me', 'alice'), isEmpty);
+  });
+
+  test('reports the newest cached message timestamp', () async {
+    final storage = <String, String>{};
+    final cache = ChatLocalCache(
+      readString: (key) => storage[key],
+      writeString: (key, value) async {
+        storage[key] = value;
+        return true;
+      },
+    );
+
+    await cache.save('me', 'alice', [
+      _message(1, 1787277601000),
+      _message(2, 1787277603000),
+      _message(3, 1787277602000),
+    ]);
+
+    expect(cache.latestTimestamp('me', 'alice'), 1787277603000);
+  });
+}
+
+Message _message(int id, int timestamp) {
+  return Message(
+    msgId: id,
+    content: '$id',
+    isMe: false,
+    time: '',
+    isRead: true,
+    conversationId: 'alice_me',
+    timestamp: timestamp,
+  );
+}

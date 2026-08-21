@@ -41,6 +41,12 @@ class ChatStore {
     return _chatRecords[conversationId]?.length ?? 0;
   }
 
+  Iterable<String> get conversationIds => _chatRecords.keys;
+
+  List<Message> messageSnapshot(String conversationId) {
+    return List<Message>.of(_chatRecords[conversationId] ?? const []);
+  }
+
   void replaceMessages(String conversationId, List<Message> messages) {
     _chatRecords[conversationId] = messages;
   }

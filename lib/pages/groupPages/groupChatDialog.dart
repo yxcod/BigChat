@@ -88,6 +88,13 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   Future<void> _initializeGroupChatData() async {
+    final restored = await GlobalUtil().hydrateChatRecords(
+      widget.groupId.toString(),
+    );
+    if (restored && mounted) {
+      setState(() {});
+      _scrollToBottom();
+    }
     await _checkGroupMembership();
     if (!mounted) {
       return;
@@ -138,10 +145,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       }
       messages.sort((left, right) => left.msgId.compareTo(right.msgId));
 
-      globalUtil.clearChatRecords(widget.groupId.toString());
-      for (final message in messages) {
-        globalUtil.addMessage(widget.groupId.toString(), message);
-      }
+      await globalUtil.replaceChatRecords(widget.groupId.toString(), messages);
 
       _replaceReadStatuses(groupRecord.messages);
       _loadedMessageLimit = limit;

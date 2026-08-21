@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../model/conversationModel.dart';
 import '../../api/getConversationAPI.dart';
-import '../../api/getChatMessagesAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../model/friendInfoModel.dart';
 import '../../model/messageModel.dart';
@@ -397,54 +396,22 @@ class _ChatpageState extends State<Chatpage> {
         return;
       }
 
-      // 检查是否有新的会话ID添加
-      final existingUserNames = _chats.map((chat) => chat.userName).toSet();
-      final newUserNames = chatList.map((chat) => chat.userName).toSet();
-      final addedUserNames = newUserNames.difference(existingUserNames);
-      final hasNewConversationsAdded = addedUserNames.isNotEmpty;
-
       setState(() {
         _chats.clear();
         _chats.addAll(chatList);
         _notifyUnreadCountChanged();
       });
 
-      // 只在以下情况加载聊天记录：
-      // 1. 有新的会话添加（会话列表长度增加）
-      // 2. 有新的会话ID添加
-      if (hasNewConversationsAdded) {
-        // 筛选出新增的单聊会话
-        final addedConversations = conversations.where((conversation) {
-          final targetUserName = conversation.user1Id == currentUserName
-              ? conversation.user2Id
-              : conversation.user1Id;
-          return addedUserNames.contains(targetUserName);
-        }).toList();
+      // 每次只比对服务端会话更新时间与本地最新消息。
+      // 时间未变时只读本地，不再请求完整聊天记录。
+      await _loadChatRecordsForConversations(conversations, currentUserName);
+      await _loadGroupChatRecordsForConversations(
+        groupConversations,
+        currentUserName,
+      );
 
-        // 只为新增的单聊会话加载最近100条聊天记录
-        await _loadChatRecordsForConversations(
-          addedConversations,
-          currentUserName,
-        );
-
-        // 筛选出新增的群聊会话
-        final addedGroupConversations = groupConversations.where((
-          conversation,
-        ) {
-          final groupIdStr = conversation.groupId.toString();
-          return addedUserNames.contains(groupIdStr);
-        }).toList();
-
-        // 只为新增的群聊会话加载最近100条聊天记录
-        await _loadGroupChatRecordsForConversations(
-          addedGroupConversations,
-          currentUserName,
-        );
-
-        // 搜索过程中聊天记录加载完成后立即刷新结果。
-        if (mounted && _searchQuery.isNotEmpty) {
-          setState(() {});
-        }
+      if (mounted && _searchQuery.isNotEmpty) {
+        setState(() {});
       }
     } catch (e) {
       debugPrint('获取会话列表失败：$e');
@@ -612,42 +579,16 @@ class _ChatpageState extends State<Chatpage> {
             ? conversation.user2Id
             : conversation.user1Id;
 
-        // 生成会话ID
-        final sessionId = GlobalUtil.generateSessionId(
-          currentUserName,
-          targetUserName,
-        );
-
         try {
-          // 获取最近100条聊天记录
-          final messageModels = await getChatMessagesApi(
-            conversationId: sessionId,
-            count: 100,
+          await globalUtil.hydrateChatRecords(targetUserName);
+          final cachedTimestamp = globalUtil.getLatestChatTimestamp(
+            targetUserName,
           );
+          if (cachedTimestamp < conversation.updateTime) {
+            await globalUtil.loadChatRecords(targetUserName, 100);
+          }
 
-          // 转换为Message对象并保存到_chatRecords
-          final messages = messageModels.map((model) {
-            return Message(
-              msgId: model.msgId ?? 0,
-              content: model.content ?? '',
-              isMe: model.senderName == currentUserName,
-              time: model.timestamp != null
-                  ? GlobalUtil.formatChatTimestamp(model.timestamp!)
-                  : '',
-              isRead: true,
-              conversationId: model.conversationId ?? '',
-              messageType: model.messageType ?? MessageType.text,
-              status: model.messageStatus ?? MessageStatus.sent,
-            );
-          }).toList();
-
-          // 保存到_chatRecords
-          globalUtil.clearChatRecords(targetUserName);
-          messages.forEach((msg) {
-            globalUtil.addMessage(targetUserName, msg);
-          });
-
-          debugPrint('成功为$targetUserName加载${messages.length}条聊天记录');
+          debugPrint('已恢复$targetUserName的聊天记录');
         } catch (e) {
           debugPrint('为$targetUserName加载聊天记录失败：$e');
           // 继续处理其他会话，不中断整个流程
@@ -675,7 +616,12 @@ class _ChatpageState extends State<Chatpage> {
         final groupIdStr = groupId.toString();
 
         try {
-          // 获取最近100条群聊记录
+          await globalUtil.hydrateChatRecords(groupIdStr);
+          if (globalUtil.getLatestChatTimestamp(groupIdStr) >=
+              groupConversation.updateTime) {
+            continue;
+          }
+
           final groupMessageModel = await getGroupChatRecord(groupId, 100);
 
           // 转换为Message对象并保存到_chatRecords
@@ -704,14 +650,11 @@ class _ChatpageState extends State<Chatpage> {
               messageType: messageType,
               status: MessageStatus.sent, // 简化处理，使用默认值
               senderId: model.senderId,
+              timestamp: model.sendTime,
             );
           }).toList();
 
-          // 保存到_chatRecords
-          globalUtil.clearChatRecords(groupIdStr);
-          messages.forEach((msg) {
-            globalUtil.addMessage(groupIdStr, msg);
-          });
+          await globalUtil.replaceChatRecords(groupIdStr, messages);
 
           debugPrint('成功为群聊$groupId加载${messages.length}条聊天记录');
         } catch (e) {

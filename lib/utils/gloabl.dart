@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +14,7 @@ import '../core/config/app_config.dart';
 import '../features/chat/application/chat_store.dart';
 import '../features/chat/domain/chat_message_mapper.dart';
 import '../features/chat/domain/chat_time_formatter.dart';
+import '../features/chat/data/chat_local_cache.dart';
 import '../features/groups/application/group_member_cache.dart';
 
 class GlobalUtil {
@@ -26,7 +27,9 @@ class GlobalUtil {
   Function(String, int)? onUnreadCountChanged;
 
   final ChatStore _chatStore = ChatStore();
+  final ChatLocalCache _chatLocalCache = ChatLocalCache();
   final GroupMemberCache _groupMemberCache = GroupMemberCache();
+  final Map<String, Timer> _chatCacheWriteTimers = {};
 
   static final GlobalUtil _instance = GlobalUtil._internal();
   factory GlobalUtil() {
@@ -113,7 +116,9 @@ class GlobalUtil {
 
   // 添加消息到聊天记录
   void addMessage(String userName, Message message) {
-    _chatStore.addMessage(userName, message);
+    if (_chatStore.addMessage(userName, message)) {
+      _scheduleChatCacheWrite(userName);
+    }
   }
 
   // 获取某个用户的所有聊天记录
@@ -124,6 +129,61 @@ class GlobalUtil {
   // 获取聊天记录的当前加载数量
   int getChatRecordsCount(String userName) {
     return _chatStore.messageCount(userName);
+  }
+
+  Future<bool> hydrateChatRecords(String conversationId) async {
+    if (_chatStore.messageCount(conversationId) > 0) return true;
+    final ownerId = userName ?? '';
+    if (ownerId.isEmpty) return false;
+
+    final messages = _chatLocalCache.load(ownerId, conversationId);
+    if (messages.isEmpty) return false;
+    _chatStore.replaceMessages(conversationId, messages);
+    return true;
+  }
+
+  int getLatestChatTimestamp(String conversationId) {
+    return _chatStore
+        .messages(conversationId)
+        .fold<int>(
+          0,
+          (latest, message) =>
+              message.timestamp > latest ? message.timestamp : latest,
+        );
+  }
+
+  void _scheduleChatCacheWrite(String conversationId) {
+    _chatCacheWriteTimers[conversationId]?.cancel();
+    _chatCacheWriteTimers[conversationId] = Timer(
+      const Duration(milliseconds: 400),
+      () => unawaited(persistChatRecords(conversationId)),
+    );
+  }
+
+  Future<void> persistChatRecords(String conversationId) async {
+    final ownerId = userName ?? '';
+    if (ownerId.isEmpty) return;
+    await _chatLocalCache.save(
+      ownerId,
+      conversationId,
+      _chatStore.messageSnapshot(conversationId),
+    );
+  }
+
+  Future<void> replaceChatRecords(
+    String conversationId,
+    List<Message> messages,
+  ) async {
+    _chatStore.replaceMessages(conversationId, messages);
+    await persistChatRecords(conversationId);
+  }
+
+  Future<void> flushChatRecordsToLocal() async {
+    for (final timer in _chatCacheWriteTimers.values) {
+      timer.cancel();
+    }
+    _chatCacheWriteTimers.clear();
+    await Future.wait(_chatStore.conversationIds.map(persistChatRecords));
   }
 
   // 加载指定数量的聊天记录
@@ -170,6 +230,7 @@ class GlobalUtil {
 
       // 保存到_chatRecords
       _chatStore.replaceMessages(userName, messages);
+      await persistChatRecords(userName);
 
       debugPrint('成功加载$count条聊天记录');
     } catch (e) {
@@ -208,16 +269,19 @@ class GlobalUtil {
   // 标记特定消息为已读
   void markMessageAsRead(String userName, int msgId) {
     _chatStore.markMessageAsRead(userName, msgId);
+    _scheduleChatCacheWrite(userName);
   }
 
   // 标记所有消息为已读
   void markAllMessagesAsRead(String userName) {
     _chatStore.markAllIncomingMessagesAsRead(userName);
+    _scheduleChatCacheWrite(userName);
   }
 
   // 删除指定消息
   void deleteMessage(String userName, int msgId) {
     _chatStore.deleteMessage(userName, msgId);
+    _scheduleChatCacheWrite(userName);
   }
 
   // 群成员列表管理方法
@@ -276,17 +340,8 @@ class GlobalUtil {
     String otherUserName,
     List<Message> messages,
   ) async {
-    // 生成唯一的存储key，确保相同的两个用户无论顺序如何都使用相同的key
-    final sessionKey = generateSessionId(myUserName, otherUserName);
-    final storageKey = 'chat_records_$sessionKey';
-
     try {
-      // 将Message数组序列化为JSON字符串
-      final messagesJson = messages.map((msg) => msg.toJSON()).toList();
-      final jsonString = jsonEncode(messagesJson);
-
-      // 保存到本地存储
-      await StorageUtil.setString(storageKey, jsonString);
+      await _chatLocalCache.save(myUserName, otherUserName, messages);
     } catch (e) {
       // 处理保存失败的情况
       if (kDebugMode) {
@@ -301,24 +356,8 @@ class GlobalUtil {
     String myUserName,
     String otherUserName,
   ) async {
-    // 生成唯一的存储key
-    final sessionKey = generateSessionId(myUserName, otherUserName);
-    final storageKey = 'chat_records_$sessionKey';
-
     try {
-      // 从本地存储读取JSON字符串
-      final jsonString = StorageUtil.getString(storageKey);
-      if (jsonString == null || jsonString.isEmpty) {
-        return [];
-      }
-
-      // 将JSON字符串反序列化为Message数组
-      final messagesJson = jsonDecode(jsonString) as List<dynamic>;
-      final messages = messagesJson
-          .map((msgJson) => Message.fromJSON(msgJson as Map<String, dynamic>))
-          .toList();
-
-      return messages;
+      return _chatLocalCache.load(myUserName, otherUserName);
     } catch (e) {
       // 处理读取失败的情况
       if (kDebugMode) {

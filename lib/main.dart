@@ -4,6 +4,7 @@ import './utils/storageUtil.dart';
 import './utils/GlobalNavigatorKey.dart';
 import './core/config/app_config.dart';
 import './app/theme/app_theme.dart';
+import './utils/gloabl.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +45,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       case AppLifecycleState.paused:
         // 应用进入后台
         debugPrint('应用进入后台');
+        GlobalUtil().flushChatRecordsToLocal();
         break;
       case AppLifecycleState.inactive:
         // 应用变为非活动状态

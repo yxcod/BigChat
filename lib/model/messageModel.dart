@@ -80,6 +80,7 @@ class Message {
   MessageStatus status;
   final String conversationId;
   final String? senderId;
+  final int timestamp;
 
   Message({
     required this.msgId,
@@ -91,7 +92,8 @@ class Message {
     this.messageType = MessageType.text,
     this.status = MessageStatus.sent,
     this.senderId,
-  });
+    int? timestamp,
+  }) : timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch;
 
   // 序列化方法：将Message对象转换为Map<String, dynamic>
   Map<String, dynamic> toJSON() {
@@ -105,6 +107,7 @@ class Message {
       'status': status.index,
       'conversationId': conversationId,
       'senderId': senderId,
+      'timestamp': timestamp,
     };
   }
 
@@ -130,6 +133,7 @@ class Message {
       senderId: json['senderId'] == null
           ? null
           : JsonValueParser.stringValue(json['senderId']),
+      timestamp: JsonValueParser.timestampMillis(json['timestamp']),
     );
   }
 }

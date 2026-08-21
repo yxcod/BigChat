@@ -21,6 +21,7 @@ class ChatMessageMapper {
       messageType: record.messageType ?? MessageType.text,
       status: record.messageStatus ?? MessageStatus.sent,
       senderId: record.senderName,
+      timestamp: record.timestamp ?? 0,
     );
   }
 
@@ -47,6 +48,7 @@ class ChatMessageMapper {
       messageType: record.msgType == 2 ? MessageType.image : MessageType.text,
       status: MessageStatus.sent,
       senderId: record.senderId,
+      timestamp: record.sendTime,
     );
   }
 }

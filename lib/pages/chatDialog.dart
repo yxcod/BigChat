@@ -576,14 +576,13 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     try {
       final globalUtil = GlobalUtil();
 
-      // 检查是否已经加载过记录
-      if (globalUtil.getChatRecordsCount(id!) == 0) {
-        // 加载100条记录
+      // 先从本地恢复；只有本地无记录时才首次请求后端。
+      final restoredFromLocal = await globalUtil.hydrateChatRecords(id!);
+      if (!restoredFromLocal && globalUtil.getChatRecordsCount(id!) == 0) {
         await globalUtil.loadChatRecords(id!, 100);
-
-        // 更新UI
-        setState(() {});
       }
+
+      if (mounted) setState(() {});
 
       // 无论是否加载了新记录，都滚动到底部
       // 在整个界面构建完成后执行滚动操作
