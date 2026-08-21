@@ -982,6 +982,20 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
               );
             },
           ),
+          IconButton(
+            icon: Icon(Icons.more_vert, color: Colors.black),
+            onPressed: () {
+              // 进入群聊设置页面
+              Navigator.pushNamed(
+                context,
+                '/groupChatSettings',
+                arguments: {
+                  'groupId': widget.groupId.toString(),
+                  'groupName': _currentGroupName,
+                },
+              );
+            },
+          ),
         ],
       ),
       body: GestureDetector(
