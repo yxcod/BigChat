@@ -3,11 +3,11 @@ import './routes/routeIndex.dart';
 import './utils/storageUtil.dart';
 import './utils/GlobalNavigatorKey.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  StorageUtil.init();
+  await StorageUtil.init();
 
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
@@ -65,7 +65,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         primarySwatch: Colors.green,
       ),
       navigatorKey: GlobalNavigatorKey.navigatorKey,
-      home: getRootWidget(),
+      initialRoute: '/login',
+      routes: getRoutes(),
+      onGenerateRoute: generateRoute,
     );
   }
 }
