@@ -114,8 +114,9 @@ class WebSocketManager {
     }
 
     if (heartbeatInterval != null) _heartbeatInterval = heartbeatInterval;
-    if (maxReconnectAttempts != null)
+    if (maxReconnectAttempts != null) {
       _maxReconnectAttempts = maxReconnectAttempts;
+    }
     if (reconnectDelay != null) _reconnectDelay = reconnectDelay;
 
     await _connect();

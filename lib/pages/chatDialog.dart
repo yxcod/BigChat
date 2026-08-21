@@ -646,11 +646,6 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       friendInfo = foundFriend;
     });
 
-    // 添加示例消息
-    if (friendInfo != null) {
-      //_addSampleMessages();
-    }
-
     // 处理未读消息：进入聊天界面时标记所有未读消息为已读
     if (id != null) {
       // 获取该用户的所有未读消息ID
@@ -670,103 +665,6 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
     // 通知聊天列表页面清除该聊天的未读消息数
     _clearUnreadCount();
-  }
-
-  // 添加示例消息
-  void _addSampleMessages() {
-    if (id == null) return;
-
-    String conversationId = _generateConversationId();
-    final globalUtil = GlobalUtil();
-
-    // 添加示例消息到全局聊天记录
-    globalUtil.addMessage(
-      id!,
-      Message(
-        msgId: 1,
-        content: '你好！',
-        isMe: false,
-        time: '10:30',
-        isRead: true,
-        conversationId: conversationId,
-      ),
-    );
-
-    globalUtil.addMessage(
-      id!,
-      Message(
-        msgId: 2,
-        content: '你好，最近怎么样？',
-        isMe: true,
-        time: '10:31',
-        isRead: true,
-        conversationId: conversationId,
-      ),
-    );
-
-    globalUtil.addMessage(
-      id!,
-      Message(
-        msgId: 3,
-        content: '我很好，谢谢关心！',
-        isMe: false,
-        time: '10:32',
-        isRead: true,
-        conversationId: conversationId,
-      ),
-    );
-
-    globalUtil.addMessage(
-      id!,
-      Message(
-        msgId: 4,
-        content: '这是一条很长的消息，用于测试消息气泡的自动换行功能。我想看看当消息内容超过一定长度时，气泡会不会自动调整大小以适应内容。',
-        isMe: true,
-        time: '10:33',
-        isRead: true,
-        conversationId: conversationId,
-      ),
-    );
-
-    globalUtil.addMessage(
-      id!,
-      Message(
-        msgId: 5,
-        content: '明白了，谢谢！',
-        isMe: false,
-        time: '10:34',
-        isRead: true,
-        conversationId: conversationId,
-      ),
-    );
-
-    globalUtil.addMessage(
-      id!,
-      Message(
-        msgId: 6,
-        content: '发送一条未读消息测试',
-        isMe: true,
-        time: '10:35',
-        isRead: false,
-        conversationId: conversationId,
-      ),
-    );
-
-    globalUtil.addMessage(
-      id!,
-      Message(
-        msgId: 7,
-        content: '这条消息发送失败了',
-        isMe: true,
-        time: '10:36',
-        isRead: false,
-        conversationId: conversationId,
-        status: MessageStatus.failed,
-      ),
-    );
-
-    // 更新UI
-    setState(() {});
   }
 
   void _clearUnreadCount() {
@@ -1351,6 +1249,10 @@ class MessageBubble extends StatelessWidget {
         options: Options(responseType: ResponseType.bytes),
       );
       final Uint8List imageBytes = response.data;
+
+      if (kDebugMode) {
+        debugPrint('已下载图片大小: ${imageBytes.lengthInBytes} bytes');
+      }
 
       // 暂时禁用图片保存功能
       // final result = await ImageGallerySaver.saveImage(

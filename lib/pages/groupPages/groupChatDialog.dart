@@ -888,7 +888,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       }
 
       if (!foundUser) {
-        print('未找到当前用户在群成员列表中');
+        debugPrint('未找到当前用户在群成员列表中');
         // 停止所有定时器，防止重复触发
         _groupInfoTimer.cancel();
         _groupMembersTimer.cancel();
@@ -903,7 +903,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         }
       }
     } catch (e) {
-      print('检查群成员列表失败: $e');
+      debugPrint('检查群成员列表失败: $e');
     }
   }
 

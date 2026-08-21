@@ -23,7 +23,7 @@ Future<List<GroupInfoModel>> getGroups(String userName) async {
     }
   } catch (e) {
     debugPrint('获取群信息失败: $e');
-    throw e;
+    rethrow;
   }
 }
 
@@ -47,7 +47,7 @@ Future<int> createGroup(String userName, String groupName, int groupId) async {
     }
   } catch (e) {
     debugPrint('创建群聊失败: $e');
-    throw e;
+    rethrow;
   }
 }
 
@@ -94,6 +94,6 @@ Future<int> updateGroupInfo(
     }
   } catch (e) {
     debugPrint('更新群信息失败: $e');
-    throw e;
+    rethrow;
   }
 }

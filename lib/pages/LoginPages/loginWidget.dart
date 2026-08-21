@@ -48,7 +48,7 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
     final userName = GlobalUtil().userName;
 
     if (userName == null) {
-      print('ERROR: 无法建立WebSocket连接，用户名为空');
+      debugPrint('ERROR: 无法建立WebSocket连接，用户名为空');
       return;
     }
 

@@ -25,7 +25,7 @@ Future<List<GroupMemberModel>> getGroupMembers(int groupId) async {
     }
   } catch (e) {
     debugPrint('获取群成员信息失败: $e');
-    throw e;
+    rethrow;
   }
 }
 
@@ -45,7 +45,7 @@ Future<int> addGroup(int groupId, List<String> userNames) async {
     }
   } catch (e) {
     debugPrint('拉人进群失败: $e');
-    throw e;
+    rethrow;
   }
 }
 
@@ -65,7 +65,7 @@ Future<int> minuGroup(int groupId, List<String> userNames) async {
     }
   } catch (e) {
     debugPrint('移除人员进群失败: $e');
-    throw e;
+    rethrow;
   }
 }
 
@@ -95,6 +95,6 @@ Future<int> updateGroupMemberInfo(
     }
   } catch (e) {
     debugPrint('更新群成员信息失败: $e');
-    throw e;
+    rethrow;
   }
 }

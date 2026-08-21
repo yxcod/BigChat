@@ -23,7 +23,7 @@ Future<GroupMessageModel> getGroupChatRecord(int groupId, int limit) async {
     }
   } catch (e) {
     debugPrint('获取群聊记录失败: $e');
-    throw e;
+    rethrow;
   }
 }
 
