@@ -175,7 +175,7 @@ class _ProfilePageState extends State<ProfilePage>
                     _fetchProfileInfo();
                   },
                 ),
-                Divider(height: 1, color: Colors.grey[200]),
+                const Divider(height: 1, indent: 56, color: Color(0xFFE5E5E5)),
                 ListTile(
                   leading: Icon(Icons.album, color: Colors.green),
                   title: Text('相册'),
@@ -186,7 +186,7 @@ class _ProfilePageState extends State<ProfilePage>
                   ),
                   onTap: () => Navigator.pushNamed(context, '/myMoments'),
                 ),
-                Divider(height: 1, color: Colors.grey[200]),
+                const Divider(height: 1, indent: 56, color: Color(0xFFE5E5E5)),
                 // ListTile(
                 //   leading: Icon(Icons.card_giftcard, color: Colors.green),
                 //   title: Text('卡包'),
@@ -197,7 +197,6 @@ class _ProfilePageState extends State<ProfilePage>
                 //   ),
                 //   onTap: () {},
                 // ),
-                Divider(height: 1, color: Colors.grey[200]),
                 ListTile(
                   leading: Icon(Icons.settings, color: Colors.green),
                   title: Text('设置'),
@@ -208,7 +207,7 @@ class _ProfilePageState extends State<ProfilePage>
                   ),
                   onTap: () {},
                 ),
-                Divider(height: 1, color: Colors.grey[200]),
+                const Divider(height: 1, indent: 56, color: Color(0xFFE5E5E5)),
                 ListTile(
                   leading: Icon(Icons.help_outline, color: Colors.green),
                   title: Text('其它'),

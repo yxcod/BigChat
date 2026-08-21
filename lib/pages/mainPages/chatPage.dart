@@ -507,7 +507,7 @@ class _ChatpageState extends State<Chatpage> {
       itemCount: results.length + 1,
       separatorBuilder: (_, index) => index == 0
           ? const SizedBox.shrink()
-          : const Divider(height: 1, indent: 72),
+          : const Divider(height: 1, indent: 72, color: Color(0xFFE5E5E5)),
       itemBuilder: (context, index) {
         if (index == 0) {
           return Padding(
@@ -693,8 +693,13 @@ class _ChatpageState extends State<Chatpage> {
           ? _buildSearchResults()
           : Padding(
               padding: EdgeInsets.only(top: 8),
-              child: ListView.builder(
+              child: ListView.separated(
                 itemCount: _chats.length,
+                separatorBuilder: (_, _) => const Divider(
+                  height: 1,
+                  indent: 72,
+                  color: Color(0xFFE5E5E5),
+                ),
                 itemBuilder: (context, index) {
                   return ListTile(
                     leading: CircleAvatar(
