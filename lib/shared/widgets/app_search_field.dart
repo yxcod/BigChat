@@ -9,7 +9,7 @@ class AppSearchField extends StatelessWidget {
     required this.query,
     required this.hintText,
     required this.onChanged,
-    this.height = 40,
+    this.height = 44,
   });
 
   final TextEditingController controller;
@@ -63,7 +63,10 @@ class AppSearchField extends StatelessWidget {
             borderRadius: BorderRadius.circular(height / 2),
             borderSide: const BorderSide(color: AppColors.primary),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 11,
+          ),
         ),
       ),
     );

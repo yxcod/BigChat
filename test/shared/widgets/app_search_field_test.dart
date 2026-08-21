@@ -16,7 +16,6 @@ void main() {
             controller: controller,
             query: value,
             hintText: '搜索',
-            height: 36,
             onChanged: (nextValue) => value = nextValue,
           ),
         ),
@@ -24,6 +23,7 @@ void main() {
     );
 
     expect(find.byTooltip('清除'), findsOneWidget);
+    expect(tester.getSize(find.byType(TextField)).height, 44);
     await tester.tap(find.byTooltip('清除'));
     await tester.pump();
 

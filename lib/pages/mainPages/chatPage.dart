@@ -733,6 +733,7 @@ class _ChatpageState extends State<Chatpage> {
         backgroundColor: Colors.white,
         elevation: 1,
         toolbarHeight: 70,
+        titleSpacing: 12,
         title: AppSearchField(
           controller: _searchController,
           query: _searchQuery,

@@ -284,12 +284,12 @@ class _FriendsPage extends State<Friendspage>
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        toolbarHeight: 60,
+        toolbarHeight: 64,
+        titleSpacing: 12,
         title: AppSearchField(
           controller: _searchController,
           query: _searchQuery,
           hintText: '搜索好友昵称或备注',
-          height: 36,
           onChanged: (value) => setState(() => _searchQuery = value),
         ),
         actions: [
