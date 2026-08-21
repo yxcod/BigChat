@@ -20,6 +20,7 @@ import '../../api/getGroupInfoAPI.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../api/groupChatRecordAPI.dart';
 import '../../utils/user_profile_navigator.dart';
+import '../../features/chat/domain/chat_message_mapper.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -104,10 +105,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     return int.tryParse(value?.toString() ?? '') ?? fallback;
   }
 
-  MessageType _parseMessageType(int value) {
-    return value == 2 ? MessageType.image : MessageType.text;
-  }
-
   Future<void> _loadGroupChatRecords({
     required int limit,
     bool scrollToBottom = true,
@@ -123,25 +120,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         for (final message in existingMessages) message.msgId: message,
       };
 
-      final messages = groupRecord.messages.map((record) {
-        final readUserIds = record.readers
-            .map((reader) => reader.userId)
-            .where((userId) => userId.isNotEmpty)
-            .toSet();
-        final isMe = record.senderId == currentUserId;
-        final isReadByCurrentUser = readUserIds.contains(currentUserId);
-        return Message(
-          msgId: record.msgId,
-          content: record.msgContent,
-          isMe: isMe,
-          time: GlobalUtil.formatChatTimestamp(record.sendTime),
-          isRead: isMe ? readUserIds.isNotEmpty : isReadByCurrentUser,
-          conversationId: widget.groupId.toString(),
-          messageType: _parseMessageType(record.msgType),
-          status: MessageStatus.sent,
-          senderId: record.senderId,
-        );
-      }).toList();
+      final messages = groupRecord.messages
+          .map(
+            (record) => ChatMessageMapper.fromGroupRecord(
+              record,
+              currentUserId: currentUserId,
+              conversationId: widget.groupId.toString(),
+            ),
+          )
+          .toList();
 
       final loadedMessageIds = messages.map((message) => message.msgId).toSet();
       for (final entry in existingById.entries) {

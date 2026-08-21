@@ -12,6 +12,8 @@ import '../utils/http.dart';
 import '../api/getChatMessagesAPI.dart';
 import '../core/config/app_config.dart';
 import '../features/chat/application/chat_store.dart';
+import '../features/chat/domain/chat_message_mapper.dart';
+import '../features/chat/domain/chat_time_formatter.dart';
 import '../features/groups/application/group_member_cache.dart';
 
 class GlobalUtil {
@@ -157,20 +159,14 @@ class GlobalUtil {
       }
 
       // 转换为Message对象
-      final messages = messageModels.map((model) {
-        return Message(
-          msgId: model.msgId ?? 0,
-          content: model.content ?? '',
-          isMe: model.senderName == currentUserName,
-          time: model.timestamp != null
-              ? GlobalUtil.formatChatTimestamp(model.timestamp!)
-              : '',
-          isRead: true,
-          conversationId: model.conversationId ?? '',
-          messageType: model.messageType ?? MessageType.text,
-          status: model.messageStatus ?? MessageStatus.sent,
-        );
-      }).toList();
+      final messages = messageModels
+          .map(
+            (model) => ChatMessageMapper.fromPrivateRecord(
+              model,
+              currentUserId: currentUserName,
+            ),
+          )
+          .toList();
 
       // 保存到_chatRecords
       _chatStore.replaceMessages(userName, messages);
@@ -380,28 +376,7 @@ class GlobalUtil {
 
   /// 聊天消息时间：当天显示时分，今年显示月日时分，往年显示年月日时分。
   static String formatChatTimestamp(int timestamp, {DateTime? referenceTime}) {
-    if (timestamp <= 0) {
-      return '';
-    }
-
-    // 兼容后端可能返回的秒级和毫秒级时间戳。
-    final normalizedTimestamp = timestamp < 1000000000000
-        ? timestamp * 1000
-        : timestamp;
-    final dateTime = DateTime.fromMillisecondsSinceEpoch(normalizedTimestamp);
-    final now = referenceTime ?? DateTime.now();
-    final isToday =
-        dateTime.year == now.year &&
-        dateTime.month == now.month &&
-        dateTime.day == now.day;
-
-    if (isToday) {
-      return DateFormat('HH:mm').format(dateTime);
-    }
-    if (dateTime.year == now.year) {
-      return DateFormat('MM-dd HH:mm').format(dateTime);
-    }
-    return DateFormat('yyyy-MM-dd HH:mm').format(dateTime);
+    return ChatTimeFormatter.format(timestamp, referenceTime: referenceTime);
   }
 
   //根据userName查找FriendInfoModel
