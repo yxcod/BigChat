@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +11,8 @@ import '../model/groupMemberModel.dart';
 import '../utils/http.dart';
 import '../api/getChatMessagesAPI.dart';
 import '../core/config/app_config.dart';
+import '../features/chat/application/chat_store.dart';
+import '../features/groups/application/group_member_cache.dart';
 
 class GlobalUtil {
   String? _token;
@@ -22,17 +23,8 @@ class GlobalUtil {
   String? _currentChatUserName;
   Function(String, int)? onUnreadCountChanged;
 
-  // 存储每个聊天对象的未读消息ID列表
-  final Map<String, List<int>> _unreadMessages = {};
-
-  // 存储每个聊天对象的未读消息总数
-  final Map<String, int> _unreadCounts = {};
-
-  // 存储所有聊天记录，以userName为key
-  final Map<String, List<Message>> _chatRecords = {};
-
-  // 存储所有群的成员列表，以groupId为key
-  final Map<int, List<GroupMemberModel>> _groupMembers = {};
+  final ChatStore _chatStore = ChatStore();
+  final GroupMemberCache _groupMemberCache = GroupMemberCache();
 
   static final GlobalUtil _instance = GlobalUtil._internal();
   factory GlobalUtil() {
@@ -87,13 +79,7 @@ class GlobalUtil {
 
   // 添加一条未读消息
   void addUnreadMessage(String userName, int msgId) {
-    if (!_unreadMessages.containsKey(userName)) {
-      _unreadMessages[userName] = [];
-      _unreadCounts[userName] = 0;
-    }
-    _unreadMessages[userName]!.add(msgId);
-    _unreadCounts[userName] = (_unreadCounts[userName] ?? 0) + 1;
-    final count = _unreadCounts[userName]!;
+    final count = _chatStore.addUnreadMessage(userName, msgId);
 
     // 通知未读消息数变化，使用addPostFrameCallback确保不在构建过程中调用
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -103,13 +89,12 @@ class GlobalUtil {
 
   // 获取某个用户的所有未读消息ID
   List<int> getUnreadMessages(String userName) {
-    return _unreadMessages[userName] ?? [];
+    return _chatStore.unreadMessageIds(userName);
   }
 
   // 清除某个用户的所有未读消息
   void clearUnreadMessages(String userName) {
-    _unreadMessages.remove(userName);
-    _unreadCounts.remove(userName);
+    _chatStore.clearUnreadMessages(userName);
 
     // 通知未读消息数变化，使用addPostFrameCallback确保不在构建过程中调用
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -119,32 +104,24 @@ class GlobalUtil {
 
   // 获取某个用户的未读消息数
   int getUnreadCount(String userName) {
-    return _unreadCounts[userName] ?? 0;
+    return _chatStore.unreadCount(userName);
   }
 
   // 聊天记录管理方法
 
   // 添加消息到聊天记录
   void addMessage(String userName, Message message) {
-    _chatRecords.putIfAbsent(userName, () => []);
-
-    // 检查消息是否已存在（通过msgId判断），避免重复添加
-    bool messageExists = _chatRecords[userName]!.any(
-      (msg) => msg.msgId == message.msgId,
-    );
-    if (!messageExists) {
-      _chatRecords[userName]!.add(message);
-    }
+    _chatStore.addMessage(userName, message);
   }
 
   // 获取某个用户的所有聊天记录
   List<Message> getChatRecords(String userName) {
-    return _chatRecords[userName] ?? [];
+    return _chatStore.messages(userName);
   }
 
   // 获取聊天记录的当前加载数量
   int getChatRecordsCount(String userName) {
-    return _chatRecords[userName]?.length ?? 0;
+    return _chatStore.messageCount(userName);
   }
 
   // 加载指定数量的聊天记录
@@ -167,7 +144,7 @@ class GlobalUtil {
 
       // 检查是否有新记录：只有当获取到的记录数量小于1时，才认为没有更多记录了
       // 这样修改是因为后端可能返回少于请求数量的记录（例如当接近记录末尾时）
-      if (messageModels.length < 1) {
+      if (messageModels.isEmpty) {
         debugPrint('没有获取到新的聊天记录');
         return; // 直接返回，不更新_chatRecords
       }
@@ -196,7 +173,7 @@ class GlobalUtil {
       }).toList();
 
       // 保存到_chatRecords
-      _chatRecords[userName] = messages;
+      _chatStore.replaceMessages(userName, messages);
 
       debugPrint('成功加载$count条聊天记录');
     } catch (e) {
@@ -224,69 +201,49 @@ class GlobalUtil {
 
   // 清除某个用户的所有聊天记录
   void clearChatRecords(String userName) {
-    _chatRecords.remove(userName);
+    _chatStore.clearMessages(userName);
   }
 
   // 清除所有聊天记录
   void clearAllChatRecords() {
-    _chatRecords.clear();
+    _chatStore.clearAllMessages();
   }
 
   // 标记特定消息为已读
   void markMessageAsRead(String userName, int msgId) {
-    if (_chatRecords.containsKey(userName)) {
-      List<Message> messages = _chatRecords[userName]!;
-      for (var message in messages) {
-        if (message.msgId == msgId) {
-          message.isRead = true;
-          message.status = MessageStatus.read;
-          break;
-        }
-      }
-    }
+    _chatStore.markMessageAsRead(userName, msgId);
   }
 
   // 标记所有消息为已读
   void markAllMessagesAsRead(String userName) {
-    if (_chatRecords.containsKey(userName)) {
-      List<Message> messages = _chatRecords[userName]!;
-      for (var message in messages) {
-        if (!message.isMe) {
-          message.isRead = true;
-          message.status = MessageStatus.read;
-        }
-      }
-    }
+    _chatStore.markAllIncomingMessagesAsRead(userName);
   }
 
   // 删除指定消息
   void deleteMessage(String userName, int msgId) {
-    if (_chatRecords.containsKey(userName)) {
-      List<Message> messages = _chatRecords[userName]!;
-      messages.removeWhere((message) => message.msgId == msgId);
-    }
+    _chatStore.deleteMessage(userName, msgId);
   }
 
   // 群成员列表管理方法
 
   // 添加群成员列表
   void addGroupMembers(int groupId, List<GroupMemberModel> members) {
-    _groupMembers[groupId] = members;
+    _groupMemberCache.put(groupId, members);
   }
 
   // 获取群成员列表
   List<GroupMemberModel> getGroupMembers(int groupId) {
-    return _groupMembers[groupId] ?? [];
+    return _groupMemberCache.get(groupId);
   }
 
   // 清除群成员列表
   void clearGroupMembers(int groupId) {
-    _groupMembers.remove(groupId);
+    _groupMemberCache.remove(groupId);
   }
 
   // 清除所有群成员列表
   void clearAllGroupMembers() {
-    _groupMembers.clear();
+    _groupMemberCache.clear();
   }
 
   //根据图片名生成图片的URL
@@ -503,7 +460,7 @@ class GlobalUtil {
         throw Exception('上传失败');
       }
     } catch (e) {
-      print('选择或上传头像失败: $e');
+      debugPrint('选择或上传头像失败: $e');
       return null;
     }
   }
