@@ -23,6 +23,7 @@ class _FriendsPage extends State<Friendspage>
   List<FriendRequestModel> _pendingRequests = [];
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isRefreshing = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -41,12 +42,22 @@ class _FriendsPage extends State<Friendspage>
   }
 
   void _startPolling() {
-    _pollingTimer = Timer.periodic(Duration(seconds: 5), (timer) {
-      _fetchFriendList();
-      _fetchFriendRequests();
+    _pollingTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      _refreshFriends();
     });
-    _fetchFriendList();
-    _fetchFriendRequests();
+    _refreshFriends();
+  }
+
+  Future<void> _refreshFriends() async {
+    if (_isRefreshing) {
+      return;
+    }
+    _isRefreshing = true;
+    try {
+      await Future.wait([_fetchFriendList(), _fetchFriendRequests()]);
+    } finally {
+      _isRefreshing = false;
+    }
   }
 
   Future<void> _fetchFriendRequests() async {
@@ -420,47 +431,50 @@ class _FriendsPage extends State<Friendspage>
                       ],
                     ),
                   )
-                : ListView.builder(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    itemCount:
-                        _filteredFriends.length +
-                        (_searchQuery.trim().isNotEmpty ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (_searchQuery.trim().isNotEmpty && index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                          child: Text(
-                            '好友（${_filteredFriends.length}）',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
+                : RefreshIndicator(
+                    onRefresh: _refreshFriends,
+                    child: ListView.builder(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      itemCount:
+                          _filteredFriends.length +
+                          (_searchQuery.trim().isNotEmpty ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (_searchQuery.trim().isNotEmpty && index == 0) {
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                            child: Text(
+                              '好友（${_filteredFriends.length}）',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
                             ),
-                          ),
+                          );
+                        }
+                        final friendIndex =
+                            index - (_searchQuery.trim().isNotEmpty ? 1 : 0);
+                        final friend = _filteredFriends[friendIndex];
+                        final item = _buildFriendTile(
+                          friend,
+                          isSearching: _searchQuery.trim().isNotEmpty,
                         );
-                      }
-                      final friendIndex =
-                          index - (_searchQuery.trim().isNotEmpty ? 1 : 0);
-                      final friend = _filteredFriends[friendIndex];
-                      final item = _buildFriendTile(
-                        friend,
-                        isSearching: _searchQuery.trim().isNotEmpty,
-                      );
 
-                      if (friendIndex < _filteredFriends.length - 1) {
-                        return Column(
-                          children: [
-                            item,
-                            Divider(
-                              height: 1,
-                              color: Colors.grey[300],
-                              indent: 70,
-                            ),
-                          ],
-                        );
-                      }
-                      return item;
-                    },
+                        if (friendIndex < _filteredFriends.length - 1) {
+                          return Column(
+                            children: [
+                              item,
+                              Divider(
+                                height: 1,
+                                color: Colors.grey[300],
+                                indent: 70,
+                              ),
+                            ],
+                          );
+                        }
+                        return item;
+                      },
+                    ),
                   ),
           ),
         ],

@@ -223,6 +223,10 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
       '/selectContactsPage',
       arguments: {'groupId': widget.groupId},
     );
+    if (mounted) {
+      await _fetchGroupMembers();
+      await _fetchGroupInfo();
+    }
   }
 
   @override
@@ -238,12 +242,11 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     _fetchGroupMembers();
     // 初始化时获取一次群信息
     _fetchGroupInfo();
-    // 设置定时器，每秒获取一次成员列表
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+    // 操作完成后会主动刷新，定时器只作为低频兜底。
+    _timer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _fetchGroupMembers();
     });
-    // 设置定时器，每2秒获取一次群信息，以更新群名称
-    _groupInfoTimer = Timer.periodic(Duration(seconds: 2), (timer) {
+    _groupInfoTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _fetchGroupInfo();
     });
   }

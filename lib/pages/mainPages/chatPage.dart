@@ -9,10 +9,10 @@ import '../../model/messageModel.dart';
 import '../../model/groupConversationModel.dart';
 import '../../api/groupChatRecordAPI.dart';
 import '../../api/getGroupInfoAPI.dart';
-import '../../api/getGroupMemberAPI.dart';
 import '../../model/groupInfoModel.dart';
 import '../../model/groupMemberModel.dart';
 import '../../utils/chat_search_util.dart';
+import '../../utils/WebSocketManager.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
@@ -45,9 +45,11 @@ class _ChatpageState extends State<Chatpage> {
     // ),
   ];
 
-  Timer? _fetchTimer;
+  Timer? _fallbackRefreshTimer;
+  Timer? _refreshDebounceTimer;
+  WebSocketMessageSubscription? _messageSubscription;
   GlobalUtil globalUtil = GlobalUtil();
-  bool _wasChatting = false;
+  bool _isFetchingConversations = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   // 头像 URL 缓存，用于避免重复加载
@@ -61,9 +63,12 @@ class _ChatpageState extends State<Chatpage> {
       _notifyUnreadCountChanged();
       // 页面加载时获取会话列表
       fetchConversations();
-      // 启动定期获取会话列表的定时器
-      _startFetchTimer();
+      _startFallbackRefreshTimer();
     });
+
+    _messageSubscription = WebSocketManager().addMessageListener(
+      _handleWebSocketMessage,
+    );
 
     // 注册未读消息数变化的回调
     globalUtil.onUnreadCountChanged = (userName, count) {
@@ -75,49 +80,42 @@ class _ChatpageState extends State<Chatpage> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // 监听isChatting状态变化
-    bool currentIsChatting = globalUtil.isChatting ?? false;
-    if (currentIsChatting != _wasChatting) {
-      _wasChatting = currentIsChatting;
-      if (currentIsChatting) {
-        // 进入聊天界面，停止定时器
-        _stopFetchTimer();
-      } else {
-        // 离开聊天界面，启动定时器
-        _startFetchTimer();
-      }
-    }
-  }
-
-  @override
   void dispose() {
-    // 清理定时器
-    _stopFetchTimer();
+    _fallbackRefreshTimer?.cancel();
+    _refreshDebounceTimer?.cancel();
+    _messageSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  // 启动定时器，每秒获取一次会话列表
-  void _startFetchTimer() {
-    if (_fetchTimer != null && _fetchTimer!.isActive) {
-      return;
-    }
-
-    _fetchTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+  void _startFallbackRefreshTimer() {
+    _fallbackRefreshTimer?.cancel();
+    _fallbackRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted && !(globalUtil.isChatting ?? false)) {
         fetchConversations();
       }
     });
   }
 
-  // 停止定时器
-  void _stopFetchTimer() {
-    if (_fetchTimer != null) {
-      _fetchTimer!.cancel();
-      _fetchTimer = null;
+  void _handleWebSocketMessage(dynamic message) {
+    if (message is! Map<String, dynamic>) {
+      return;
     }
+    const conversationEventTypes = {
+      'chat',
+      'chatCallback',
+      'groupChat',
+      'groupChatCallback',
+    };
+    if (!conversationEventTypes.contains(message['type'])) {
+      return;
+    }
+    _refreshDebounceTimer?.cancel();
+    _refreshDebounceTimer = Timer(const Duration(milliseconds: 400), () {
+      if (mounted) {
+        fetchConversations();
+      }
+    });
   }
 
   void updateChat(String userName, Chat chat) {
@@ -157,6 +155,9 @@ class _ChatpageState extends State<Chatpage> {
           time: _chats[index].time,
           unreadCount: count,
           userName: _chats[index].userName,
+          isGroup: _chats[index].isGroup,
+          lastSenderName: _chats[index].lastSenderName,
+          updateTime: _chats[index].updateTime,
         );
         _chats[index] = updatedChat;
         _notifyUnreadCountChanged();
@@ -235,6 +236,7 @@ class _ChatpageState extends State<Chatpage> {
           unreadCount: conversation.unreadCount,
           userName: targetUserName,
           isGroup: false,
+          updateTime: conversation.updateTime,
         ),
       );
     }
@@ -292,8 +294,8 @@ class _ChatpageState extends State<Chatpage> {
               lastSenderName = '我';
             } else {
               try {
-                // 获取群成员列表
-                final groupMembers = await getGroupMembers(
+                // 优先使用已缓存的群成员，避免会话列表刷新时产生 N+1 请求。
+                final groupMembers = globalUtil.getGroupMembers(
                   groupConversation.groupId,
                 );
                 // 从群成员列表中查找发送者的群昵称
@@ -351,6 +353,7 @@ class _ChatpageState extends State<Chatpage> {
               userName: groupIdStr,
               isGroup: true,
               lastSenderName: lastSenderName,
+              updateTime: groupConversation.updateTime,
             ),
           );
         } catch (e) {
@@ -363,17 +366,14 @@ class _ChatpageState extends State<Chatpage> {
       // 继续处理，不中断整个流程
     }
 
-    // 按更新时间排序，最新的在前面
-    chatList.sort((a, b) {
-      // 这里简化处理，实际应该根据会话的更新时间排序
-      // 由于我们没有在 Chat 对象中存储更新时间，这里暂时不做排序
-      return 0;
-    });
-
-    return chatList;
+    return sortChatsByLatest(chatList);
   }
 
   Future<void> fetchConversations() async {
+    if (_isFetchingConversations) {
+      return;
+    }
+    _isFetchingConversations = true;
     try {
       final globalUtil = GlobalUtil();
       final currentUserName = globalUtil.userName;
@@ -392,6 +392,9 @@ class _ChatpageState extends State<Chatpage> {
         conversations,
         groupConversations,
       );
+      if (!mounted) {
+        return;
+      }
 
       // 检查是否有新的会话ID添加
       final existingUserNames = _chats.map((chat) => chat.userName).toSet();
@@ -444,6 +447,8 @@ class _ChatpageState extends State<Chatpage> {
       }
     } catch (e) {
       debugPrint('获取会话列表失败：$e');
+    } finally {
+      _isFetchingConversations = false;
     }
   }
 
@@ -863,6 +868,7 @@ class Chat {
   final String userName;
   final bool isGroup; // 是否为群聊
   final String? lastSenderName; // 群聊最后一条消息的发送者名称
+  final int updateTime;
 
   Chat({
     required this.name,
@@ -873,5 +879,12 @@ class Chat {
     required this.userName,
     this.isGroup = false,
     this.lastSenderName,
+    required this.updateTime,
   });
+}
+
+List<Chat> sortChatsByLatest(Iterable<Chat> chats) {
+  final sortedChats = List<Chat>.of(chats);
+  sortedChats.sort((a, b) => b.updateTime.compareTo(a.updateTime));
+  return sortedChats;
 }

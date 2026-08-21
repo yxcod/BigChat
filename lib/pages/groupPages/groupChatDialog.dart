@@ -70,16 +70,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     // 初始化WebSocket连接
     _ensureWebSocketConnected();
 
-    // 设置定时器，每隔2秒获取一次群信息
-    _groupInfoTimer = Timer.periodic(Duration(seconds: 2), (timer) {
+    // WebSocket 暂未推送群资料变更，使用低频刷新作为兜底。
+    _groupInfoTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _fetchGroupInfo();
     });
 
     // 先加载群成员，再加载带已读状态的群聊记录。
     _initializeGroupChatData();
 
-    // 设置定时器，每隔3秒检查一次群成员列表
-    _groupMembersTimer = Timer.periodic(Duration(seconds: 3), (timer) {
+    _groupMembersTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _checkGroupMembership();
     });
 
