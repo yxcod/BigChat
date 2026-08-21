@@ -14,6 +14,7 @@ import '../utils/WebSocketManager.dart';
 import '../model/messageModel.dart';
 import '../utils/http.dart';
 import '../utils/user_profile_navigator.dart';
+import '../core/cache/app_image_cache.dart';
 import 'videoCallPage.dart';
 
 class ChatDialogPage extends StatefulWidget {
@@ -1425,7 +1426,7 @@ class MessageBubble extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(2),
         child: CircleAvatar(
-          backgroundImage: NetworkImage(avatarUrl),
+          backgroundImage: AppImageCache.provider(avatarUrl),
           backgroundColor: Colors.grey[200],
           radius: 24,
         ),
@@ -1458,7 +1459,7 @@ class MessageBubble extends StatelessWidget {
     }
 
     return CircleAvatar(
-      backgroundImage: NetworkImage(avatarUrl),
+      backgroundImage: AppImageCache.provider(avatarUrl),
       backgroundColor: Colors.grey[200],
       radius: 24,
     );
@@ -1494,6 +1495,7 @@ class MessageBubble extends StatelessWidget {
         alignment: Alignment.center,
         child: CachedNetworkImage(
           imageUrl: imageURL,
+          cacheKey: AppImageCache.cacheKey(imageURL),
           fit: BoxFit.cover,
           width: 200.0,
           height: 200.0,
@@ -1605,6 +1607,17 @@ class MessageBubble extends StatelessWidget {
                                           message.content,
                                         ),
                                   fit: BoxFit.contain,
+                                  cacheKey: AppImageCache.cacheKey(
+                                    message.isMe
+                                        ? globalUtil.getImageURL(
+                                            globalUtil.userName ?? "",
+                                            message.content,
+                                          )
+                                        : globalUtil.getImageURL(
+                                            friendInfo?.userName ?? "",
+                                            message.content,
+                                          ),
+                                  ),
                                   progressIndicatorBuilder:
                                       (context, url, progress) => Center(
                                         child: CircularProgressIndicator(

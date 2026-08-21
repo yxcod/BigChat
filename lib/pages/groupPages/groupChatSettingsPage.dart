@@ -12,6 +12,7 @@ import '../../api/getGroupMemberAPI.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../utils/http.dart';
+import '../../core/cache/app_image_cache.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
@@ -765,6 +766,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                     width: 60.0,
                     height: 60.0,
                     imageUrl: _groupAvatar,
+                    cacheKey: AppImageCache.cacheKey(_groupAvatar),
                     imageBuilder: (context, imageProvider) => Container(
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -880,6 +882,11 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                                 imageUrl: _avatarCache.containsKey(member['id'])
                                     ? _avatarCache[member['id']]!
                                     : member['avatar'],
+                                cacheKey: AppImageCache.cacheKey(
+                                  _avatarCache.containsKey(member['id'])
+                                      ? _avatarCache[member['id']]!
+                                      : member['avatar'],
+                                ),
                                 imageBuilder: (context, imageProvider) =>
                                     Container(
                                       decoration: BoxDecoration(
@@ -898,7 +905,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                                     image:
                                         _avatarCache.containsKey(member['id'])
                                         ? DecorationImage(
-                                            image: NetworkImage(
+                                            image: AppImageCache.provider(
                                               _avatarCache[member['id']]!,
                                             ),
                                             fit: BoxFit.cover,
@@ -915,7 +922,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                                     image:
                                         _avatarCache.containsKey(member['id'])
                                         ? DecorationImage(
-                                            image: NetworkImage(
+                                            image: AppImageCache.provider(
                                               _avatarCache[member['id']]!,
                                             ),
                                             fit: BoxFit.cover,

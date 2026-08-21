@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/cache/app_image_cache.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../utils/WebSocketManager.dart';
@@ -560,20 +561,23 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
         // URL 相同，使用缓存的头像 URL
         return CircleAvatar(
           radius: 30,
-          backgroundImage: NetworkImage(cachedUrl),
+          backgroundImage: AppImageCache.provider(cachedUrl),
         );
       } else {
         // URL 不同，使用新的头像 URL 并更新缓存
         _avatarCache[userName] = avatarUrl;
         return CircleAvatar(
           radius: 30,
-          backgroundImage: NetworkImage(avatarUrl),
+          backgroundImage: AppImageCache.provider(avatarUrl),
         );
       }
     } else {
       // 缓存中没有，使用新的头像 URL 并加入缓存
       _avatarCache[userName] = avatarUrl;
-      return CircleAvatar(radius: 30, backgroundImage: NetworkImage(avatarUrl));
+      return CircleAvatar(
+        radius: 30,
+        backgroundImage: AppImageCache.provider(avatarUrl),
+      );
     }
   }
 

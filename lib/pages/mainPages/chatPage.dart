@@ -13,6 +13,7 @@ import '../../model/groupMemberModel.dart';
 import '../../utils/chat_search_util.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../shared/widgets/app_search_field.dart';
+import '../../core/cache/app_image_cache.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
@@ -521,7 +522,7 @@ class _ChatpageState extends State<Chatpage> {
             vertical: 5,
           ),
           leading: CircleAvatar(
-            backgroundImage: NetworkImage(result.chat.avatar),
+            backgroundImage: AppImageCache.provider(result.chat.avatar),
             backgroundColor: Colors.grey[200],
           ),
           title: Row(
@@ -693,7 +694,9 @@ class _ChatpageState extends State<Chatpage> {
                 itemBuilder: (context, index) {
                   return ListTile(
                     leading: CircleAvatar(
-                      backgroundImage: NetworkImage(_chats[index].avatar),
+                      backgroundImage: AppImageCache.provider(
+                        _chats[index].avatar,
+                      ),
                       backgroundColor: Colors.grey[200],
                     ),
                     title: Row(

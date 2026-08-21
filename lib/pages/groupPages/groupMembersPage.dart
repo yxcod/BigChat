@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/cache/app_image_cache.dart';
 
 import '../../model/groupMemberModel.dart';
 import '../../api/getGroupMemberAPI.dart';
@@ -156,6 +157,9 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
                       child: ClipOval(
                         child: CachedNetworkImage(
                           imageUrl: _getAvatarUrl(member),
+                          cacheKey: AppImageCache.cacheKey(
+                            _getAvatarUrl(member),
+                          ),
                           fit: BoxFit.cover,
                           width: 40,
                           height: 40,

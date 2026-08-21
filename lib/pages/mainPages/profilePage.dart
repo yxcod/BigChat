@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../utils/gloabl.dart';
 import '../../api/getInfoAPI.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/cache/app_image_cache.dart';
 
 class ProfilePage extends StatefulWidget {
   ProfilePage({Key? key}) : super(key: key);
@@ -86,29 +88,32 @@ class _ProfilePageState extends State<ProfilePage>
                         radius: 40,
                         backgroundColor: Colors.grey[200],
                         child: ClipOval(
-                          child: Image.network(
-                            _currentAvatarUrl.isNotEmpty
+                          child: CachedNetworkImage(
+                            imageUrl: _currentAvatarUrl.isNotEmpty
                                 ? _currentAvatarUrl
                                 : GlobalUtil().getImageURL(
                                     GlobalUtil().userName ?? "",
                                     "head.jpg",
                                   ),
+                            cacheKey: AppImageCache.cacheKey(
+                              _currentAvatarUrl.isNotEmpty
+                                  ? _currentAvatarUrl
+                                  : GlobalUtil().getImageURL(
+                                      GlobalUtil().userName ?? "",
+                                      "head.jpg",
+                                    ),
+                            ),
                             fit: BoxFit.cover,
                             width: 80,
                             height: 80,
-                            loadingBuilder: (context, child, progress) {
-                              if (progress == null) return child;
-                              return Center(
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  value: progress.expectedTotalBytes != null
-                                      ? progress.cumulativeBytesLoaded /
-                                            progress.expectedTotalBytes!
-                                      : null,
+                            progressIndicatorBuilder:
+                                (context, url, progress) => Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    value: progress.progress,
+                                  ),
                                 ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
+                            errorWidget: (context, url, error) {
                               debugPrint('头像加载失败：$error');
                               return Icon(
                                 Icons.person,

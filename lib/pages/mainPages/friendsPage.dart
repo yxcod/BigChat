@@ -6,6 +6,8 @@ import '../../api/getFriendRequestsAPI.dart';
 import '../../model/friendRequestModel.dart';
 import '../../utils/friend_search_util.dart';
 import '../../shared/widgets/app_search_field.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/cache/app_image_cache.dart';
 
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
@@ -209,12 +211,13 @@ class _FriendsPage extends State<Friendspage>
             radius: 20,
             child: ClipOval(
               child: friend.avatar != '👤'
-                  ? Image.network(
-                      friend.avatar,
+                  ? CachedNetworkImage(
+                      imageUrl: friend.avatar,
+                      cacheKey: AppImageCache.cacheKey(friend.avatar),
                       fit: BoxFit.cover,
                       width: 40,
                       height: 40,
-                      errorBuilder: (context, error, stackTrace) {
+                      errorWidget: (context, url, error) {
                         return Icon(Icons.person, color: Colors.grey);
                       },
                     )

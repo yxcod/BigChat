@@ -21,6 +21,7 @@ import '../../api/getGroupMemberAPI.dart';
 import '../../api/groupChatRecordAPI.dart';
 import '../../utils/user_profile_navigator.dart';
 import '../../features/chat/domain/chat_message_mapper.dart';
+import '../../core/cache/app_image_cache.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -1578,7 +1579,7 @@ class GroupMessageBubble extends StatelessWidget {
                     child: CircleAvatar(
                       radius: 20,
                       backgroundImage: _getSenderAvatar() != null
-                          ? NetworkImage(_getSenderAvatar()!)
+                          ? AppImageCache.provider(_getSenderAvatar()!)
                           : null,
                       child: _getSenderAvatar() == null
                           ? Text(
@@ -1606,7 +1607,7 @@ class GroupMessageBubble extends StatelessWidget {
                   child: CircleAvatar(
                     radius: 20,
                     backgroundImage: _getSelfAvatar() != null
-                        ? NetworkImage(_getSelfAvatar()!)
+                        ? AppImageCache.provider(_getSelfAvatar()!)
                         : null,
                     child: _getSelfAvatar() == null
                         ? Text(
@@ -1725,6 +1726,7 @@ class GroupMessageBubble extends StatelessWidget {
         ),
         child: CachedNetworkImage(
           imageUrl: message.content,
+          cacheKey: AppImageCache.cacheKey(message.content),
           fit: BoxFit.cover,
           placeholder: (context, url) => Container(
             width: 150,

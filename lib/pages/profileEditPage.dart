@@ -4,6 +4,8 @@ import '../utils/gloabl.dart';
 import '../api/getInfoAPI.dart';
 import '../model/userInfoModel.dart';
 import '../utils/WebSocketManager.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../core/cache/app_image_cache.dart';
 
 class ProfileEditPage extends StatefulWidget {
   final Map<String, dynamic>? profileInfo;
@@ -22,7 +24,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   bool _isLoading = false;
   String _nickName = "";
   String _signature = "";
-  bool _shouldRefreshAvatar = false; // 标记是否需要刷新头像
   @override
   void initState() {
     super.initState();
@@ -44,19 +45,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     super.dispose();
   }
 
-  // 构建带有时间戳的头像URL
+  // 头像文件名是缓存版本；文件名变化时会自动下载新头像。
   String _buildAvatarUrl() {
     String avatarName = GlobalUtil().userInfoModel.avatar ?? "head.jpg";
-    final String baseUrl = GlobalUtil().getImageURL(
-      GlobalUtil().userName ?? "",
-      avatarName,
-    );
-    final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-    return _shouldRefreshAvatar
-        ? (baseUrl.contains('?')
-              ? '$baseUrl&t=$timestamp'
-              : '$baseUrl?t=$timestamp')
-        : baseUrl;
+    return GlobalUtil().getImageURL(GlobalUtil().userName ?? "", avatarName);
   }
 
   // 修改头像
@@ -92,10 +84,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         if (code == 100) {
           // 保存更新后的用户信息到全局变量
           GlobalUtil().userInfoModel = updatedUserInfo;
-          // 标记需要刷新头像
-          setState(() {
-            _shouldRefreshAvatar = true;
-          });
+          setState(() {});
           _showMessage('头像修改成功');
         } else {
           _showMessage('头像修改失败，请稍后重试');
@@ -307,32 +296,20 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                             ),
                           ),
                           clipBehavior: Clip.antiAlias,
-                          child: Image.network(
-                            _buildAvatarUrl(),
+                          child: CachedNetworkImage(
+                            imageUrl: _buildAvatarUrl(),
+                            cacheKey: AppImageCache.cacheKey(_buildAvatarUrl()),
                             fit: BoxFit.cover,
                             width: 80,
                             height: 80,
-                            loadingBuilder: (context, child, progress) {
-                              if (progress == null) {
-                                // 图片加载完成后，重置刷新标记
-                                if (_shouldRefreshAvatar) {
-                                  setState(() {
-                                    _shouldRefreshAvatar = false;
-                                  });
-                                }
-                                return child;
-                              }
-                              return Center(
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  value: progress.expectedTotalBytes != null
-                                      ? progress.cumulativeBytesLoaded /
-                                            progress.expectedTotalBytes!
-                                      : null,
+                            progressIndicatorBuilder:
+                                (context, url, progress) => Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    value: progress.progress,
+                                  ),
                                 ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
+                            errorWidget: (context, url, error) {
                               debugPrint('头像加载失败：$error');
                               return Icon(
                                 Icons.person,
