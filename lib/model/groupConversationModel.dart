@@ -1,3 +1,5 @@
+import '../core/parsing/json_value_parser.dart';
+
 class GroupConversationModel {
   int id; // 主键ID
   int groupId; // 群组唯一标识
@@ -17,12 +19,12 @@ class GroupConversationModel {
 
   factory GroupConversationModel.fromJson(Map<String, dynamic> json) {
     return GroupConversationModel(
-      id: json['id'] ?? 0,
-      groupId: json['groupId'] ?? 0,
-      updateTime: json['updateTime'] ?? 0,
-      lastSenderId: json['lastSenderId'] ?? '',
-      lastMsg: json['lastMsg'] ?? '',
-      unreadCount: json['unreadCount'] ?? 0,
+      id: JsonValueParser.intValue(json['id']),
+      groupId: JsonValueParser.intValue(json['groupId']),
+      updateTime: JsonValueParser.timestampMillis(json['updateTime']),
+      lastSenderId: JsonValueParser.stringValue(json['lastSenderId']),
+      lastMsg: JsonValueParser.stringValue(json['lastMsg']),
+      unreadCount: JsonValueParser.intValue(json['unreadCount']),
     );
   }
 

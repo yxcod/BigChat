@@ -1,4 +1,5 @@
 import 'friendInfoModel.dart';
+import '../core/parsing/json_value_parser.dart';
 
 class UserInfoModel {
   String? userName;
@@ -19,19 +20,18 @@ class UserInfoModel {
     if (json["friendListData"] != null) {
       friendList = [];
       // 确保friendListData是一个List类型
-      if (json["friendListData"] is List) {
-        for (var item in json["friendListData"]) {
-          if (item is Map<String, dynamic>) {
-            friendList.add(FriendInfoModel.formJSON(item));
-          }
+      for (final item in JsonValueParser.listValue(json["friendListData"])) {
+        final friendJson = JsonValueParser.mapValue(item);
+        if (friendJson != null) {
+          friendList.add(FriendInfoModel.formJSON(friendJson));
         }
       }
     }
     return UserInfoModel(
-      userName: json["userName"] ?? "",
-      nickName: json["nickName"] ?? "",
-      avatar: json["avatar"] ?? "",
-      signature: json["signature"] ?? "",
+      userName: JsonValueParser.stringValue(json["userName"]),
+      nickName: JsonValueParser.stringValue(json["nickName"]),
+      avatar: JsonValueParser.stringValue(json["avatar"]),
+      signature: JsonValueParser.stringValue(json["signature"]),
       friendListData: friendList,
     ); //..friendListData = friendList;
   }
@@ -53,7 +53,7 @@ class UserInfoModel {
 //     },
 //     {
 //       "userName": "friend002",
-//       "nickName": "王五", 
+//       "nickName": "王五",
 //       "remarks": "",
 //       "avater": "https://example.com/friend2.jpg",
 //       "signature": "好友签名2"

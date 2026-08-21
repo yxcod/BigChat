@@ -1,3 +1,5 @@
+import '../core/parsing/json_value_parser.dart';
+
 enum RequestStatus { pending, accepted, rejected }
 
 class FriendRequestModel {
@@ -19,12 +21,14 @@ class FriendRequestModel {
 
   factory FriendRequestModel.fromJSON(Map<String, dynamic> json) {
     return FriendRequestModel(
-      requestId: json["id"] ?? 0,
-      userName: json["fromUserId"] ?? "",
-      nickName: json["nickName"] ?? "",
-      verificationMessage: json["applyMsg"] ?? "",
+      requestId: JsonValueParser.intValue(json["id"]),
+      userName: JsonValueParser.stringValue(json["fromUserId"]),
+      nickName: JsonValueParser.stringValue(json["nickName"]),
+      verificationMessage: JsonValueParser.stringValue(json["applyMsg"]),
       requestTime: json["createTime"] != null
-          ? DateTime.fromMillisecondsSinceEpoch(json["createTime"])
+          ? DateTime.fromMillisecondsSinceEpoch(
+              JsonValueParser.timestampMillis(json["createTime"]),
+            )
           : DateTime.now(),
     );
   }
@@ -45,10 +49,13 @@ class RecentFriendModel {
 
   factory RecentFriendModel.fromJSON(Map<String, dynamic> json) {
     return RecentFriendModel(
-      userName: json["userName"] ?? "",
-      nickName: json["nickName"] ?? "",
-      addTime: json["addTime"] ?? DateTime.now().millisecondsSinceEpoch,
-      remarks: json["remarks"] ?? "",
+      userName: JsonValueParser.stringValue(json["userName"]),
+      nickName: JsonValueParser.stringValue(json["nickName"]),
+      addTime: JsonValueParser.timestampMillis(
+        json["addTime"],
+        fallback: DateTime.now().millisecondsSinceEpoch,
+      ),
+      remarks: JsonValueParser.stringValue(json["remarks"]),
     );
   }
 }

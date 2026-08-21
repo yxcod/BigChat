@@ -1,3 +1,5 @@
+import '../core/parsing/json_value_parser.dart';
+
 class FriendInfoModel {
   String? userName;
   String? nickName;
@@ -15,12 +17,12 @@ class FriendInfoModel {
   });
   factory FriendInfoModel.formJSON(Map<String, dynamic> json) {
     return FriendInfoModel(
-      userName: json["userName"] ?? "",
-      nickName: json["nickName"] ?? "",
-      remarks: json["remark"] ?? "",
-      avatar: json["avatar"] ?? "",
-      signature: json["signature"] ?? "",
-      isOnline: json["onlineStatus"] ?? false,
+      userName: JsonValueParser.stringValue(json["userName"]),
+      nickName: JsonValueParser.stringValue(json["nickName"]),
+      remarks: JsonValueParser.stringValue(json["remark"]),
+      avatar: JsonValueParser.stringValue(json["avatar"]),
+      signature: JsonValueParser.stringValue(json["signature"]),
+      isOnline: JsonValueParser.boolValue(json["onlineStatus"]),
     );
   }
 }

@@ -3,6 +3,7 @@ import '../model/userInfoModel.dart';
 import '../utils/http.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import '../core/parsing/json_value_parser.dart';
 
 Future<UserInfoModel> getUserInfoApi(String userName) async {
   try {
@@ -14,7 +15,9 @@ Future<UserInfoModel> getUserInfoApi(String userName) async {
     final mapData = response.data as Map<String, dynamic>;
 
     // 检查后端返回的code值
-    final code = mapData['code'] as int?;
+    final code = mapData.containsKey('code')
+        ? JsonValueParser.intValue(mapData['code'], fallback: -1)
+        : null;
     if (code != null) {
       if (code == 101) {
         // code为101表示未查询到好友信息
@@ -56,7 +59,7 @@ Future<int> updateUserInfoApi(UserInfoModel userInfo) async {
     debugPrint('更新用户信息请求成功：${response.data}');
     final mapData = response.data as Map<String, dynamic>;
     // 解析并返回code值，默认为-1表示解析失败
-    return mapData['code'] as int? ?? -1;
+    return JsonValueParser.intValue(mapData['code'], fallback: -1);
   } on DioException catch (e) {
     debugPrint('更新用户信息请求失败：${e.error}');
     // 抛出异常
@@ -86,7 +89,7 @@ Future<int> changePasswordApi(
     debugPrint('更改密码请求成功：${response.data}');
     final mapData = response.data as Map<String, dynamic>;
     // 解析并返回code值，默认为-1表示解析失败
-    return mapData['code'] as int? ?? -1;
+    return JsonValueParser.intValue(mapData['code'], fallback: -1);
   } on DioException catch (e) {
     debugPrint('更改密码请求失败：${e.error}');
     // 抛出异常

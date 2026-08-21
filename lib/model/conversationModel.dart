@@ -1,3 +1,5 @@
+import '../core/parsing/json_value_parser.dart';
+
 class ConversationModel {
   String convId;
   int convType;
@@ -29,18 +31,18 @@ class ConversationModel {
 
   factory ConversationModel.formJSON(Map<String, dynamic> json) {
     return ConversationModel(
-      convId: json['convId'] ?? '',
-      convType: json['convType'] ?? 1,
-      user1Id: json['user1Id'] ?? '',
-      user2Id: json['user2Id'] ?? '',
-      groupId: json['groupId'] ?? '',
-      lastMsg: json['lastMsg'],
-      lastMsgId: json['lastMsgId'] ?? '',
-      lastSenderId: json['lastSenderId'] ?? '',
-      unreadCount: json['unreadCount'] ?? 0,
-      updateTime: json['updateTime'] ?? 11111,
-      user2isValid: json['user2isValid'] ?? 0,
-      user1isVaild: json['user1isVaild'] ?? 0,
+      convId: JsonValueParser.stringValue(json['convId']),
+      convType: JsonValueParser.intValue(json['convType'], fallback: 1),
+      user1Id: JsonValueParser.stringValue(json['user1Id']),
+      user2Id: JsonValueParser.stringValue(json['user2Id']),
+      groupId: JsonValueParser.stringValue(json['groupId']),
+      lastMsg: JsonValueParser.stringValue(json['lastMsg']),
+      lastMsgId: JsonValueParser.stringValue(json['lastMsgId']),
+      lastSenderId: JsonValueParser.stringValue(json['lastSenderId']),
+      unreadCount: JsonValueParser.intValue(json['unreadCount']),
+      updateTime: JsonValueParser.timestampMillis(json['updateTime']),
+      user2isValid: JsonValueParser.intValue(json['user2isValid']),
+      user1isVaild: JsonValueParser.intValue(json['user1isVaild']),
     );
   }
 }

@@ -1,3 +1,5 @@
+import '../core/parsing/json_value_parser.dart';
+
 class GroupMemberModel {
   int groupId; // 群聊ID
   String userId; // 用户ID（字符串形式）
@@ -21,14 +23,14 @@ class GroupMemberModel {
 
   factory GroupMemberModel.fromJson(Map<String, dynamic> json) {
     return GroupMemberModel(
-      groupId: json['groupId'] ?? 0,
-      userId: json['userId'] ?? '',
-      role: json['role'] ?? 0,
-      joinTime: json['joinTime'] ?? 0,
-      quitTime: json['quitTime'] ?? 0,
-      isQuit: json['isQuit'] ?? 0,
-      groupNickName: json['groupNickName'] ?? '',
-      avatar: json['avatar'] ?? '',
+      groupId: JsonValueParser.intValue(json['groupId']),
+      userId: JsonValueParser.stringValue(json['userId']),
+      role: JsonValueParser.intValue(json['role']),
+      joinTime: JsonValueParser.timestampMillis(json['joinTime']),
+      quitTime: JsonValueParser.timestampMillis(json['quitTime']),
+      isQuit: JsonValueParser.intValue(json['isQuit']),
+      groupNickName: JsonValueParser.stringValue(json['groupNickName']),
+      avatar: JsonValueParser.stringValue(json['avatar']),
     );
   }
 

@@ -2,6 +2,7 @@ import '../model/friendRequestModel.dart';
 import '../utils/http.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import '../core/parsing/json_value_parser.dart';
 
 Future<List<FriendRequestModel>> getFriendRequestsApi(String userName) async {
   try {
@@ -128,7 +129,9 @@ Future<bool> sendFriendRequestApi(
     );
     debugPrint('发送好友申请成功：${response.data}');
     final mapData = response.data as Map<String, dynamic>;
-    final code = mapData['code'] as int?;
+    final code = mapData.containsKey('code')
+        ? JsonValueParser.intValue(mapData['code'], fallback: -1)
+        : null;
     if (code == 100) {
       return true;
     } else if (code == 101) {

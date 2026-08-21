@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../core/parsing/json_value_parser.dart';
 
 // 消息类型枚举
 enum MessageType { text, image, video, audio, file, location, system }
@@ -28,41 +29,26 @@ class MessageModel {
   });
 
   factory MessageModel.fromJSON(Map<String, dynamic> json) {
-    // 解析消息类型
-    MessageType? messageType;
-    try {
-      if (json["messageType"] != null) {
-        final typeStr = json["messageType"];
-        if (typeStr is int) {
-          messageType = MessageType.values[typeStr];
-        }
-      }
-    } catch (e) {
-      messageType = MessageType.text;
-    }
-
-    // 解析消息状态
-    MessageStatus? messageStatus;
-    try {
-      if (json["messageStatus"] != null) {
-        final statusStr = json["messageStatus"];
-        if (statusStr is int) {
-          messageStatus = MessageStatus.values[statusStr];
-        }
-      }
-    } catch (e) {
-      messageStatus = MessageStatus.sent;
-    }
-
     return MessageModel(
-      senderName: json["senderName"] ?? "",
-      receiverName: json["receiverName"] ?? "",
-      timestamp: json["timestamp"] ?? DateTime.now().millisecondsSinceEpoch,
-      msgId: json["msgId"],
-      content: json["content"] ?? "",
-      messageType: messageType ?? MessageType.text,
-      messageStatus: messageStatus ?? MessageStatus.sent,
-      conversationId: json["conversationId"] ?? "",
+      senderName: JsonValueParser.stringValue(json["senderName"]),
+      receiverName: JsonValueParser.stringValue(json["receiverName"]),
+      timestamp: JsonValueParser.timestampMillis(
+        json["timestamp"],
+        fallback: DateTime.now().millisecondsSinceEpoch,
+      ),
+      msgId: JsonValueParser.intValue(json["msgId"]),
+      content: JsonValueParser.stringValue(json["content"]),
+      messageType: JsonValueParser.enumValue(
+        json["messageType"],
+        MessageType.values,
+        fallback: MessageType.text,
+      ),
+      messageStatus: JsonValueParser.enumValue(
+        json["messageStatus"],
+        MessageStatus.values,
+        fallback: MessageStatus.sent,
+      ),
+      conversationId: JsonValueParser.stringValue(json["conversationId"]),
     );
   }
 
@@ -125,15 +111,25 @@ class Message {
   // 反序列化方法：从Map<String, dynamic>创建Message对象
   factory Message.fromJSON(Map<String, dynamic> json) {
     return Message(
-      msgId: json['msgId'] ?? 0,
-      content: json['content'] ?? '',
-      isMe: json['isMe'] ?? false,
-      time: json['time'] ?? '',
-      isRead: json['isRead'] ?? false,
-      conversationId: json['conversationId'] ?? '',
-      messageType: MessageType.values[json['messageType'] ?? 0],
-      status: MessageStatus.values[json['status'] ?? 0],
-      senderId: json['senderId'],
+      msgId: JsonValueParser.intValue(json['msgId']),
+      content: JsonValueParser.stringValue(json['content']),
+      isMe: JsonValueParser.boolValue(json['isMe']),
+      time: JsonValueParser.stringValue(json['time']),
+      isRead: JsonValueParser.boolValue(json['isRead']),
+      conversationId: JsonValueParser.stringValue(json['conversationId']),
+      messageType: JsonValueParser.enumValue(
+        json['messageType'],
+        MessageType.values,
+        fallback: MessageType.text,
+      ),
+      status: JsonValueParser.enumValue(
+        json['status'],
+        MessageStatus.values,
+        fallback: MessageStatus.sent,
+      ),
+      senderId: json['senderId'] == null
+          ? null
+          : JsonValueParser.stringValue(json['senderId']),
     );
   }
 }
