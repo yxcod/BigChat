@@ -8,6 +8,7 @@ import '../../utils/friend_search_util.dart';
 import '../../shared/widgets/app_search_field.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../core/config/refresh_intervals.dart';
 
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
@@ -45,9 +46,10 @@ class _FriendsPage extends State<Friendspage>
   }
 
   void _startPolling() {
-    _pollingTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      _refreshFriends();
-    });
+    _pollingTimer = Timer.periodic(
+      RefreshIntervals.friendFallback,
+      (timer) => _refreshFriends(),
+    );
     _refreshFriends();
   }
 

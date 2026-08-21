@@ -13,6 +13,7 @@ import '../../api/getGroupInfoAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../utils/http.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../core/config/refresh_intervals.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
@@ -244,12 +245,14 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     // 初始化时获取一次群信息
     _fetchGroupInfo();
     // 操作完成后会主动刷新，定时器只作为低频兜底。
-    _timer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _fetchGroupMembers();
-    });
-    _groupInfoTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _fetchGroupInfo();
-    });
+    _timer = Timer.periodic(
+      RefreshIntervals.groupFallback,
+      (timer) => _fetchGroupMembers(),
+    );
+    _groupInfoTimer = Timer.periodic(
+      RefreshIntervals.groupFallback,
+      (timer) => _fetchGroupInfo(),
+    );
   }
 
   // 获取群信息

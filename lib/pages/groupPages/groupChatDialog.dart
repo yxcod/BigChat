@@ -22,6 +22,7 @@ import '../../api/groupChatRecordAPI.dart';
 import '../../utils/user_profile_navigator.dart';
 import '../../features/chat/domain/chat_message_mapper.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../core/config/refresh_intervals.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -73,16 +74,18 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     _ensureWebSocketConnected();
 
     // WebSocket 暂未推送群资料变更，使用低频刷新作为兜底。
-    _groupInfoTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _fetchGroupInfo();
-    });
+    _groupInfoTimer = Timer.periodic(
+      RefreshIntervals.groupFallback,
+      (timer) => _fetchGroupInfo(),
+    );
 
     // 先加载群成员，再加载带已读状态的群聊记录。
     _initializeGroupChatData();
 
-    _groupMembersTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _checkGroupMembership();
-    });
+    _groupMembersTimer = Timer.periodic(
+      RefreshIntervals.groupFallback,
+      (timer) => _checkGroupMembership(),
+    );
 
     // 页面初始化时自动滚动到聊天记录底部
     _scrollToBottom();

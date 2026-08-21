@@ -14,6 +14,7 @@ import '../../utils/chat_search_util.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../shared/widgets/app_search_field.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../core/config/refresh_intervals.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
@@ -91,11 +92,14 @@ class _ChatpageState extends State<Chatpage> {
 
   void _startFallbackRefreshTimer() {
     _fallbackRefreshTimer?.cancel();
-    _fallbackRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted && !(globalUtil.isChatting ?? false)) {
-        fetchConversations();
-      }
-    });
+    _fallbackRefreshTimer = Timer.periodic(
+      RefreshIntervals.conversationFallback,
+      (_) {
+        if (mounted && !(globalUtil.isChatting ?? false)) {
+          fetchConversations();
+        }
+      },
+    );
   }
 
   void _handleWebSocketMessage(dynamic message) {

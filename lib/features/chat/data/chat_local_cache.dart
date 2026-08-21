@@ -1,20 +1,21 @@
 import 'dart:convert';
+import 'dart:io';
 
 import '../../../model/messageModel.dart';
-import '../../../utils/storageUtil.dart';
+import 'package:path_provider/path_provider.dart';
 
-typedef CacheStringReader = String? Function(String key);
-typedef CacheStringWriter = Future<bool> Function(String key, String value);
+typedef CacheStringReader = Future<String?> Function(String key);
+typedef CacheStringWriter = Future<void> Function(String key, String value);
 
 class ChatLocalCache {
   ChatLocalCache({
     CacheStringReader? readString,
     CacheStringWriter? writeString,
-  }) : _readString = readString ?? StorageUtil.getString,
-       _writeString = writeString ?? StorageUtil.setString;
+  }) : _readString = readString,
+       _writeString = writeString;
 
-  final CacheStringReader _readString;
-  final CacheStringWriter _writeString;
+  final CacheStringReader? _readString;
+  final CacheStringWriter? _writeString;
 
   String cacheKey(String ownerId, String conversationId) {
     return 'chat_records_v2_${Uri.encodeComponent(ownerId)}_'
@@ -29,11 +30,21 @@ class ChatLocalCache {
     final json = jsonEncode(
       messages.map((message) => message.toJSON()).toList(),
     );
-    await _writeString(cacheKey(ownerId, conversationId), json);
+    final key = cacheKey(ownerId, conversationId);
+    if (_writeString != null) {
+      await _writeString(key, json);
+      return;
+    }
+    final file = await _cacheFile(key);
+    await file.parent.create(recursive: true);
+    await file.writeAsString(json, flush: true);
   }
 
-  List<Message> load(String ownerId, String conversationId) {
-    final json = _readString(cacheKey(ownerId, conversationId));
+  Future<List<Message>> load(String ownerId, String conversationId) async {
+    final key = cacheKey(ownerId, conversationId);
+    final json = _readString != null
+        ? await _readString(key)
+        : await _readCacheFile(key);
     if (json == null || json.isEmpty) return const [];
 
     try {
@@ -52,12 +63,23 @@ class ChatLocalCache {
     }
   }
 
-  int latestTimestamp(String ownerId, String conversationId) {
-    final messages = load(ownerId, conversationId);
+  Future<int> latestTimestamp(String ownerId, String conversationId) async {
+    final messages = await load(ownerId, conversationId);
     return messages.fold<int>(
       0,
       (latest, message) =>
           message.timestamp > latest ? message.timestamp : latest,
     );
+  }
+
+  Future<File> _cacheFile(String key) async {
+    final documents = await getApplicationDocumentsDirectory();
+    return File('${documents.path}/chat_cache/$key.json');
+  }
+
+  Future<String?> _readCacheFile(String key) async {
+    final file = await _cacheFile(key);
+    if (!await file.exists()) return null;
+    return file.readAsString();
   }
 }

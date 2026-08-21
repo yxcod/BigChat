@@ -6,10 +6,9 @@ void main() {
   test('persists chat records per owner and conversation', () async {
     final storage = <String, String>{};
     final cache = ChatLocalCache(
-      readString: (key) => storage[key],
+      readString: (key) async => storage[key],
       writeString: (key, value) async {
         storage[key] = value;
-        return true;
       },
     );
     final message = Message(
@@ -25,29 +24,28 @@ void main() {
 
     await cache.save('me', 'alice', [message]);
 
-    final restored = cache.load('me', 'alice');
+    final restored = await cache.load('me', 'alice');
     expect(restored, hasLength(1));
     expect(restored.single.msgId, 7);
     expect(restored.single.timestamp, 1787277600000);
-    expect(cache.load('other-account', 'alice'), isEmpty);
+    expect(await cache.load('other-account', 'alice'), isEmpty);
   });
 
-  test('returns an empty list for corrupt cached JSON', () {
+  test('returns an empty list for corrupt cached JSON', () async {
     final cache = ChatLocalCache(
-      readString: (_) => '{invalid',
-      writeString: (_, _) async => true,
+      readString: (_) async => '{invalid',
+      writeString: (_, _) async {},
     );
 
-    expect(cache.load('me', 'alice'), isEmpty);
+    expect(await cache.load('me', 'alice'), isEmpty);
   });
 
   test('reports the newest cached message timestamp', () async {
     final storage = <String, String>{};
     final cache = ChatLocalCache(
-      readString: (key) => storage[key],
+      readString: (key) async => storage[key],
       writeString: (key, value) async {
         storage[key] = value;
-        return true;
       },
     );
 
@@ -57,7 +55,7 @@ void main() {
       _message(3, 1787277602000),
     ]);
 
-    expect(cache.latestTimestamp('me', 'alice'), 1787277603000);
+    expect(await cache.latestTimestamp('me', 'alice'), 1787277603000);
   });
 }
 

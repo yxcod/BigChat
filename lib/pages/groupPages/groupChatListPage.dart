@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../core/config/refresh_intervals.dart';
 import '../../utils/gloabl.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../model/groupInfoModel.dart';
@@ -51,10 +52,11 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
     _filteredGroupChats = _groupChats;
     // 初始化时获取一次群聊数据
     _fetchGroups();
-    // 设置定时器，每秒获取一次群聊数据
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      _fetchGroups();
-    });
+    // 首次立即加载，后续只用低频轮询兜底。
+    _timer = Timer.periodic(
+      RefreshIntervals.groupFallback,
+      (timer) => _fetchGroups(),
+    );
   }
 
   @override

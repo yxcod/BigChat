@@ -136,7 +136,7 @@ class GlobalUtil {
     final ownerId = userName ?? '';
     if (ownerId.isEmpty) return false;
 
-    final messages = _chatLocalCache.load(ownerId, conversationId);
+    final messages = await _chatLocalCache.load(ownerId, conversationId);
     if (messages.isEmpty) return false;
     _chatStore.replaceMessages(conversationId, messages);
     return true;
@@ -357,7 +357,7 @@ class GlobalUtil {
     String otherUserName,
   ) async {
     try {
-      return _chatLocalCache.load(myUserName, otherUserName);
+      return await _chatLocalCache.load(myUserName, otherUserName);
     } catch (e) {
       // 处理读取失败的情况
       if (kDebugMode) {

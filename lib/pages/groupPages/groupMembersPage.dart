@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../core/config/refresh_intervals.dart';
 
 import '../../model/groupMemberModel.dart';
 import '../../api/getGroupMemberAPI.dart';
@@ -39,10 +40,11 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
     print('初始化默认数据完成，成员数: ${_filteredMembers.length}');
     // 初始化时获取一次成员列表
     _fetchGroupMembers();
-    // 设置定时器，每秒获取一次成员列表
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      _fetchGroupMembers();
-    });
+    // 手动操作会立即刷新，定时器只作为低频兜底。
+    _timer = Timer.periodic(
+      RefreshIntervals.groupFallback,
+      (timer) => _fetchGroupMembers(),
+    );
   }
 
   @override
