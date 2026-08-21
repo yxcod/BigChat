@@ -208,23 +208,18 @@ class _ProfilePageState extends State<ProfilePage>
                   ),
                   onTap: () {},
                 ),
+                Divider(height: 1, color: Colors.grey[200]),
+                ListTile(
+                  leading: Icon(Icons.help_outline, color: Colors.green),
+                  title: Text('其它'),
+                  trailing: Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.grey,
+                    size: 16,
+                  ),
+                  onTap: () {},
+                ),
               ],
-            ),
-          ),
-          SizedBox(height: 10),
-
-          // 其他功能
-          Container(
-            color: Colors.white,
-            child: ListTile(
-              leading: Icon(Icons.help_outline, color: Colors.green),
-              title: Text('其它'),
-              trailing: Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.grey,
-                size: 16,
-              ),
-              onTap: () {},
             ),
           ),
         ],
