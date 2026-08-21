@@ -11,13 +11,9 @@ import '../model/messageModel.dart';
 import '../model/groupMemberModel.dart';
 import '../utils/http.dart';
 import '../api/getChatMessagesAPI.dart';
+import '../core/config/app_config.dart';
 
 class GlobalUtil {
-  static const String _baseURL = 'http://45.197.144.95:5555';
-  //static const String _baseURL = 'https://989cd2489iw2.vicp.fun';
-
-  static const String _baseWebSocketURL = 'ws://45.197.144.95:5555';
-  //static const String _baseWebSocketURL = 'ws://989cd2489iw2.vicp.fun';
   String? _token;
   String? _userName;
   bool? _isLoading;
@@ -46,8 +42,8 @@ class GlobalUtil {
 
   UserInfoModel get userInfoModel =>
       _userInfoModel ?? UserInfoModel.formJSON({});
-  String get baseURL => _baseURL;
-  String get baseWebSocketURL => _baseWebSocketURL;
+  String get baseURL => AppConfig.apiBaseUrl;
+  String get baseWebSocketURL => AppConfig.webSocketBaseUrl;
   String? get token => _token ?? StorageUtil.getString('global_token');
   String? get userName => _userName ?? StorageUtil.getString('global_userName');
   bool? get isLoading => _isLoading ?? StorageUtil.getBool('global_isLoading');
@@ -298,7 +294,27 @@ class GlobalUtil {
     if (token == null) {
       throw Exception('Token is null');
     }
-    return '$baseURL/api/image/download?key=$token&userName=$userName&imageName=$imageName';
+    final baseUri = Uri.parse(baseURL);
+    return baseUri
+        .replace(
+          path: '${baseUri.path}/api/image/download',
+          queryParameters: {
+            'key': token!,
+            'userName': userName,
+            'imageName': imageName,
+          },
+        )
+        .toString();
+  }
+
+  String getChatWebSocketURL(String userName) {
+    final baseUri = Uri.parse(baseWebSocketURL);
+    return baseUri
+        .replace(
+          path: '${baseUri.path}/api/chat',
+          queryParameters: {'userName': userName},
+        )
+        .toString();
   }
 
   // 保存聊天记录到本地

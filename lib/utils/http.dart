@@ -207,11 +207,15 @@ class HttpUtil {
       throw Exception('无法获取当前用户信息');
     }
 
-    // 调用上传接口，URL中带上用户名和图片名
+    final uploadQueryParameters = <String, dynamic>{
+      ...?queryParameters,
+      'userName': finalUserName,
+      'imageName': imageName,
+    };
     Response response = await _dio.post(
-      '/api/image/upload?userName=$finalUserName&imageName=$imageName', // 带上用户名和图片名的上传接口路径
+      '/api/image/upload',
       data: formData,
-      queryParameters: queryParameters,
+      queryParameters: uploadQueryParameters,
       options: options,
       cancelToken: cancelToken,
       onSendProgress: onSendProgress,

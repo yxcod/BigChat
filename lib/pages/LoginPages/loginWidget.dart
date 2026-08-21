@@ -52,8 +52,7 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
       return;
     }
 
-    String wsUrl =
-        '${GlobalUtil().baseWebSocketURL}/api/chat?userName=$userName';
+    final wsUrl = GlobalUtil().getChatWebSocketURL(userName);
 
     // 连接WebSocket，不添加消息监听器（由具体页面添加）
     wsManager.connect(wsUrl);
@@ -126,8 +125,6 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
               SnackBar(content: Text('用户不存在'), duration: Duration(seconds: 2)),
             );
           }
-
-          debugPrint('获取到token: $token');
         }
       } catch (error) {
         if (mounted) {

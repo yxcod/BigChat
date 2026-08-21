@@ -13,7 +13,6 @@ Future<List<MessageModel>> getChatMessagesApi({
       '/api/chat/chatMessages',
       data: {'conversationId': conversationId, 'limit': count},
     );
-    debugPrint('获取最近聊天记录POST成功：${response.data}');
     final mapData = response.data as Map<String, dynamic>;
     final messageList = mapData['messageList'] as List<dynamic>;
 

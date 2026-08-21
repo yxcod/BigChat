@@ -834,7 +834,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     // 确保WebSocket连接已建立
     if (!_wsManager.isConnected) {
       _wsManager.connect(
-        '${GlobalUtil().baseWebSocketURL}/api/chat?userName=${GlobalUtil().userName}',
+        GlobalUtil().getChatWebSocketURL(GlobalUtil().userName ?? ''),
       );
     } else {
       debugPrint('WebSocket已连接，只更新监听器');

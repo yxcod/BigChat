@@ -632,7 +632,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
     if (!_wsManager.isConnected) {
       _wsManager.connect(
-        '${GlobalUtil().baseWebSocketURL}/api/chat?userName=${GlobalUtil().userName}',
+        GlobalUtil().getChatWebSocketURL(GlobalUtil().userName ?? ''),
       );
     }
   }

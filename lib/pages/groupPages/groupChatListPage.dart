@@ -129,12 +129,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
       }
     } catch (e) {
       print('获取头像 URL 异常: $e');
-      // 尝试使用固定的测试 URL 进行调试
-      String testUrl =
-          'http://45.197.144.95:5555/api/image/download?key=test&userName=$groupId&imageName=$avatarName';
-      'http://45.197.144.95:5555/api/image/download?key=test&userName=$groupId&imageName=$avatarName';
-      print('使用测试头像 URL: $testUrl');
-      return testUrl;
+      return '';
     }
   }
 

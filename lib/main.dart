@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import './routes/routeIndex.dart';
 import './utils/storageUtil.dart';
 import './utils/GlobalNavigatorKey.dart';
+import './core/config/app_config.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  AppConfig.validate();
   await StorageUtil.init();
 
   runApp(const MyApp());
