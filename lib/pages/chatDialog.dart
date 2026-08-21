@@ -791,10 +791,6 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
               }
             },
           ),
-          IconButton(
-            icon: Icon(Icons.more_vert, color: Colors.black),
-            onPressed: () {},
-          ),
         ],
       ),
       body: GestureDetector(
