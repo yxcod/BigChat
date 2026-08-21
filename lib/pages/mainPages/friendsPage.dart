@@ -5,6 +5,7 @@ import '../../api/getInfoAPI.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../model/friendRequestModel.dart';
 import '../../utils/friend_search_util.dart';
+import '../../shared/widgets/app_search_field.dart';
 
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
@@ -284,37 +285,12 @@ class _FriendsPage extends State<Friendspage>
         backgroundColor: Colors.white,
         elevation: 1,
         toolbarHeight: 60,
-        title: Container(
+        title: AppSearchField(
+          controller: _searchController,
+          query: _searchQuery,
+          hintText: '搜索好友昵称或备注',
           height: 36,
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (value) => setState(() => _searchQuery = value),
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: '搜索好友昵称或备注',
-              prefixIcon: Icon(Icons.search, color: Colors.grey),
-              suffixIcon: _searchQuery.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: '清除',
-                      icon: Icon(
-                        Icons.cancel,
-                        color: Colors.grey[400],
-                        size: 20,
-                      ),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    ),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 3),
-            ),
-          ),
+          onChanged: (value) => setState(() => _searchQuery = value),
         ),
         actions: [
           PopupMenuButton<String>(

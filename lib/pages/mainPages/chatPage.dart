@@ -13,6 +13,7 @@ import '../../model/groupInfoModel.dart';
 import '../../model/groupMemberModel.dart';
 import '../../utils/chat_search_util.dart';
 import '../../utils/WebSocketManager.dart';
+import '../../shared/widgets/app_search_field.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
@@ -732,37 +733,11 @@ class _ChatpageState extends State<Chatpage> {
         backgroundColor: Colors.white,
         elevation: 1,
         toolbarHeight: 70,
-        title: Container(
-          height: 40,
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (value) => setState(() => _searchQuery = value),
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: '搜索聊天记录',
-              prefixIcon: Icon(Icons.search, color: Colors.grey),
-              suffixIcon: _searchQuery.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: '清除',
-                      icon: Icon(
-                        Icons.cancel,
-                        color: Colors.grey[400],
-                        size: 20,
-                      ),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    ),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-            ),
-          ),
+        title: AppSearchField(
+          controller: _searchController,
+          query: _searchQuery,
+          hintText: '搜索聊天记录',
+          onChanged: (value) => setState(() => _searchQuery = value),
         ),
       ),
       body: _searchQuery.trim().isNotEmpty

@@ -3,6 +3,7 @@ import './routes/routeIndex.dart';
 import './utils/storageUtil.dart';
 import './utils/GlobalNavigatorKey.dart';
 import './core/config/app_config.dart';
+import './app/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,10 +63,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: "全信",
-      theme: ThemeData(
-        scaffoldBackgroundColor: Colors.white,
-        primarySwatch: Colors.green,
-      ),
+      theme: AppTheme.light,
       navigatorKey: GlobalNavigatorKey.navigatorKey,
       initialRoute: '/login',
       routes: getRoutes(),
