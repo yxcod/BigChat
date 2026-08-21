@@ -16,6 +16,7 @@ import '../pages/friendManage/addFriendRequestPage.dart';
 import '../pages/profileEditPage.dart';
 import '../pages/LoginPages/registerPage.dart';
 import '../model/friendRequestModel.dart';
+import '../features/moments/presentation/my_moments_page.dart';
 
 int _parseIntRouteArgument(dynamic value) {
   if (value is int) {
@@ -56,6 +57,8 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       return MaterialPageRoute(
         builder: (context) => ProfileEditPage(profileInfo: profileInfo),
       );
+    case '/myMoments':
+      return MaterialPageRoute(builder: (context) => const MyMomentsPage());
     case '/groupChatDialog':
       final groupData = settings.arguments as Map<String, dynamic>;
       return MaterialPageRoute(
