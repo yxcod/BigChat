@@ -144,7 +144,6 @@ class _ProfilePageState extends State<ProfilePage>
                       ],
                     ),
                     Spacer(),
-                    Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
                   ],
                 ),
               ],
