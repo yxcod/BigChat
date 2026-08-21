@@ -41,13 +41,13 @@ class ChatLocalCache {
   }
 
   Future<List<Message>> load(String ownerId, String conversationId) async {
-    final key = cacheKey(ownerId, conversationId);
-    final json = _readString != null
-        ? await _readString(key)
-        : await _readCacheFile(key);
-    if (json == null || json.isEmpty) return const [];
-
     try {
+      final key = cacheKey(ownerId, conversationId);
+      final json = _readString != null
+          ? await _readString(key)
+          : await _readCacheFile(key);
+      if (json == null || json.isEmpty) return const [];
+
       final records = jsonDecode(json);
       if (records is! List) return const [];
       return records

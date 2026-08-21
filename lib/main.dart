@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import './routes/routeIndex.dart';
 import './utils/storageUtil.dart';
@@ -45,7 +47,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       case AppLifecycleState.paused:
         // 应用进入后台
         debugPrint('应用进入后台');
-        GlobalUtil().flushChatRecordsToLocal();
+        unawaited(GlobalUtil().flushChatRecordsToLocal());
         break;
       case AppLifecycleState.inactive:
         // 应用变为非活动状态

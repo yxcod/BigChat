@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_base/features/chat/data/chat_local_cache.dart';
 import 'package:flutter_base/model/messageModel.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,6 +36,15 @@ void main() {
   test('returns an empty list for corrupt cached JSON', () async {
     final cache = ChatLocalCache(
       readString: (_) async => '{invalid',
+      writeString: (_, _) async {},
+    );
+
+    expect(await cache.load('me', 'alice'), isEmpty);
+  });
+
+  test('returns an empty list when the cache file cannot be read', () async {
+    final cache = ChatLocalCache(
+      readString: (_) async => throw const FileSystemException('unreadable'),
       writeString: (_, _) async {},
     );
 
