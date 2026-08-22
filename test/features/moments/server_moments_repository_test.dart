@@ -72,6 +72,65 @@ void main() {
     expect(requestData['clientRequestId'], startsWith('me-'));
   });
 
+  test('loads moments visible to the current user from a profile', () async {
+    late Map<String, dynamic> requestData;
+    final api = _FakeMomentsApi((path, data) async {
+      expect(path, '/api/moment/userList');
+      requestData = data;
+      return {
+        'code': 100,
+        'data': {
+          'items': [_momentJson(id: 31, content: '好友公开动态')],
+        },
+      };
+    });
+    final repository = ServerMomentsRepository(
+      apiClient: api,
+      cache: InMemoryMomentsStorage(),
+    );
+
+    final moments = await repository.fetchUserMoments('me');
+
+    expect(requestData['targetUserName'], 'me');
+    expect(requestData['limit'], 50);
+    expect(moments.single.content, '好友公开动态');
+  });
+
+  test('loads every visible profile page using the moment cursor', () async {
+    var callCount = 0;
+    final api = _FakeMomentsApi((path, data) async {
+      callCount += 1;
+      expect(path, '/api/moment/userList');
+      if (callCount == 1) {
+        expect(data.containsKey('beforeMomentId'), isFalse);
+        return {
+          'code': 100,
+          'data': {
+            'items': [_momentJson(id: 2, content: '第二条')],
+            'hasMore': true,
+          },
+        };
+      }
+      expect(data['beforeMomentId'], '2');
+      return {
+        'code': 100,
+        'data': {
+          'items': [_momentJson(id: 1, content: '第一条')],
+          'hasMore': false,
+        },
+      };
+    });
+    final repository = ServerMomentsRepository(
+      apiClient: api,
+      cache: InMemoryMomentsStorage(),
+    );
+
+    final moments = await repository.fetchUserMoments('me');
+
+    expect(callCount, 2);
+    expect(moments.map((moment) => moment.id), ['2', '1']);
+  });
+
   test('uses cached own moments when loading from server fails', () async {
     final cache = InMemoryMomentsStorage();
     await cache.save([Moment.fromJson(_momentJson(id: 8, content: '离线动态'))]);

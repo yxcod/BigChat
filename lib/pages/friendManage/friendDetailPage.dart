@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../api/getFriendRequestsAPI.dart';
+import '../../features/moments/data/moments_repository.dart';
+import '../../features/moments/data/server_moments_repository.dart';
+import '../../features/moments/domain/moment.dart';
+import '../../features/moments/presentation/my_moments_page.dart';
 import '../../utils/gloabl.dart';
 import '../../utils/WebSocketManager.dart';
 import '../videoCallPage.dart';
 
 class FriendDetailPage extends StatefulWidget {
   final Map<String, dynamic> friendData;
+  final MomentsRepository? momentsRepository;
 
-  const FriendDetailPage({Key? key, required this.friendData})
-    : super(key: key);
+  const FriendDetailPage({
+    Key? key,
+    required this.friendData,
+    this.momentsRepository,
+  }) : super(key: key);
 
   @override
   _FriendDetailPageState createState() => _FriendDetailPageState();
@@ -18,19 +26,54 @@ class FriendDetailPage extends StatefulWidget {
 class _FriendDetailPageState extends State<FriendDetailPage> {
   final GlobalKey _popupButtonKey = GlobalKey();
   final GlobalUtil _globalUtil = GlobalUtil();
+  late final MomentsRepository _momentsRepository;
+  Moment? _latestVisibleMoment;
+  bool _isLoadingMoments = true;
+  bool _momentLoadFailed = false;
 
-  // 头像 URL 缓存，用于避免重复加载
-  Map<String, String> _avatarCache = {};
+  String get _targetUserName =>
+      widget.friendData['userName']?.toString().trim() ?? '';
 
-  // 模拟朋友圈数据
-  final List<String> _momentImages = [
-    'https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=300&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=300&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=300&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=300&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&h=300&fit=crop',
-  ];
+  String get _displayName {
+    final remark = widget.friendData['remark']?.toString().trim() ?? '';
+    final nickname = widget.friendData['nickname']?.toString().trim() ?? '';
+    if (_isFriend && remark.isNotEmpty) return remark;
+    return nickname.isEmpty ? _targetUserName : nickname;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _momentsRepository =
+        widget.momentsRepository ?? ServerMomentsRepository.instance;
+    _loadMomentPreview();
+  }
+
+  Future<void> _loadMomentPreview() async {
+    if (_targetUserName.isEmpty) {
+      _isLoadingMoments = false;
+      return;
+    }
+    try {
+      final moments = await _momentsRepository.fetchUserMoments(
+        _targetUserName,
+        maxItems: 1,
+      );
+      if (!mounted) return;
+      setState(() {
+        _latestVisibleMoment = moments.isEmpty ? null : moments.first;
+        _isLoadingMoments = false;
+        _momentLoadFailed = false;
+      });
+    } catch (error) {
+      debugPrint('加载好友动态预览失败: $error');
+      if (!mounted) return;
+      setState(() {
+        _isLoadingMoments = false;
+        _momentLoadFailed = true;
+      });
+    }
+  }
 
   bool get _isFriend {
     final explicitValue = widget.friendData['isFriend'];
@@ -91,8 +134,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
 
             SizedBox(height: 32),
 
-            // 非好友只能看到基础资料，不能查看动态详情。
-            _isFriend ? _buildMomentsSection() : _buildPrivateMomentsSection(),
+            _buildMomentsSection(),
 
             SizedBox(height: 40),
 
@@ -175,89 +217,104 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
 
   // 构建朋友圈区域
   Widget _buildMomentsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    final previewImages =
+        _latestVisibleMoment?.mediaPaths.take(6).toList() ?? const <String>[];
+    return InkWell(
+      key: const Key('friend_moments_section'),
+      borderRadius: BorderRadius.circular(12),
+      onTap: _viewAllMoments,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.camera_alt, color: Colors.grey[600], size: 20),
-            SizedBox(width: 8),
-            Text(
-              '好友动态',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-
-        SizedBox(height: 16),
-
-        // 朋友圈图片网格
-        GridView.builder(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: _momentImages.length > 6 ? 6 : _momentImages.length,
-          itemBuilder: (context, index) {
-            return GestureDetector(
-              onTap: () => _viewMomentDetail(index),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[200]!),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image(
-                    image: AppImageCache.provider(_momentImages[index]),
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey[200],
-                        child: Icon(Icons.image, color: Colors.grey[400]),
-                      );
-                    },
+            Row(
+              children: [
+                Icon(Icons.photo_library_outlined, color: Colors.grey[600]),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    '好友动态',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
-              ),
-            );
-          },
-        ),
-
-        if (_momentImages.length > 6)
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: TextButton(
-              onPressed: () => _viewAllMoments(),
-              child: Text('查看更多朋友圈', style: TextStyle(color: Colors.blue)),
+                Text(
+                  '进入空间',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                ),
+                const SizedBox(width: 2),
+                Icon(Icons.chevron_right, color: Colors.grey[400]),
+              ],
             ),
-          ),
-      ],
+            const SizedBox(height: 14),
+            if (_isLoadingMoments)
+              const SizedBox(
+                height: 72,
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            else if (_momentLoadFailed)
+              _buildMomentStatus('动态加载失败，点击进入空间重试')
+            else if (_latestVisibleMoment == null)
+              _buildMomentStatus('暂无对你可见的动态')
+            else ...[
+              if (previewImages.isNotEmpty)
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: previewImages.length,
+                  itemBuilder: (context, index) => ClipRRect(
+                    key: ValueKey('friend_moment_preview_image_$index'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image(
+                      image: AppImageCache.provider(previewImages[index]),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => ColoredBox(
+                        color: Colors.grey[200]!,
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: Colors.grey[400],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (_latestVisibleMoment!.content.isNotEmpty) ...[
+                if (previewImages.isNotEmpty) const SizedBox(height: 10),
+                Text(
+                  _latestVisibleMoment!.content,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey[700], height: 1.4),
+                ),
+              ],
+              if (previewImages.isEmpty &&
+                  _latestVisibleMoment!.content.isEmpty)
+                _buildMomentStatus('最近一条动态暂无图片'),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildPrivateMomentsSection() {
+  Widget _buildMomentStatus(String message) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
       decoration: BoxDecoration(
         color: Colors.grey[50],
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[200]!),
       ),
-      child: Column(
-        children: [
-          Icon(Icons.lock_outline, color: Colors.grey[500], size: 28),
-          SizedBox(height: 8),
-          Text(
-            '添加好友后可查看动态',
-            style: TextStyle(color: Colors.grey[600], fontSize: 14),
-          ),
-        ],
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.grey[600], fontSize: 14),
       ),
     );
   }
@@ -473,14 +530,24 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
     );
   }
 
-  // 查看朋友圈详情
-  void _viewMomentDetail(int index) {
-    _showMessage('查看朋友圈详情 $index');
-  }
-
   // 查看全部朋友圈
   void _viewAllMoments() {
-    _showMessage('查看全部朋友圈');
+    if (_targetUserName.isEmpty) {
+      _showMessage('用户信息不完整');
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MyMomentsPage(
+          repository: _momentsRepository,
+          userId: _targetUserName,
+          displayName: _displayName,
+          avatarUrl: _resolvedAvatarUrl(),
+          allowPublishing: false,
+          pageTitle: '$_displayName的空间',
+        ),
+      ),
+    );
   }
 
   // 发送信息
@@ -533,19 +600,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
 
   // 构建头像，实现缓存机制
   Widget _buildAvatar() {
-    String userName = widget.friendData['userName'] ?? "";
-    String avatarUrl = widget.friendData['avatar'] ?? '';
-    if (avatarUrl.isNotEmpty &&
-        !avatarUrl.startsWith('http://') &&
-        !avatarUrl.startsWith('https://')) {
-      try {
-        avatarUrl = _globalUtil.getImageURL(userName, avatarUrl);
-      } catch (error) {
-        debugPrint('生成资料页头像地址失败: $error');
-        avatarUrl = '';
-      }
-    }
-
+    final avatarUrl = _resolvedAvatarUrl();
     if (avatarUrl.isEmpty) {
       final nickname = widget.friendData['nickname']?.toString() ?? '';
       final initial = nickname.trim().isEmpty
@@ -554,31 +609,25 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
       return CircleAvatar(radius: 30, child: Text(initial));
     }
 
-    // 检查缓存中是否已有该用户的头像，并且 URL 是否相同
-    if (_avatarCache.containsKey(userName)) {
-      String cachedUrl = _avatarCache[userName]!;
-      if (cachedUrl == avatarUrl) {
-        // URL 相同，使用缓存的头像 URL
-        return CircleAvatar(
-          radius: 30,
-          backgroundImage: AppImageCache.provider(cachedUrl),
-        );
-      } else {
-        // URL 不同，使用新的头像 URL 并更新缓存
-        _avatarCache[userName] = avatarUrl;
-        return CircleAvatar(
-          radius: 30,
-          backgroundImage: AppImageCache.provider(avatarUrl),
-        );
+    return CircleAvatar(
+      radius: 30,
+      backgroundImage: AppImageCache.provider(avatarUrl),
+    );
+  }
+
+  String _resolvedAvatarUrl() {
+    String avatarUrl = widget.friendData['avatar']?.toString() ?? '';
+    if (avatarUrl.isNotEmpty &&
+        !avatarUrl.startsWith('http://') &&
+        !avatarUrl.startsWith('https://')) {
+      try {
+        avatarUrl = _globalUtil.getImageURL(_targetUserName, avatarUrl);
+      } catch (error) {
+        debugPrint('生成资料页头像地址失败: $error');
+        avatarUrl = '';
       }
-    } else {
-      // 缓存中没有，使用新的头像 URL 并加入缓存
-      _avatarCache[userName] = avatarUrl;
-      return CircleAvatar(
-        radius: 30,
-        backgroundImage: AppImageCache.provider(avatarUrl),
-      );
     }
+    return avatarUrl;
   }
 
   // 显示提示信息

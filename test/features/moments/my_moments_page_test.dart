@@ -95,6 +95,31 @@ void main() {
     expect(find.byKey(const Key('moments_empty_state')), findsOneWidget);
     expect(find.text('发布第一条动态'), findsOneWidget);
   });
+
+  testWidgets('friend space displays moments without publishing controls', (
+    tester,
+  ) async {
+    final repository = LocalMomentsRepository();
+    await repository.publish(_draft('friend', '朋友的公开记录'));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MyMomentsPage(
+          repository: repository,
+          userId: 'friend',
+          displayName: '小李',
+          avatarUrl: '',
+          allowPublishing: false,
+          pageTitle: '小李的空间',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('小李的空间'), findsOneWidget);
+    expect(find.text('朋友的公开记录'), findsOneWidget);
+    expect(find.byKey(const Key('moment_publish_fab')), findsNothing);
+  });
 }
 
 MomentDraft _draft(String authorId, String content) {

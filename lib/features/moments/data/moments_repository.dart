@@ -4,6 +4,8 @@ import 'moments_local_storage.dart';
 abstract class MomentsRepository {
   Future<List<Moment>> fetchOwnMoments(String userId);
 
+  Future<List<Moment>> fetchUserMoments(String userId, {int? maxItems});
+
   Future<Moment> publish(MomentDraft draft);
 
   Future<Moment> toggleLike({required String momentId, required String userId});
@@ -47,6 +49,13 @@ class LocalMomentsRepository implements MomentsRepository {
         _moments.where((moment) => moment.authorId == userId).toList()
           ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
     return List<Moment>.unmodifiable(result);
+  }
+
+  @override
+  Future<List<Moment>> fetchUserMoments(String userId, {int? maxItems}) async {
+    final moments = await fetchOwnMoments(userId);
+    if (maxItems == null || moments.length <= maxItems) return moments;
+    return List<Moment>.unmodifiable(moments.take(maxItems));
   }
 
   @override

@@ -59,16 +59,7 @@ class ServerMomentsRepository implements MomentsRepository {
       final envelope = await _apiClient.post('/api/moment/ownList', {
         'limit': 50,
       });
-      final data = _requireMapData(envelope);
-      final rawItems = data['items'];
-      if (rawItems is! List) {
-        throw const MomentsApiException('动态列表格式错误');
-      }
-      final moments = rawItems
-          .whereType<Map>()
-          .map((item) => _parseMoment(Map<String, dynamic>.from(item)))
-          .where((moment) => moment.authorId == userId)
-          .toList(growable: false);
+      final moments = _parseMomentList(envelope, authorId: userId);
       await _cache.save(moments);
       return moments;
     } catch (_) {
@@ -78,6 +69,30 @@ class ServerMomentsRepository implements MomentsRepository {
       if (cached.isNotEmpty) return cached;
       rethrow;
     }
+  }
+
+  @override
+  Future<List<Moment>> fetchUserMoments(String userId, {int? maxItems}) async {
+    final moments = <Moment>[];
+    String? beforeMomentId;
+    while (maxItems == null || moments.length < maxItems) {
+      final remaining = maxItems == null ? 50 : maxItems - moments.length;
+      final request = <String, dynamic>{
+        'targetUserName': userId,
+        'limit': remaining.clamp(1, 50),
+        if (beforeMomentId != null) 'beforeMomentId': beforeMomentId,
+      };
+      final envelope = await _apiClient.post('/api/moment/userList', request);
+      final data = _requireMapData(envelope);
+      final page = _parseMomentItems(data, authorId: userId);
+      moments.addAll(page);
+      final hasMore = data['hasMore'] == true;
+      if (!hasMore || page.isEmpty) break;
+      final nextCursor = page.last.id;
+      if (nextCursor == beforeMomentId) break;
+      beforeMomentId = nextCursor;
+    }
+    return List<Moment>.unmodifiable(moments);
   }
 
   @override
@@ -141,6 +156,29 @@ class ServerMomentsRepository implements MomentsRepository {
       throw const MomentsApiException('动态数据格式错误');
     }
     return Map<String, dynamic>.from(data);
+  }
+
+  List<Moment> _parseMomentList(
+    Map<String, dynamic> envelope, {
+    required String authorId,
+  }) {
+    final data = _requireMapData(envelope);
+    return _parseMomentItems(data, authorId: authorId);
+  }
+
+  List<Moment> _parseMomentItems(
+    Map<String, dynamic> data, {
+    required String authorId,
+  }) {
+    final rawItems = data['items'];
+    if (rawItems is! List) {
+      throw const MomentsApiException('动态列表格式错误');
+    }
+    return rawItems
+        .whereType<Map>()
+        .map((item) => _parseMoment(Map<String, dynamic>.from(item)))
+        .where((moment) => moment.authorId == authorId)
+        .toList(growable: false);
   }
 
   Moment _parseMoment(Map<String, dynamic> json) {

@@ -19,12 +19,16 @@ class MyMomentsPage extends StatefulWidget {
     this.userId,
     this.displayName,
     this.avatarUrl,
+    this.allowPublishing = true,
+    this.pageTitle,
   });
 
   final MomentsRepository? repository;
   final String? userId;
   final String? displayName;
   final String? avatarUrl;
+  final bool allowPublishing;
+  final String? pageTitle;
 
   @override
   State<MyMomentsPage> createState() => _MyMomentsPageState();
@@ -64,7 +68,9 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
 
   Future<void> _loadMoments() async {
     try {
-      final moments = await _repository.fetchOwnMoments(_userId);
+      final moments = widget.allowPublishing
+          ? await _repository.fetchOwnMoments(_userId)
+          : await _repository.fetchUserMoments(_userId);
       if (!mounted) return;
       setState(() {
         _moments = moments;
@@ -186,15 +192,21 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
-      appBar: AppBar(title: const Text('我的动态')),
-      floatingActionButton: FloatingActionButton.extended(
-        key: const Key('moment_publish_fab'),
-        onPressed: _openComposer,
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('发动态'),
+      appBar: AppBar(
+        title: Text(
+          widget.pageTitle ?? (widget.allowPublishing ? '我的动态' : '动态'),
+        ),
       ),
+      floatingActionButton: widget.allowPublishing
+          ? FloatingActionButton.extended(
+              key: const Key('moment_publish_fab'),
+              onPressed: _openComposer,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('发动态'),
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: _loadMoments,
         child: CustomScrollView(
@@ -216,7 +228,10 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
             else if (_moments.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: _EmptyMoments(onCreate: _openComposer),
+                child: _EmptyMoments(
+                  allowCreate: widget.allowPublishing,
+                  onCreate: _openComposer,
+                ),
               )
             else
               SliverPadding(
@@ -306,8 +321,9 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 class _EmptyMoments extends StatelessWidget {
-  const _EmptyMoments({required this.onCreate});
+  const _EmptyMoments({required this.allowCreate, required this.onCreate});
 
+  final bool allowCreate;
   final VoidCallback onCreate;
 
   @override
@@ -333,21 +349,23 @@ class _EmptyMoments extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-            const Text(
-              '还没有发布过动态',
+            Text(
+              allowCreate ? '还没有发布过动态' : '暂无可见动态',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 7),
-            const Text(
-              '记录生活片段，在这里回看自己的每一刻',
+            Text(
+              allowCreate ? '记录生活片段，在这里回看自己的每一刻' : '对方还没有发布你可以查看的动态',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
-            const SizedBox(height: 20),
-            OutlinedButton.icon(
-              onPressed: onCreate,
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('发布第一条动态'),
-            ),
+            if (allowCreate) ...[
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: onCreate,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('发布第一条动态'),
+              ),
+            ],
           ],
         ),
       ),
