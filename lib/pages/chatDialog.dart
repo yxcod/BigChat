@@ -13,6 +13,7 @@ import '../utils/WebSocketManager.dart';
 import '../model/messageModel.dart';
 import '../utils/http.dart';
 import '../utils/user_profile_navigator.dart';
+import '../utils/presence_event.dart';
 import '../core/cache/app_image_cache.dart';
 import 'videoCallPage.dart';
 
@@ -371,6 +372,18 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       debugPrint('消息类型: $messageType');
 
       switch (messageType) {
+        case 'presence':
+          final event = PresenceEvent.tryParse(message);
+          if (event != null && event.userName == id) {
+            final globalFriend = GlobalUtil().userInfoModel.friendListData
+                ?.where((friend) => friend.userName == event.userName)
+                .firstOrNull;
+            if (globalFriend != null) globalFriend.isOnline = event.isOnline;
+            if (mounted) {
+              setState(() => friendInfo?.isOnline = event.isOnline);
+            }
+          }
+          break;
         case 'message':
           // 普通消息
           debugPrint('处理普通消息');

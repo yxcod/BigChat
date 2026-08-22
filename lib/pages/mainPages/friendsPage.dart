@@ -9,6 +9,8 @@ import '../../shared/widgets/app_search_field.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
+import '../../utils/WebSocketManager.dart';
+import '../../utils/presence_event.dart';
 
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
@@ -22,6 +24,9 @@ class _FriendsPage extends State<Friendspage>
   List<Friend> friends = [];
   Map<String, String> previousAvatars = {};
   Timer? _pollingTimer;
+  WebSocketMessageSubscription? _presenceSubscription;
+  WebSocketStatusSubscription? _webSocketStatusSubscription;
+  final Map<String, bool> _presenceOverrides = {};
   final GlobalUtil _globalUtil = GlobalUtil();
   int _friendRequestCount = 0;
   List<FriendRequestModel> _pendingRequests = [];
@@ -35,14 +40,45 @@ class _FriendsPage extends State<Friendspage>
   @override
   void initState() {
     super.initState();
+    final webSocketManager = WebSocketManager();
+    _presenceSubscription = webSocketManager.addMessageListener(
+      _handlePresenceMessage,
+    );
+    _webSocketStatusSubscription = webSocketManager.addStatusListener((status) {
+      if (status == WebSocketStatus.connected && mounted) {
+        _presenceOverrides.clear();
+        _refreshFriends();
+      }
+    });
     _startPolling();
   }
 
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _presenceSubscription?.cancel();
+    _webSocketStatusSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _handlePresenceMessage(dynamic message) {
+    final event = PresenceEvent.tryParse(message);
+    if (event == null || !mounted) return;
+
+    _presenceOverrides[event.userName] = event.isOnline;
+    final globalFriend = _globalUtil.userInfoModel.friendListData
+        ?.where((friend) => friend.userName == event.userName)
+        .firstOrNull;
+    if (globalFriend != null) globalFriend.isOnline = event.isOnline;
+
+    final index = friends.indexWhere(
+      (friend) => friend.userName == event.userName,
+    );
+    if (index == -1 || friends[index].isOnline == event.isOnline) return;
+    setState(() {
+      friends[index] = friends[index].copyWith(isOnline: event.isOnline);
+    });
   }
 
   void _startPolling() {
@@ -108,7 +144,6 @@ class _FriendsPage extends State<Friendspage>
       final userInfo = await getUserInfoApi(userName);
       if (mounted) {
         if (userInfo.friendListData != null) {
-          _globalUtil.userInfoModel = userInfo;
           final newFriends = userInfo.friendListData!.map((f) {
             final avatarName = f.avatar ?? '';
             final userName = f.userName ?? '';
@@ -119,6 +154,9 @@ class _FriendsPage extends State<Friendspage>
             if (avatarURL != previousAvatar && avatarURL.isNotEmpty) {
               previousAvatars[userName] = avatarURL;
             }
+            final isOnline =
+                _presenceOverrides[userName] ?? f.isOnline ?? false;
+            f.isOnline = isOnline;
             return Friend(
               userName: userName,
               name: f.remarks?.isNotEmpty == true
@@ -129,9 +167,10 @@ class _FriendsPage extends State<Friendspage>
               previousAvatar: previousAvatars[userName] ?? '',
               signature: f.signature ?? '',
               time: '',
-              isOnline: f.isOnline ?? false,
+              isOnline: isOnline,
             );
           }).toList();
+          _globalUtil.userInfoModel = userInfo;
           setState(() {
             friends = newFriends;
           });
@@ -486,4 +525,17 @@ class Friend {
     required this.time,
     required this.isOnline,
   });
+
+  Friend copyWith({bool? isOnline}) {
+    return Friend(
+      userName: userName,
+      name: name,
+      nickName: nickName,
+      avatar: avatar,
+      previousAvatar: previousAvatar,
+      signature: signature,
+      time: time,
+      isOnline: isOnline ?? this.isOnline,
+    );
+  }
 }
