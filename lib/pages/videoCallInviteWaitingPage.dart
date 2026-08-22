@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_base/utils/WebSocketManager.dart';
 import 'package:flutter_base/utils/gloabl.dart';
+import 'package:flutter_base/core/cache/app_image_cache.dart';
 import 'videoCallPage.dart';
 
 class VideoCallInviteWaitingPage extends StatefulWidget {
@@ -78,8 +79,13 @@ class _VideoCallInviteWaitingPageState
                 border: Border.all(color: Colors.white, width: 3),
               ),
               child: ClipOval(
-                child: Image.network(
-                  GlobalUtil().getImageURL(widget.inviterUsername, "head.jpg"),
+                child: Image(
+                  image: AppImageCache.provider(
+                    GlobalUtil().getImageURL(
+                      widget.inviterUsername,
+                      "head.jpg",
+                    ),
+                  ),
                   width: 120,
                   height: 120,
                   fit: BoxFit.cover,

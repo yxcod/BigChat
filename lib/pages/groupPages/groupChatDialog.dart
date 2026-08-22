@@ -1023,7 +1023,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           decoration: BoxDecoration(
             image: DecorationImage(
               //聊天背景图
-              image: NetworkImage(
+              image: AppImageCache.provider(
                 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
               ),
               fit: BoxFit.cover,
@@ -1748,6 +1748,7 @@ class GroupMessageBubble extends StatelessWidget {
           ],
         ),
         child: CachedNetworkImage(
+          cacheManager: AppImageCache.manager,
           imageUrl: imageUrl,
           cacheKey: AppImageCache.cacheKey(imageUrl),
           fit: BoxFit.cover,

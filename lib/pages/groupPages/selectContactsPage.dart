@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../model/friendInfoModel.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../utils/gloabl.dart';
+import '../../core/cache/app_image_cache.dart';
 
 class SelectContactsPage extends StatefulWidget {
   final String groupId;
@@ -375,7 +376,7 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                                             decoration: BoxDecoration(
                                               shape: BoxShape.circle,
                                               image: DecorationImage(
-                                                image: NetworkImage(
+                                                image: AppImageCache.provider(
                                                   friend.avatar ?? '',
                                                 ),
                                                 fit: BoxFit.cover,

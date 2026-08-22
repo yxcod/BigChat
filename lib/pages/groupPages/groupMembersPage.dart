@@ -158,6 +158,7 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
                       radius: 20,
                       child: ClipOval(
                         child: CachedNetworkImage(
+                          cacheManager: AppImageCache.manager,
                           imageUrl: _getAvatarUrl(member),
                           cacheKey: AppImageCache.cacheKey(
                             _getAvatarUrl(member),

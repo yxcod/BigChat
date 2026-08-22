@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'addFriendRequestPage.dart';
 import '../../api/getInfoAPI.dart';
 import '../../utils/Gloabl.dart';
+import '../../core/cache/app_image_cache.dart';
 
 class SearchFriendPage extends StatefulWidget {
   @override
@@ -174,7 +175,7 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
             backgroundImage:
                 _searchResult!['avatar'] != null &&
                     _searchResult!['avatar'].isNotEmpty
-                ? NetworkImage(_searchResult!['avatar'])
+                ? AppImageCache.provider(_searchResult!['avatar'])
                 : null,
             backgroundColor: Colors.grey[200],
             child:

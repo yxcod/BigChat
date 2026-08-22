@@ -772,6 +772,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                 Container(
                   margin: EdgeInsets.only(right: 12.0),
                   child: CachedNetworkImage(
+                    cacheManager: AppImageCache.manager,
                     width: 60.0,
                     height: 60.0,
                     imageUrl: _groupAvatar,
@@ -886,6 +887,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                           child: Column(
                             children: [
                               CachedNetworkImage(
+                                cacheManager: AppImageCache.manager,
                                 width: 40.0,
                                 height: 40.0,
                                 imageUrl: _avatarCache.containsKey(member['id'])
@@ -1158,7 +1160,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                                 shape: BoxShape.circle,
                                 image: DecorationImage(
                                   image: _groupAvatar.startsWith('http')
-                                      ? NetworkImage(_groupAvatar)
+                                      ? AppImageCache.provider(_groupAvatar)
                                       : FileImage(File(_groupAvatar))
                                             as ImageProvider,
                                   fit: BoxFit.cover,

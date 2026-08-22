@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../model/groupMemberModel.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../utils/gloabl.dart';
+import '../../core/cache/app_image_cache.dart';
 
 class SelectGroupMembersToRemovePage extends StatefulWidget {
   final String groupId;
@@ -393,7 +394,7 @@ class _SelectGroupMembersToRemovePageState
                                             decoration: BoxDecoration(
                                               shape: BoxShape.circle,
                                               image: DecorationImage(
-                                                image: NetworkImage(
+                                                image: AppImageCache.provider(
                                                   GlobalUtil().getImageURL(
                                                     member.userId,
                                                     'head.jpg',

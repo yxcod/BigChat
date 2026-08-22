@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../model/friendRequestModel.dart';
 import '../../utils/Gloabl.dart';
 import '../../api/getFriendRequestsAPI.dart';
+import '../../core/cache/app_image_cache.dart';
 
 class FriendAddManagerPage extends StatefulWidget {
   final List<FriendRequestModel>? initialRequests;
@@ -258,7 +259,9 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
           // 头像
           CircleAvatar(
             radius: 30,
-            backgroundImage: isNetworkImage ? NetworkImage(avatarUrl) : null,
+            backgroundImage: isNetworkImage
+                ? AppImageCache.provider(avatarUrl)
+                : null,
             child: isNetworkImage
                 ? null
                 : Text(
@@ -352,7 +355,9 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     return ListTile(
       leading: CircleAvatar(
         radius: 25,
-        backgroundImage: isNetworkImage ? NetworkImage(avatarUrl) : null,
+        backgroundImage: isNetworkImage
+            ? AppImageCache.provider(avatarUrl)
+            : null,
         child: isNetworkImage
             ? null
             : Text(avatarUrl, style: TextStyle(fontSize: 20)),

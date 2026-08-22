@@ -89,6 +89,7 @@ class _ProfilePageState extends State<ProfilePage>
                         backgroundColor: Colors.grey[200],
                         child: ClipOval(
                           child: CachedNetworkImage(
+                            cacheManager: AppImageCache.manager,
                             imageUrl: _currentAvatarUrl.isNotEmpty
                                 ? _currentAvatarUrl
                                 : GlobalUtil().getImageURL(

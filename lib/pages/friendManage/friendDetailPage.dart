@@ -211,8 +211,8 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    _momentImages[index],
+                  child: Image(
+                    image: AppImageCache.provider(_momentImages[index]),
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Container(

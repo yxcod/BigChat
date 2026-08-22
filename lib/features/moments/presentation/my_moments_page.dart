@@ -568,6 +568,7 @@ class _MomentMediaGrid extends StatelessWidget {
                   child:
                       path.startsWith('http://') || path.startsWith('https://')
                       ? CachedNetworkImage(
+                          cacheManager: AppImageCache.manager,
                           imageUrl: path,
                           cacheKey: AppImageCache.cacheKey(path),
                           fit: BoxFit.cover,

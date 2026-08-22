@@ -214,6 +214,7 @@ class _FriendsPage extends State<Friendspage>
             child: ClipOval(
               child: friend.avatar != '👤'
                   ? CachedNetworkImage(
+                      cacheManager: AppImageCache.manager,
                       imageUrl: friend.avatar,
                       cacheKey: AppImageCache.cacheKey(friend.avatar),
                       fit: BoxFit.cover,

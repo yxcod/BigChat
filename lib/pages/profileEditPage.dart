@@ -6,6 +6,7 @@ import '../model/userInfoModel.dart';
 import '../utils/WebSocketManager.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../core/cache/app_image_cache.dart';
+import '../utils/storageUtil.dart';
 
 class ProfileEditPage extends StatefulWidget {
   final Map<String, dynamic>? profileInfo;
@@ -240,10 +241,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   // 执行退出登录
-  void _performLogout() {
+  Future<void> _performLogout() async {
     // 断开WebSocket连接
     WebSocketManager().disconnect();
-    // 这里可以跳转到登录页面
+    await StorageUtil.logout();
+    if (!mounted) return;
     Navigator.pushReplacementNamed(context, '/login');
   }
 
@@ -297,6 +299,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: CachedNetworkImage(
+                            cacheManager: AppImageCache.manager,
                             imageUrl: _buildAvatarUrl(),
                             cacheKey: AppImageCache.cacheKey(_buildAvatarUrl()),
                             fit: BoxFit.cover,

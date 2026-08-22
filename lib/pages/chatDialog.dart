@@ -813,7 +813,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
           decoration: BoxDecoration(
             image: DecorationImage(
               //聊天背景图
-              image: NetworkImage(
+              image: AppImageCache.provider(
                 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
               ),
               fit: BoxFit.cover,
@@ -1516,6 +1516,7 @@ class MessageBubble extends StatelessWidget {
         height: 200.0,
         alignment: Alignment.center,
         child: CachedNetworkImage(
+          cacheManager: AppImageCache.manager,
           imageUrl: imageURL,
           cacheKey: AppImageCache.cacheKey(imageURL),
           fit: BoxFit.cover,
@@ -1619,6 +1620,7 @@ class MessageBubble extends StatelessWidget {
                               child: GestureDetector(
                                 onTap: () => Navigator.of(context).pop(),
                                 child: CachedNetworkImage(
+                                  cacheManager: AppImageCache.manager,
                                   imageUrl: message.isMe
                                       ? globalUtil.getImageURL(
                                           globalUtil.userName ?? "",

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../utils/gloabl.dart';
+import '../../core/cache/app_image_cache.dart';
 
 class AddFriendRequestPage extends StatefulWidget {
   final Map<String, dynamic> targetUser;
@@ -85,7 +86,9 @@ class _AddFriendRequestPageState extends State<AddFriendRequestPage> {
           // 用户头像
           CircleAvatar(
             radius: 25,
-            backgroundImage: avatarUrl.isEmpty ? null : NetworkImage(avatarUrl),
+            backgroundImage: avatarUrl.isEmpty
+                ? null
+                : AppImageCache.provider(avatarUrl),
             backgroundColor: Colors.grey[200],
             child: avatarUrl.isEmpty
                 ? Text(

@@ -228,6 +228,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
                               ),
                               child: ClipOval(
                                 child: CachedNetworkImage(
+                                  cacheManager: AppImageCache.manager,
                                   imageUrl: groupChat.avatar,
                                   cacheKey: AppImageCache.cacheKey(
                                     groupChat.avatar,

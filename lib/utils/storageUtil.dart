@@ -5,6 +5,7 @@ import 'package:get_storage/get_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../core/cache/app_image_cache.dart';
 
 class StorageUtil {
   static SharedPreferences? _prefs;
@@ -150,11 +151,15 @@ class StorageUtil {
 
   static Future<bool> logout() async {
     await _ensureInitialized();
+    await AppImageCache.clear();
+    await clearAllImages();
     await _prefs!.remove('user_id');
     await _prefs!.remove('user_phone');
     await _prefs!.remove('user_nickname');
     await _prefs!.remove('user_avatar');
     await _prefs!.remove('access_token');
+    await _prefs!.remove('global_token');
+    await _prefs!.remove('global_userName');
     return _prefs!.setBool('is_login', false);
   }
 
@@ -230,11 +235,16 @@ class StorageUtil {
     if (!await imageDir.exists()) {
       await imageDir.create(recursive: true);
     }
+    final previousPath = _prefs!.getString('image_path_$key');
     final fileName = '${DateTime.now().millisecondsSinceEpoch}_$key';
     final file = File('${imageDir.path}/$fileName');
     await file.writeAsBytes(imageBytes);
     final imagePath = file.path;
     await _prefs!.setString('image_path_$key', imagePath);
+    if (previousPath != null && previousPath != imagePath) {
+      final previousFile = File(previousPath);
+      if (await previousFile.exists()) await previousFile.delete();
+    }
     return imagePath;
   }
 
@@ -339,6 +349,12 @@ class StorageUtil {
       await imageDir.delete(recursive: true);
       await _createImageDirectory();
     }
-    _box.remove('image_');
+    final imageKeys = (_box.getKeys() as Iterable)
+        .whereType<String>()
+        .where((key) => key.startsWith('image_'))
+        .toList();
+    for (final key in imageKeys) {
+      await _box.remove(key);
+    }
   }
 }
