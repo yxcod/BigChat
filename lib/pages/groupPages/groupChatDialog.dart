@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -23,6 +22,7 @@ import '../../utils/user_profile_navigator.dart';
 import '../../features/chat/domain/chat_message_mapper.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
+import '../../core/media/app_media_url.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -45,6 +45,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   FocusNode _textFieldFocusNode = FocusNode();
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
+  bool _isUploadingImage = false;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
   final Set<int> _sentReadAckMessageIds = {};
   int _loadedMessageLimit = 100;
@@ -433,7 +434,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   // 发送图片消息
-  Future<void> _sendImageMessage(File imageFile) async {
+  Future<void> _sendImageMessage(XFile imageFile) async {
     try {
       final globalUtil = GlobalUtil();
 
@@ -495,19 +496,17 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       }
     } catch (e) {
       debugPrint('发送图片消息失败: $e');
+      rethrow;
     }
   }
 
   // 上传图片到服务器
-  Future<void> _uploadImage(File imageFile, String imageName) async {
+  Future<void> _uploadImage(XFile imageFile, String imageName) async {
     try {
-      final httpUtil = HttpUtil();
-
-      // 将File转换为Uint8List
-      Uint8List imageData = await imageFile.readAsBytes();
-
-      // 调用HttpUtil的uploadImage接口
-      await httpUtil.uploadImage(imageName, imageData);
+      if (await imageFile.length() > 5 * 1024 * 1024) {
+        throw Exception('图片压缩后仍超过5MB，请选择较小的图片');
+      }
+      await HttpUtil().uploadImageFile(imageName, imageFile.path);
 
       debugPrint('Image uploaded successfully');
     } catch (e) {
@@ -518,19 +517,28 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   // 选择图片
   Future<void> _pickImage() async {
+    if (_isUploadingImage) return;
     try {
       final pickedFile = await ImagePicker().pickImage(
         source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
+        imageQuality: 82,
+        maxWidth: 1600,
+        maxHeight: 1600,
       );
 
       if (pickedFile != null) {
-        File imageFile = File(pickedFile.path);
-        _sendImageMessage(imageFile);
+        if (mounted) setState(() => _isUploadingImage = true);
+        await _sendImageMessage(pickedFile);
       }
     } catch (e) {
       debugPrint('选择图片失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('图片发送失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
     }
   }
 
@@ -1120,7 +1128,18 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
               ),
             ),
             IconButton(icon: Icon(Icons.attach_file), onPressed: () {}),
-            IconButton(icon: Icon(Icons.camera_alt), onPressed: _pickImage),
+            _isUploadingImage
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox.square(
+                      dimension: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.camera_alt),
+                    onPressed: _pickImage,
+                  ),
             IconButton(
               icon: Icon(Icons.send),
               //_isComposing为true时候表示输入框内容不为空才能发送出去
@@ -1701,6 +1720,7 @@ class GroupMessageBubble extends StatelessWidget {
 
   // 构建图片气泡
   Widget _buildImageBubble(BuildContext context) {
+    final imageUrl = _resolveImageUrl();
     return GestureDetector(
       onTap: () => _showImageActions(context),
       child: Container(
@@ -1728,8 +1748,8 @@ class GroupMessageBubble extends StatelessWidget {
           ],
         ),
         child: CachedNetworkImage(
-          imageUrl: message.content,
-          cacheKey: AppImageCache.cacheKey(message.content),
+          imageUrl: imageUrl,
+          cacheKey: AppImageCache.cacheKey(imageUrl),
           fit: BoxFit.cover,
           placeholder: (context, url) => Container(
             width: 150,
@@ -1743,6 +1763,16 @@ class GroupMessageBubble extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  String _resolveImageUrl() {
+    return AppMediaUrl.resolveMessageImage(
+      content: message.content,
+      senderId: message.senderId,
+      currentUserId: globalUtil.userName ?? '',
+      isMine: message.isMe,
+      buildServerUrl: globalUtil.getImageURL,
     );
   }
 

@@ -58,15 +58,21 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
 
   Future<void> _pickGroupAvatar() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 800,
+      maxHeight: 800,
+    );
 
     if (image != null) {
       // 创建取消令牌
       _uploadCancelToken = CancelToken();
 
       try {
-        // 读取图片文件为字节数组
-        final bytes = await image.readAsBytes();
+        if (await image.length() > 5 * 1024 * 1024) {
+          throw Exception('图片压缩后仍超过5MB，请选择较小的图片');
+        }
 
         // 生成带时间戳的图片名
         String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
@@ -76,9 +82,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         final httpUtil = HttpUtil();
 
         // 调用 uploadImage 函数上传图片，使用群 ID 作为 userName
-        bool success = await httpUtil.uploadImage(
+        bool success = await httpUtil.uploadImageFile(
           imageName,
-          bytes,
+          image.path,
           userName: widget.groupId, // 使用群 ID 作为 userName
           cancelToken: _uploadCancelToken,
         );

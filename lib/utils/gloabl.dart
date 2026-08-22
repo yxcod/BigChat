@@ -445,9 +445,6 @@ class GlobalUtil {
         return null;
       }
 
-      // 将图片转换为Uint8List
-      final Uint8List imageData = await image.readAsBytes();
-
       // 获取当前用户名
       final String userName = this.userName ?? '';
       if (userName.isEmpty) {
@@ -455,7 +452,15 @@ class GlobalUtil {
       }
 
       // 上传图片
-      final bool isSuccess = await HttpUtil().uploadImage(imageName, imageData);
+      final imageLength = await image.length();
+      if (imageLength > 5 * 1024 * 1024) {
+        throw Exception('图片压缩后仍超过5MB，请选择较小的图片');
+      }
+
+      final bool isSuccess = await HttpUtil().uploadImageFile(
+        imageName,
+        image.path,
+      );
 
       // 检查上传结果
       if (isSuccess) {
@@ -469,7 +474,7 @@ class GlobalUtil {
           friendListData: currentUserInfo.friendListData,
         );
 
-        return imageData; // 返回图片数据
+        return image.readAsBytes();
       } else {
         throw Exception('上传失败');
       }

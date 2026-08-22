@@ -176,6 +176,38 @@ class HttpUtil {
   }
 
   // 上传图片
+  DioMediaType _imageMediaType(String imageName) {
+    final extension = imageName.contains('.')
+        ? imageName.split('.').last.toLowerCase()
+        : 'jpg';
+    return DioMediaType('image', extension == 'jpg' ? 'jpeg' : extension);
+  }
+
+  Future<bool> uploadImageFile(
+    String imageName,
+    String filePath, {
+    String? userName,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+    ProgressCallback? onSendProgress,
+  }) async {
+    final file = await MultipartFile.fromFile(
+      filePath,
+      filename: imageName,
+      contentType: _imageMediaType(imageName),
+    );
+    return _uploadImageMultipart(
+      imageName,
+      file,
+      userName: userName,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+    );
+  }
+
   Future<bool> uploadImage(
     String imageName,
     Uint8List imageData, {
@@ -185,23 +217,33 @@ class HttpUtil {
     CancelToken? cancelToken,
     ProgressCallback? onSendProgress,
   }) async {
-    // 从文件名中提取扩展名，如果没有则使用默认扩展名
-    String extension = imageName.contains('.')
-        ? imageName.split('.').last.toLowerCase()
-        : 'png';
-
-    // 创建MultipartFile对象
-    MultipartFile file = MultipartFile.fromBytes(
+    final file = MultipartFile.fromBytes(
       imageData,
       filename: imageName,
-      contentType: DioMediaType('image', extension),
+      contentType: _imageMediaType(imageName),
     );
+    return _uploadImageMultipart(
+      imageName,
+      file,
+      userName: userName,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+    );
+  }
 
-    // 创建FormData
-    FormData formData = FormData.fromMap({'file': file});
-
-    // 获取最终的用户名
-    String finalUserName = userName ?? (_globalUtil.userName ?? '');
+  Future<bool> _uploadImageMultipart(
+    String imageName,
+    MultipartFile file, {
+    String? userName,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+    ProgressCallback? onSendProgress,
+  }) async {
+    final formData = FormData.fromMap({'file': file});
+    final finalUserName = userName ?? (_globalUtil.userName ?? '');
     if (finalUserName.isEmpty) {
       throw Exception('无法获取当前用户信息');
     }
@@ -211,7 +253,7 @@ class HttpUtil {
       'userName': finalUserName,
       'imageName': imageName,
     };
-    Response response = await _dio.post(
+    final response = await _dio.post(
       '/api/image/upload',
       data: formData,
       queryParameters: uploadQueryParameters,
@@ -222,7 +264,7 @@ class HttpUtil {
 
     // 解析响应数据
     if (response.data != null && response.data is Map<String, dynamic>) {
-      Map<String, dynamic> responseData = response.data as Map<String, dynamic>;
+      final responseData = response.data as Map<String, dynamic>;
       // 检查code值，100表示上传成功
       if (responseData.containsKey('code') && responseData['code'] == 100) {
         return true;

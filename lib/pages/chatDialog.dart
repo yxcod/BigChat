@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/foundation.dart';
@@ -31,6 +30,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   FocusNode _textFieldFocusNode = FocusNode();
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
+  bool _isUploadingImage = false;
 
   @override
   void initState() {
@@ -184,7 +184,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   // 发送图片消息
-  Future<void> _sendImageMessage(File imageFile) async {
+  Future<void> _sendImageMessage(XFile imageFile) async {
     try {
       final globalUtil = GlobalUtil();
       String receiver = friendInfo?.userName ?? '';
@@ -261,19 +261,17 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       }
     } catch (e) {
       debugPrint('Error sending image message: $e');
+      rethrow;
     }
   }
 
   // 上传图片到服务器
-  Future<void> _uploadImage(File imageFile, String imageName) async {
+  Future<void> _uploadImage(XFile imageFile, String imageName) async {
     try {
-      final httpUtil = HttpUtil();
-
-      // 将File转换为Uint8List
-      Uint8List imageData = await imageFile.readAsBytes();
-
-      // 调用HttpUtil的uploadImage接口
-      await httpUtil.uploadImage(imageName, imageData);
+      if (await imageFile.length() > 5 * 1024 * 1024) {
+        throw Exception('图片压缩后仍超过5MB，请选择较小的图片');
+      }
+      await HttpUtil().uploadImageFile(imageName, imageFile.path);
 
       debugPrint('Image uploaded successfully');
     } catch (e) {
@@ -284,16 +282,29 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
   // 选择图片
   Future<void> _pickImage() async {
+    if (_isUploadingImage) return;
     try {
       final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 82,
+        maxWidth: 2048,
+        maxHeight: 2048,
+      );
 
       if (image != null) {
-        debugPrint('Selected image: ${image.path}');
-        await _sendImageMessage(File(image.path));
+        if (mounted) setState(() => _isUploadingImage = true);
+        await _sendImageMessage(image);
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('图片发送失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
     }
   }
 
@@ -888,7 +899,18 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
               ),
             ),
             IconButton(icon: Icon(Icons.attach_file), onPressed: () {}),
-            IconButton(icon: Icon(Icons.camera_alt), onPressed: _pickImage),
+            _isUploadingImage
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox.square(
+                      dimension: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.camera_alt),
+                    onPressed: _pickImage,
+                  ),
             IconButton(
               icon: Icon(Icons.send),
               //_isComposing为true时候表示输入框内容不为空才能发送出去
