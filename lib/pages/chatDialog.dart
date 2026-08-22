@@ -16,6 +16,7 @@ import '../utils/user_profile_navigator.dart';
 import '../utils/presence_event.dart';
 import '../core/cache/app_image_cache.dart';
 import '../shared/widgets/fullscreen_image_viewer.dart';
+import '../shared/utils/chat_scroll_util.dart';
 import 'videoCallPage.dart';
 
 class ChatDialogPage extends StatefulWidget {
@@ -32,6 +33,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   FocusNode _textFieldFocusNode = FocusNode();
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
+  bool _isInitialScrollPending = true;
+  bool _initialPositioningRequested = false;
+  int _scrollToBottomRequest = 0;
   bool _isUploadingImage = false;
   CancelToken? _imageUploadCancelToken;
 
@@ -51,7 +55,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       );
       debugPrint('是否滚动到顶部: $atTop');
 
-      if (atTop) {
+      if (atTop && !_isInitialScrollPending) {
         debugPrint('触发加载更多聊天记录');
         _loadMoreChatRecords();
       }
@@ -622,13 +626,11 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
       if (mounted) setState(() {});
 
-      // 无论是否加载了新记录，都滚动到底部
-      // 在整个界面构建完成后执行滚动操作
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom();
-      });
+      // 列表采用懒布局，需要持续对齐到底部，直到消息和图片完成布局。
+      _scrollToBottom(completeInitialPositioning: true);
     } catch (e) {
       debugPrint('初始加载聊天记录失败: $e');
+      _scrollToBottom(completeInitialPositioning: true);
     }
   }
 
@@ -716,34 +718,23 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   // 滚动到底部的辅助方法
-  void _scrollToBottom() {
-    if (GlobalUtil().getChatRecords(id ?? '').isNotEmpty) {
-      // 使用SchedulerBinding确保在适当的时间执行滚动
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          // 首次跳转到底部
-          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-
-          // 设置一个短暂延迟后再次跳转，确保图片加载完成后的高度被计算
-          Future.delayed(Duration(milliseconds: 300), () {
-            if (_scrollController.hasClients) {
-              _scrollController.jumpTo(
-                _scrollController.position.maxScrollExtent,
-              );
-            }
-          });
-
-          // 0.6秒后再次滚动，确保所有图片都加载完成
-          Future.delayed(Duration(milliseconds: 600), () {
-            if (_scrollController.hasClients) {
-              _scrollController.jumpTo(
-                _scrollController.position.maxScrollExtent,
-              );
-            }
-          });
-        }
-      });
+  void _scrollToBottom({bool completeInitialPositioning = false}) {
+    if (completeInitialPositioning) {
+      _initialPositioningRequested = true;
     }
+    final request = ++_scrollToBottomRequest;
+    ChatScrollUtil.scheduleJumpToBottom(
+      controller: _scrollController,
+      isActive: () => mounted && request == _scrollToBottomRequest,
+      onComplete: _initialPositioningRequested
+          ? () {
+              if (mounted && request == _scrollToBottomRequest) {
+                _isInitialScrollPending = false;
+                _initialPositioningRequested = false;
+              }
+            }
+          : null,
+    );
   }
 
   final TextEditingController _textController = TextEditingController();

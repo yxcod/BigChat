@@ -24,6 +24,7 @@ import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
 import '../../core/media/app_media_url.dart';
 import '../../shared/widgets/fullscreen_image_viewer.dart';
+import '../../shared/utils/chat_scroll_util.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -48,6 +49,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   FocusNode _textFieldFocusNode = FocusNode();
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
+  bool _isInitialScrollPending = true;
+  bool _initialPositioningRequested = false;
+  int _scrollToBottomRequest = 0;
   bool _isUploadingImage = false;
   CancelToken? _imageUploadCancelToken;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
@@ -74,7 +78,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           _scrollController.position.pixels <=
           _scrollController.position.minScrollExtent + 5.0;
 
-      if (atTop) {
+      if (atTop && !_isInitialScrollPending) {
         _loadMoreChatRecords();
       }
     });
@@ -95,9 +99,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       RefreshIntervals.groupFallback,
       (timer) => _checkGroupMembership(),
     );
-
-    // 页面初始化时自动滚动到聊天记录底部
-    _scrollToBottom();
   }
 
   Future<void> _initializeGroupChatData() async {
@@ -110,7 +111,13 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     if (!mounted) {
       return;
     }
-    await _loadGroupChatRecords(limit: _loadedMessageLimit);
+    await _loadGroupChatRecords(
+      limit: _loadedMessageLimit,
+      scrollToBottom: false,
+    );
+    if (mounted) {
+      _scrollToBottom(completeInitialPositioning: true);
+    }
   }
 
   int _parseInt(dynamic value, {int fallback = 0}) {
@@ -867,34 +874,23 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   // 滚动到底部的辅助方法
-  void _scrollToBottom() {
-    if (GlobalUtil().getChatRecords(_conversationKey).isNotEmpty) {
-      // 使用SchedulerBinding确保在适当的时间执行滚动
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          // 首次跳转到底部
-          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-
-          // 设置一个短暂延迟后再次跳转，确保图片加载完成后的高度被计算
-          Future.delayed(Duration(milliseconds: 300), () {
-            if (_scrollController.hasClients) {
-              _scrollController.jumpTo(
-                _scrollController.position.maxScrollExtent,
-              );
-            }
-          });
-
-          // 0.6秒后再次滚动，确保所有图片都加载完成
-          Future.delayed(Duration(milliseconds: 600), () {
-            if (_scrollController.hasClients) {
-              _scrollController.jumpTo(
-                _scrollController.position.maxScrollExtent,
-              );
-            }
-          });
-        }
-      });
+  void _scrollToBottom({bool completeInitialPositioning = false}) {
+    if (completeInitialPositioning) {
+      _initialPositioningRequested = true;
     }
+    final request = ++_scrollToBottomRequest;
+    ChatScrollUtil.scheduleJumpToBottom(
+      controller: _scrollController,
+      isActive: () => mounted && request == _scrollToBottomRequest,
+      onComplete: _initialPositioningRequested
+          ? () {
+              if (mounted && request == _scrollToBottomRequest) {
+                _isInitialScrollPending = false;
+                _initialPositioningRequested = false;
+              }
+            }
+          : null,
+    );
   }
 
   // 检查用户是否在群成员列表中
