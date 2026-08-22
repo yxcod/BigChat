@@ -109,7 +109,7 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
   }
 
   Future<void> _openCommentComposer(Moment moment) async {
-    final controller = TextEditingController();
+    var commentDraft = '';
     final content = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -125,13 +125,13 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
-              child: TextField(
+              child: TextFormField(
                 key: const Key('moment_comment_field'),
-                controller: controller,
                 autofocus: true,
                 minLines: 1,
                 maxLines: 4,
                 maxLength: 200,
+                onChanged: (value) => commentDraft = value,
                 decoration: InputDecoration(
                   hintText: '评论这条动态……',
                   filled: true,
@@ -147,7 +147,7 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
             const SizedBox(width: 10),
             FilledButton(
               onPressed: () {
-                final value = controller.text.trim();
+                final value = commentDraft.trim();
                 if (value.isNotEmpty) Navigator.pop(context, value);
               },
               child: const Text('发送'),
@@ -156,7 +156,6 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
         ),
       ),
     );
-    controller.dispose();
     if (content == null || content.isEmpty) return;
     try {
       final updated = await _repository.addComment(

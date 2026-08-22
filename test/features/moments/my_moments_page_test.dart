@@ -48,6 +48,36 @@ void main() {
     expect(find.text('1'), findsOneWidget);
   });
 
+  testWidgets('comment sheet submits without disposing active dependencies', (
+    tester,
+  ) async {
+    final repository = LocalMomentsRepository();
+    final moment = await repository.publish(_draft('me', '等待评论'));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MyMomentsPage(
+          repository: repository,
+          userId: 'me',
+          displayName: '小明',
+          avatarUrl: '',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('comment-${moment.id}')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('moment_comment_field')),
+      '这是一条评论',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '发送'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('这是一条评论'), findsOneWidget);
+  });
+
   testWidgets('empty page provides a clear creation entry', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
