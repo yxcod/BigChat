@@ -46,6 +46,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
   bool _isUploadingImage = false;
+  CancelToken? _imageUploadCancelToken;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
   final Set<int> _sentReadAckMessageIds = {};
   int _loadedMessageLimit = 100;
@@ -434,9 +435,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   // 发送图片消息
-  Future<void> _sendImageMessage(XFile imageFile) async {
+  Future<void> _sendImageMessage(
+    XFile imageFile,
+    CancelToken cancelToken,
+  ) async {
     try {
       final globalUtil = GlobalUtil();
+      if (!_wsManager.isConnected) {
+        throw Exception('当前网络未连接，请稍后重试');
+      }
 
       // 获取当前时间和消息ID
       String time = _getTime();
@@ -446,7 +453,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       // 生成图片文件名
       String imageName = '${globalUtil.userName}_${widget.groupId}_$msgId.jpg';
       // 上传图片到服务器
-      await _uploadImage(imageFile, imageName);
+      await _uploadImage(imageFile, imageName, cancelToken);
       // 创建消息对象
       Message newMessage = Message(
         msgId: msgId,
@@ -501,12 +508,20 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   // 上传图片到服务器
-  Future<void> _uploadImage(XFile imageFile, String imageName) async {
+  Future<void> _uploadImage(
+    XFile imageFile,
+    String imageName,
+    CancelToken cancelToken,
+  ) async {
     try {
       if (await imageFile.length() > 5 * 1024 * 1024) {
         throw Exception('图片压缩后仍超过5MB，请选择较小的图片');
       }
-      await HttpUtil().uploadImageFile(imageName, imageFile.path);
+      await HttpUtil().uploadImageFile(
+        imageName,
+        imageFile.path,
+        cancelToken: cancelToken,
+      );
 
       debugPrint('Image uploaded successfully');
     } catch (e) {
@@ -528,7 +543,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
       if (pickedFile != null) {
         if (mounted) setState(() => _isUploadingImage = true);
-        await _sendImageMessage(pickedFile);
+        final cancelToken = CancelToken();
+        _imageUploadCancelToken = cancelToken;
+        await _sendImageMessage(pickedFile, cancelToken);
       }
     } catch (e) {
       debugPrint('选择图片失败: $e');
@@ -538,6 +555,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         ).showSnackBar(SnackBar(content: Text('图片发送失败：$e')));
       }
     } finally {
+      _imageUploadCancelToken = null;
       if (mounted) setState(() => _isUploadingImage = false);
     }
   }
@@ -925,6 +943,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   @override
   void dispose() {
+    _imageUploadCancelToken?.cancel('群聊页面已关闭');
     _textController.dispose();
     _textFieldFocusNode.dispose();
     _scrollController.dispose();

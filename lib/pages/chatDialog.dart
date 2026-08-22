@@ -31,6 +31,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   ScrollController _scrollController = ScrollController();
   bool _isLoadingMore = false;
   bool _isUploadingImage = false;
+  CancelToken? _imageUploadCancelToken;
 
   @override
   void initState() {
@@ -184,7 +185,10 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   // 发送图片消息
-  Future<void> _sendImageMessage(XFile imageFile) async {
+  Future<void> _sendImageMessage(
+    XFile imageFile,
+    CancelToken cancelToken,
+  ) async {
     try {
       final globalUtil = GlobalUtil();
       String receiver = friendInfo?.userName ?? '';
@@ -192,6 +196,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       if (receiver.isEmpty) {
         debugPrint('ERROR: 无法发送图片消息，接收者userName为空');
         return;
+      }
+      if (!_wsManager.isConnected) {
+        throw Exception('当前网络未连接，请稍后重试');
       }
 
       // 获取当前时间和消息ID
@@ -203,7 +210,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       String imageName = '${globalUtil.userName}_${receiver}_$msgId.jpg';
 
       // 上传图片到服务器
-      await _uploadImage(imageFile, imageName);
+      await _uploadImage(imageFile, imageName, cancelToken);
 
       // 创建图片消息对象，状态为发送中
       Message newMessage = Message(
@@ -266,12 +273,20 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   // 上传图片到服务器
-  Future<void> _uploadImage(XFile imageFile, String imageName) async {
+  Future<void> _uploadImage(
+    XFile imageFile,
+    String imageName,
+    CancelToken cancelToken,
+  ) async {
     try {
       if (await imageFile.length() > 5 * 1024 * 1024) {
         throw Exception('图片压缩后仍超过5MB，请选择较小的图片');
       }
-      await HttpUtil().uploadImageFile(imageName, imageFile.path);
+      await HttpUtil().uploadImageFile(
+        imageName,
+        imageFile.path,
+        cancelToken: cancelToken,
+      );
 
       debugPrint('Image uploaded successfully');
     } catch (e) {
@@ -294,7 +309,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
       if (image != null) {
         if (mounted) setState(() => _isUploadingImage = true);
-        await _sendImageMessage(image);
+        final cancelToken = CancelToken();
+        _imageUploadCancelToken = cancelToken;
+        await _sendImageMessage(image, cancelToken);
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
@@ -304,6 +321,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         ).showSnackBar(SnackBar(content: Text('图片发送失败：$e')));
       }
     } finally {
+      _imageUploadCancelToken = null;
       if (mounted) setState(() => _isUploadingImage = false);
     }
   }
@@ -1044,6 +1062,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
   @override
   void dispose() {
+    _imageUploadCancelToken?.cancel('聊天页面已关闭');
     _messageSubscription?.cancel();
     _textController.dispose();
     _textFieldFocusNode.dispose();

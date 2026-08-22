@@ -257,7 +257,12 @@ class HttpUtil {
       '/api/image/upload',
       data: formData,
       queryParameters: uploadQueryParameters,
-      options: options,
+      options:
+          options ??
+          Options(
+            sendTimeout: const Duration(seconds: 60),
+            receiveTimeout: const Duration(seconds: 30),
+          ),
       cancelToken: cancelToken,
       onSendProgress: onSendProgress,
     );
