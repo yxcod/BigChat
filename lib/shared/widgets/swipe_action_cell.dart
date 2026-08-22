@@ -73,22 +73,24 @@ class _SwipeActionCellState extends State<SwipeActionCell>
     return ClipRect(
       child: Stack(
         children: [
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: SizedBox(
-                width: widget.actionExtent,
-                child: Material(
-                  color: const Color(0xFFE53935),
-                  child: InkWell(
-                    key: const ValueKey('swipe_delete_action'),
-                    onTap: widget.onDelete,
-                    child: Center(
-                      child: Text(
-                        widget.deleteLabel,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
+          if (_offset < 0)
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(
+                  width: widget.actionExtent,
+                  child: Material(
+                    color: const Color(0xFFE53935),
+                    child: InkWell(
+                      key: const ValueKey('swipe_delete_action'),
+                      onTap: widget.onDelete,
+                      child: Center(
+                        child: Text(
+                          widget.deleteLabel,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -96,7 +98,6 @@ class _SwipeActionCellState extends State<SwipeActionCell>
                 ),
               ),
             ),
-          ),
           Transform.translate(
             offset: Offset(_offset, 0),
             child: GestureDetector(
@@ -104,7 +105,10 @@ class _SwipeActionCellState extends State<SwipeActionCell>
               onHorizontalDragUpdate: _handleDragUpdate,
               onHorizontalDragEnd: _handleDragEnd,
               onTap: _isOpen ? () => _animateTo(0) : null,
-              child: AbsorbPointer(absorbing: _isOpen, child: widget.child),
+              child: Material(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                child: AbsorbPointer(absorbing: _isOpen, child: widget.child),
+              ),
             ),
           ),
         ],

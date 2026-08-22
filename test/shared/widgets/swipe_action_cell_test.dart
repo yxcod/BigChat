@@ -22,12 +22,15 @@ void main() {
       ),
     );
 
+    expect(find.byKey(const ValueKey('swipe_delete_action')), findsNothing);
+
     await tester.drag(
       find.byKey(const ValueKey('conversation')),
       const Offset(-100, 0),
     );
     await tester.pumpAndSettle();
     expect(deleteCount, 0);
+    expect(find.byKey(const ValueKey('swipe_delete_action')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('swipe_delete_action')));
     expect(deleteCount, 1);
