@@ -246,7 +246,10 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                 Icon(Icons.chevron_right, color: Colors.grey[400]),
               ],
             ),
-            const SizedBox(height: 14),
+            if (_isLoadingMoments ||
+                _momentLoadFailed ||
+                _latestVisibleMoment != null)
+              const SizedBox(height: 14),
             if (_isLoadingMoments)
               const SizedBox(
                 height: 72,
@@ -255,7 +258,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
             else if (_momentLoadFailed)
               _buildMomentStatus('动态加载失败，点击进入空间重试')
             else if (_latestVisibleMoment == null)
-              _buildMomentStatus('暂无对你可见的动态')
+              const SizedBox.shrink()
             else ...[
               if (previewImages.isNotEmpty)
                 GridView.builder(

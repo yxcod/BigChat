@@ -5,6 +5,29 @@ import 'package:flutter_base/pages/friendManage/friendDetailPage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'profile leaves the moment preview empty when nothing is visible',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FriendDetailPage(
+            friendData: {
+              'userName': 'friend',
+              'nickname': '小李',
+              'avatar': '',
+              'isFriend': true,
+            },
+            momentsRepository: LocalMomentsRepository(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const Key('friend_moments_section')), findsOneWidget);
+      expect(find.text('暂无对你可见的动态'), findsNothing);
+    },
+  );
+
   testWidgets('profile previews at most six photos and opens friend space', (
     tester,
   ) async {
