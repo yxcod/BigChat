@@ -15,6 +15,7 @@ import '../utils/http.dart';
 import '../utils/user_profile_navigator.dart';
 import '../utils/presence_event.dart';
 import '../core/cache/app_image_cache.dart';
+import '../shared/widgets/fullscreen_image_viewer.dart';
 import 'videoCallPage.dart';
 
 class ChatDialogPage extends StatefulWidget {
@@ -1508,22 +1509,15 @@ class MessageBubble extends StatelessWidget {
   }
 
   // 构建图片消息
-  Widget _buildImageMessage() {
-    // 获取图片URL：根据消息类型和发送者获取正确的URL
-    String imageURL;
+  String _resolveImageUrl() {
     if (message.isMe) {
-      // 自己发送的图片
-      imageURL = globalUtil.getImageURL(
-        globalUtil.userName ?? "",
-        message.content,
-      );
-    } else {
-      // 对方发送的图片
-      imageURL = globalUtil.getImageURL(
-        friendInfo?.userName ?? "",
-        message.content,
-      );
+      return globalUtil.getImageURL(globalUtil.userName ?? "", message.content);
     }
+    return globalUtil.getImageURL(friendInfo?.userName ?? "", message.content);
+  }
+
+  Widget _buildImageMessage() {
+    final imageURL = _resolveImageUrl();
 
     return ConstrainedBox(
       constraints: BoxConstraints(
@@ -1630,57 +1624,12 @@ class MessageBubble extends StatelessWidget {
                 message.messageType == MessageType.image
                     ? // 图片消息：使用不同的样式，没有背景色
                       GestureDetector(
-                        // 添加点击事件，用于图片放大查看
-                        onTap: () {
-                          // 实现图片放大查看功能
-                          showDialog(
-                            context: context,
-                            builder: (context) => Dialog(
-                              backgroundColor: Colors.transparent,
-                              child: GestureDetector(
-                                onTap: () => Navigator.of(context).pop(),
-                                child: CachedNetworkImage(
-                                  cacheManager: AppImageCache.manager,
-                                  imageUrl: message.isMe
-                                      ? globalUtil.getImageURL(
-                                          globalUtil.userName ?? "",
-                                          message.content,
-                                        )
-                                      : globalUtil.getImageURL(
-                                          friendInfo?.userName ?? "",
-                                          message.content,
-                                        ),
-                                  fit: BoxFit.contain,
-                                  cacheKey: AppImageCache.cacheKey(
-                                    message.isMe
-                                        ? globalUtil.getImageURL(
-                                            globalUtil.userName ?? "",
-                                            message.content,
-                                          )
-                                        : globalUtil.getImageURL(
-                                            friendInfo?.userName ?? "",
-                                            message.content,
-                                          ),
-                                  ),
-                                  progressIndicatorBuilder:
-                                      (context, url, progress) => Center(
-                                        child: CircularProgressIndicator(
-                                          value: progress.totalSize != null
-                                              ? (progress.downloaded as num) /
-                                                    (progress.totalSize as num)
-                                              : null,
-                                        ),
-                                      ),
-                                  errorWidget: (context, url, error) => Icon(
-                                    Icons.broken_image,
-                                    color: Colors.white,
-                                    size: 40,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
+                        onTap: () => showFullscreenImage(
+                          context,
+                          imageProvider: AppImageCache.provider(
+                            _resolveImageUrl(),
+                          ),
+                        ),
                         // 添加长按事件，用于弹出底部操作弹窗
                         onLongPress: () {
                           _showImageActions(context);

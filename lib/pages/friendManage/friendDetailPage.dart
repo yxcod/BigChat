@@ -8,6 +8,7 @@ import '../../features/moments/presentation/my_moments_page.dart';
 import '../../utils/gloabl.dart';
 import '../../utils/WebSocketManager.dart';
 import '../videoCallPage.dart';
+import '../../shared/widgets/fullscreen_image_viewer.dart';
 
 class FriendDetailPage extends StatefulWidget {
   final Map<String, dynamic> friendData;
@@ -219,58 +220,73 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
   Widget _buildMomentsSection() {
     final previewImages =
         _latestVisibleMoment?.mediaPaths.take(6).toList() ?? const <String>[];
-    return InkWell(
-      key: const Key('friend_moments_section'),
-      borderRadius: BorderRadius.circular(12),
-      onTap: _viewAllMoments,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.photo_library_outlined, color: Colors.grey[600]),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    '好友动态',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            key: const Key('friend_moments_section'),
+            borderRadius: BorderRadius.circular(8),
+            onTap: _viewAllMoments,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.photo_library_outlined, color: Colors.grey[600]),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      '好友动态',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
-                Text(
-                  '进入空间',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                ),
-                const SizedBox(width: 2),
-                Icon(Icons.chevron_right, color: Colors.grey[400]),
-              ],
+                  Text(
+                    '进入空间',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(Icons.chevron_right, color: Colors.grey[400]),
+                ],
+              ),
             ),
-            if (_isLoadingMoments ||
-                _momentLoadFailed ||
-                _latestVisibleMoment != null)
-              const SizedBox(height: 14),
-            if (_isLoadingMoments)
-              const SizedBox(
-                height: 72,
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-              )
-            else if (_momentLoadFailed)
-              _buildMomentStatus('动态加载失败，点击进入空间重试')
-            else if (_latestVisibleMoment == null)
-              const SizedBox.shrink()
-            else ...[
-              if (previewImages.isNotEmpty)
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+          ),
+          if (_isLoadingMoments ||
+              _momentLoadFailed ||
+              _latestVisibleMoment != null)
+            const SizedBox(height: 14),
+          if (_isLoadingMoments)
+            const SizedBox(
+              height: 72,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (_momentLoadFailed)
+            GestureDetector(
+              onTap: _viewAllMoments,
+              child: _buildMomentStatus('动态加载失败，点击进入空间重试'),
+            )
+          else if (_latestVisibleMoment == null)
+            const SizedBox.shrink()
+          else ...[
+            if (previewImages.isNotEmpty)
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: previewImages.length,
+                itemBuilder: (context, index) => GestureDetector(
+                  onTap: () => showFullscreenImage(
+                    context,
+                    imageProvider: AppImageCache.provider(previewImages[index]),
                   ),
-                  itemCount: previewImages.length,
-                  itemBuilder: (context, index) => ClipRRect(
+                  child: ClipRRect(
                     key: ValueKey('friend_moment_preview_image_$index'),
                     borderRadius: BorderRadius.circular(8),
                     child: Image(
@@ -286,21 +302,20 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                     ),
                   ),
                 ),
-              if (_latestVisibleMoment!.content.isNotEmpty) ...[
-                if (previewImages.isNotEmpty) const SizedBox(height: 10),
-                Text(
-                  _latestVisibleMoment!.content,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.grey[700], height: 1.4),
-                ),
-              ],
-              if (previewImages.isEmpty &&
-                  _latestVisibleMoment!.content.isEmpty)
-                _buildMomentStatus('最近一条动态暂无图片'),
+              ),
+            if (_latestVisibleMoment!.content.isNotEmpty) ...[
+              if (previewImages.isNotEmpty) const SizedBox(height: 10),
+              Text(
+                _latestVisibleMoment!.content,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Colors.grey[700], height: 1.4),
+              ),
             ],
+            if (previewImages.isEmpty && _latestVisibleMoment!.content.isEmpty)
+              _buildMomentStatus('最近一条动态暂无图片'),
           ],
-        ),
+        ],
       ),
     );
   }

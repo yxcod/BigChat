@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../data/moment_media_uploader.dart';
+import '../../../shared/widgets/fullscreen_image_viewer.dart';
 import '../data/moments_repository.dart';
 import '../domain/moment.dart';
 
@@ -302,9 +303,15 @@ class _MediaGrid extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.file(File(path), fit: BoxFit.cover),
+            GestureDetector(
+              onTap: () => showFullscreenImage(
+                context,
+                imageProvider: FileImage(File(path)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.file(File(path), fit: BoxFit.cover),
+              ),
             ),
             Positioned(
               top: 4,

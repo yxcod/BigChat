@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/cache/app_image_cache.dart';
 import '../../../utils/gloabl.dart';
+import '../../../shared/widgets/fullscreen_image_viewer.dart';
 import '../data/moments_repository.dart';
 import '../data/server_moments_repository.dart';
 import '../domain/moment.dart';
@@ -572,28 +573,39 @@ class _MomentMediaGrid extends StatelessWidget {
               itemCount: count,
               itemBuilder: (context, index) {
                 final path = paths[index];
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(7),
-                  child:
-                      path.startsWith('http://') || path.startsWith('https://')
-                      ? CachedNetworkImage(
-                          cacheManager: AppImageCache.manager,
-                          imageUrl: path,
-                          cacheKey: AppImageCache.cacheKey(path),
-                          fit: BoxFit.cover,
-                          errorWidget: (_, _, _) => const ColoredBox(
-                            color: AppColors.searchBackground,
-                            child: Icon(Icons.broken_image_outlined),
+                final imageProvider =
+                    path.startsWith('http://') || path.startsWith('https://')
+                    ? AppImageCache.provider(path)
+                    : FileImage(File(path));
+                return GestureDetector(
+                  onTap: () => showFullscreenImage(
+                    context,
+                    imageProvider: imageProvider,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(7),
+                    child:
+                        path.startsWith('http://') ||
+                            path.startsWith('https://')
+                        ? CachedNetworkImage(
+                            cacheManager: AppImageCache.manager,
+                            imageUrl: path,
+                            cacheKey: AppImageCache.cacheKey(path),
+                            fit: BoxFit.cover,
+                            errorWidget: (_, _, _) => const ColoredBox(
+                              color: AppColors.searchBackground,
+                              child: Icon(Icons.broken_image_outlined),
+                            ),
+                          )
+                        : Image.file(
+                            File(path),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const ColoredBox(
+                              color: AppColors.searchBackground,
+                              child: Icon(Icons.broken_image_outlined),
+                            ),
                           ),
-                        )
-                      : Image.file(
-                          File(path),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => const ColoredBox(
-                            color: AppColors.searchBackground,
-                            child: Icon(Icons.broken_image_outlined),
-                          ),
-                        ),
+                  ),
                 );
               },
             ),

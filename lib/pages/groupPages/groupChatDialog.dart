@@ -23,6 +23,7 @@ import '../../features/chat/domain/chat_message_mapper.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
 import '../../core/media/app_media_url.dart';
+import '../../shared/widgets/fullscreen_image_viewer.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -1736,7 +1737,11 @@ class GroupMessageBubble extends StatelessWidget {
   Widget _buildImageBubble(BuildContext context) {
     final imageUrl = _resolveImageUrl();
     return GestureDetector(
-      onTap: () => _showImageActions(context),
+      onTap: () => showFullscreenImage(
+        context,
+        imageProvider: AppImageCache.provider(imageUrl),
+      ),
+      onLongPress: () => _showImageActions(context),
       child: Container(
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.6,
