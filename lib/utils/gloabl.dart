@@ -133,6 +133,10 @@ class GlobalUtil {
     return _chatStore.messageCount(userName);
   }
 
+  String? conversationIdForMessage(int messageId) {
+    return _chatStore.conversationIdForMessage(messageId);
+  }
+
   Future<bool> hydrateChatRecords(String conversationId) async {
     if (_chatStore.messageCount(conversationId) > 0) return true;
     final ownerId = userName ?? '';

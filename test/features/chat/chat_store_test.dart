@@ -30,6 +30,7 @@ void main() {
       expect(store.addMessage('alice', incoming), isFalse);
       expect(store.addMessage('alice', outgoing), isTrue);
       expect(store.messageCount('alice'), 2);
+      expect(store.conversationIdForMessage(2), 'alice');
 
       store.markAllIncomingMessagesAsRead('alice');
       expect(incoming.isRead, isTrue);

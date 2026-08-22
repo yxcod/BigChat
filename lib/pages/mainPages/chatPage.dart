@@ -16,6 +16,8 @@ import '../../shared/widgets/app_search_field.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
 import '../../features/chat/domain/chat_realtime_event.dart';
+import '../../features/chat/data/hidden_conversations_store.dart';
+import '../../shared/widgets/swipe_action_cell.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
@@ -55,6 +57,10 @@ class _ChatpageState extends State<Chatpage> {
   bool _isFetchingConversations = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  final HiddenConversationsStore _hiddenConversationsStore =
+      HiddenConversationsStore();
+  Map<String, int> _hiddenConversations = {};
+  String _hiddenConversationsOwner = '';
   // 头像 URL 缓存，用于避免重复加载
   Map<String, String> _avatarCache = {};
 
@@ -62,9 +68,9 @@ class _ChatpageState extends State<Chatpage> {
   void initState() {
     super.initState();
     // 延迟到构建完成后执行需要setState的操作
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _notifyUnreadCountChanged();
-      // 页面加载时获取会话列表
+      await _ensureHiddenConversationsLoaded();
       fetchConversations();
       _startFallbackRefreshTimer();
     });
@@ -117,6 +123,12 @@ class _ChatpageState extends State<Chatpage> {
         _storeGroupRealtimeMessage(event);
         break;
       case ChatRealtimeEventType.privateDelivery:
+        final conversationId = globalUtil.conversationIdForMessage(
+          event.messageId,
+        );
+        if (conversationId != null) {
+          _unhideConversation('private:$conversationId');
+        }
         globalUtil.updateOutgoingMessageStatus(
           event.messageId,
           event.deliveryStatus == 'failed'
@@ -125,6 +137,10 @@ class _ChatpageState extends State<Chatpage> {
         );
         break;
       case ChatRealtimeEventType.groupDelivery:
+        final conversationId = globalUtil.conversationIdForMessage(
+          event.clientMessageId,
+        );
+        if (conversationId != null) _unhideConversation(conversationId);
         globalUtil.reconcileOutgoingMessageId(
           event.clientMessageId,
           event.messageId,
@@ -150,6 +166,7 @@ class _ChatpageState extends State<Chatpage> {
 
   void _storePrivateRealtimeMessage(ChatRealtimeEvent event) {
     if (event.senderId.isEmpty || event.messageId <= 0) return;
+    _unhideConversation('private:${event.senderId}');
     final isOpenChat =
         globalUtil.isChatting == true &&
         globalUtil.currentChatUserName == event.senderId;
@@ -181,6 +198,7 @@ class _ChatpageState extends State<Chatpage> {
     }
     final groupId = event.groupId.toString();
     final conversationKey = GlobalUtil.groupConversationKey(groupId);
+    _unhideConversation(conversationKey);
     final isOpenChat =
         globalUtil.isChatting == true &&
         globalUtil.currentChatUserName == conversationKey;
@@ -227,6 +245,47 @@ class _ChatpageState extends State<Chatpage> {
       _chats.removeWhere((element) => element.userName == userName);
       _notifyUnreadCountChanged();
     });
+  }
+
+  String _hiddenKey(Chat chat) => chat.isGroup
+      ? GlobalUtil.groupConversationKey(chat.userName)
+      : 'private:${chat.userName}';
+
+  Future<void> _ensureHiddenConversationsLoaded() async {
+    final owner = globalUtil.userName ?? '';
+    if (owner.isEmpty || owner == _hiddenConversationsOwner) return;
+    _hiddenConversationsOwner = owner;
+    _hiddenConversations = _hiddenConversationsStore.load(owner);
+  }
+
+  void _unhideConversation(String key) {
+    if (_hiddenConversations.remove(key) == null) return;
+    final owner = _hiddenConversationsOwner;
+    if (owner.isNotEmpty) {
+      unawaited(_hiddenConversationsStore.save(owner, _hiddenConversations));
+    }
+  }
+
+  Future<void> _hideConversation(Chat chat) async {
+    final owner = globalUtil.userName ?? '';
+    if (owner.isEmpty) return;
+    await _ensureHiddenConversationsLoaded();
+    final key = _hiddenKey(chat);
+    _hiddenConversations[key] = DateTime.now().millisecondsSinceEpoch;
+
+    if (!mounted) return;
+    setState(() {
+      _chats.removeWhere(
+        (item) =>
+            item.userName == chat.userName && item.isGroup == chat.isGroup,
+      );
+      _notifyUnreadCountChanged();
+    });
+    final messageKey = chat.isGroup
+        ? GlobalUtil.groupConversationKey(chat.userName)
+        : chat.userName;
+    globalUtil.clearUnreadMessages(messageKey);
+    await _hiddenConversationsStore.save(owner, _hiddenConversations);
   }
 
   void _updateChatUnreadCount(String userName, int count) {
@@ -472,6 +531,7 @@ class _ChatpageState extends State<Chatpage> {
         debugPrint('当前用户未登录');
         return;
       }
+      await _ensureHiddenConversationsLoaded();
 
       // 调用 API 获取单聊会话列表
       final conversations = await getConversationApi(currentUserName);
@@ -479,10 +539,29 @@ class _ChatpageState extends State<Chatpage> {
       final groupConversations = await getGroupConversations(currentUserName);
 
       // 转换为 Chat 列表并更新 UI
-      final chatList = await _convertToChatList(
+      final allChats = await _convertToChatList(
         conversations,
         groupConversations,
       );
+      var hiddenChanged = false;
+      final chatList = allChats.where((chat) {
+        final key = _hiddenKey(chat);
+        final hidden = _hiddenConversationsStore.shouldHide(
+          _hiddenConversations,
+          key,
+          chat.updateTime,
+        );
+        if (!hidden && _hiddenConversations.remove(key) != null) {
+          hiddenChanged = true;
+        }
+        return !hidden;
+      }).toList();
+      if (hiddenChanged) {
+        await _hiddenConversationsStore.save(
+          currentUserName,
+          _hiddenConversations,
+        );
+      }
       if (!mounted) {
         return;
       }
@@ -791,74 +870,77 @@ class _ChatpageState extends State<Chatpage> {
                   color: Color(0xFFE5E5E5),
                 ),
                 itemBuilder: (context, index) {
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: AppImageCache.provider(
-                        _chats[index].avatar,
+                  final chat = _chats[index];
+                  return SwipeActionCell(
+                    key: ValueKey('chat_${chat.isGroup}_${chat.userName}'),
+                    onDelete: () => _hideConversation(chat),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: AppImageCache.provider(chat.avatar),
+                        backgroundColor: Colors.grey[200],
                       ),
-                      backgroundColor: Colors.grey[200],
-                    ),
-                    title: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _chats[index].name,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black,
-                          ), // 确保文本颜色可见
-                        ),
-                        Text(
-                          _chats[index].time,
-                          style: TextStyle(color: Colors.grey, fontSize: 10),
-                        ),
-                      ],
-                    ),
-                    subtitle: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: _chats[index].isGroup
-                              ? Text(
-                                  _chats[index].lastSenderName != null
-                                      ? '${_chats[index].lastSenderName}: ${_chats[index].lastMessage}'
-                                      : _chats[index].lastMessage,
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
+                      title: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            chat.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black,
+                            ), // 确保文本颜色可见
+                          ),
+                          Text(
+                            chat.time,
+                            style: TextStyle(color: Colors.grey, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                      subtitle: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: chat.isGroup
+                                ? Text(
+                                    chat.lastSenderName != null
+                                        ? '${chat.lastSenderName}: ${chat.lastMessage}'
+                                        : chat.lastMessage,
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 12,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : Text(
+                                    chat.lastMessage,
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 12,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
-                                )
-                              : Text(
-                                  _chats[index].lastMessage,
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                          ),
+                          if (chat.unreadCount > 0)
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                chat.unreadCount.toString(),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
                                 ),
-                        ),
-                        if (_chats[index].unreadCount > 0)
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              _chats[index].unreadCount.toString(),
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
+                      onTap: () => _openChat(chat),
                     ),
-                    onTap: () => _openChat(_chats[index]),
                   );
                 },
               ),

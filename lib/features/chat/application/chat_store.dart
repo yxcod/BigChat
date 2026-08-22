@@ -47,6 +47,15 @@ class ChatStore {
     return List<Message>.of(_chatRecords[conversationId] ?? const []);
   }
 
+  String? conversationIdForMessage(int messageId) {
+    for (final entry in _chatRecords.entries) {
+      if (entry.value.any((message) => message.msgId == messageId)) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
   void replaceMessages(String conversationId, List<Message> messages) {
     _chatRecords[conversationId] = messages;
   }
