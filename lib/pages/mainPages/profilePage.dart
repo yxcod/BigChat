@@ -179,7 +179,7 @@ class _ProfilePageState extends State<ProfilePage>
                 const Divider(height: 1, indent: 56, color: Color(0xFFE5E5E5)),
                 ListTile(
                   leading: Icon(Icons.album, color: Colors.green),
-                  title: Text('相册'),
+                  title: Text('我的空间'),
                   trailing: Icon(
                     Icons.arrow_forward_ios,
                     color: Colors.grey,
