@@ -39,6 +39,8 @@ class GroupChatDialogPage extends StatefulWidget {
 }
 
 class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
+  String get _conversationKey =>
+      GlobalUtil.groupConversationKey(widget.groupId);
   WebSocketManager _wsManager = WebSocketManager();
   WebSocketMessageSubscription? _messageSubscription;
   WebSocketStatusSubscription? _statusSubscription;
@@ -59,7 +61,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     super.initState();
     final globalUtil = GlobalUtil();
     globalUtil.isChatting = true;
-    globalUtil.currentChatUserName = widget.groupId.toString();
+    globalUtil.currentChatUserName = _conversationKey;
+    globalUtil.clearUnreadMessages(_conversationKey);
 
     // 初始化群名称
     _currentGroupName = widget.groupName;
@@ -97,9 +100,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   Future<void> _initializeGroupChatData() async {
-    final restored = await GlobalUtil().hydrateChatRecords(
-      widget.groupId.toString(),
-    );
+    final restored = await GlobalUtil().hydrateChatRecords(_conversationKey);
     if (restored && mounted) {
       setState(() {});
       _scrollToBottom();
@@ -130,7 +131,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       final globalUtil = GlobalUtil();
       final currentUserId = globalUtil.userName ?? '';
       final existingMessages = List<Message>.from(
-        globalUtil.getChatRecords(widget.groupId.toString()),
+        globalUtil.getChatRecords(_conversationKey),
       );
       final existingById = {
         for (final message in existingMessages) message.msgId: message,
@@ -154,7 +155,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       }
       messages.sort((left, right) => left.msgId.compareTo(right.msgId));
 
-      await globalUtil.replaceChatRecords(widget.groupId.toString(), messages);
+      await globalUtil.replaceChatRecords(_conversationKey, messages);
 
       _replaceReadStatuses(groupRecord.messages);
       _loadedMessageLimit = limit;
@@ -263,7 +264,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         .map((member) => member.userId)
         .toSet();
     final ownMessageIds = globalUtil
-        .getChatRecords(widget.groupId.toString())
+        .getChatRecords(_conversationKey)
         .where((message) => message.isMe)
         .map((message) => message.msgId)
         .toSet();
@@ -299,9 +300,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       return;
     }
 
-    for (final message in globalUtil.getChatRecords(
-      widget.groupId.toString(),
-    )) {
+    for (final message in globalUtil.getChatRecords(_conversationKey)) {
       if (message.isMe ||
           message.senderId == null ||
           message.senderId!.isEmpty) {
@@ -363,7 +362,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
       // 记录当前聊天记录
       List<Message> currentMessages = List.from(
-        globalUtil.getChatRecords(widget.groupId.toString()),
+        globalUtil.getChatRecords(_conversationKey),
       );
 
       // 记录当前可见区域的关键消息
@@ -389,9 +388,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       );
 
       // 获取新的聊天记录列表
-      List<Message> newMessages = globalUtil.getChatRecords(
-        widget.groupId.toString(),
-      );
+      List<Message> newMessages = globalUtil.getChatRecords(_conversationKey);
 
       // 更新UI
       setState(() {});
@@ -471,7 +468,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       );
 
       // 添加消息到全局聊天记录
-      globalUtil.addMessage(widget.groupId.toString(), newMessage);
+      globalUtil.addMessage(_conversationKey, newMessage);
       _initializeOutgoingReadStatus(msgId);
 
       // 更新UI并滚动到底部
@@ -659,7 +656,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     if (sender.isNotEmpty && content.isNotEmpty) {
       // 检查消息是否已存在
       List<Message> existingMessages = globalUtil.getChatRecords(
-        widget.groupId.toString(),
+        _conversationKey,
       );
       bool messageExists = existingMessages.any((msg) => msg.msgId == msgId);
 
@@ -685,7 +682,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         );
 
         // 添加消息到全局聊天记录
-        globalUtil.addMessage(widget.groupId.toString(), newMessage);
+        globalUtil.addMessage(_conversationKey, newMessage);
 
         debugPrint('消息已添加到聊天记录');
 
@@ -737,9 +734,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     }
 
     // 更新消息状态
-    List<Message> groupMessages = globalUtil.getChatRecords(
-      widget.groupId.toString(),
-    );
+    List<Message> groupMessages = globalUtil.getChatRecords(_conversationKey);
     for (var message in groupMessages) {
       if (message.msgId == msgId) {
         if (status == 'success' && message.isMe) {
@@ -873,7 +868,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   // 滚动到底部的辅助方法
   void _scrollToBottom() {
-    if (GlobalUtil().getChatRecords(widget.groupId.toString()).isNotEmpty) {
+    if (GlobalUtil().getChatRecords(_conversationKey).isNotEmpty) {
       // 使用SchedulerBinding确保在适当的时间执行滚动
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
@@ -1067,13 +1062,13 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                   controller: _scrollController,
                   // 使用当前聊天群的全局消息列表，如果不存在则使用空列表
                   itemCount: GlobalUtil()
-                      .getChatRecords(widget.groupId.toString())
+                      .getChatRecords(_conversationKey)
                       .length,
                   itemBuilder: (context, index) {
                     // 获取当前聊天群的全局消息列表
                     final globalUtil = GlobalUtil();
                     final groupMessages = globalUtil.getChatRecords(
-                      widget.groupId.toString(),
+                      _conversationKey,
                     );
                     final message = groupMessages[index];
                     // 获取消息的未读人数
@@ -1208,7 +1203,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     );
 
     // 添加消息到全局聊天记录
-    globalUtil.addMessage(widget.groupId.toString(), newMessage);
+    globalUtil.addMessage(_conversationKey, newMessage);
 
     // 新消息默认由除发送者外的当前群成员组成未读名单。
     _initializeOutgoingReadStatus(msgId);

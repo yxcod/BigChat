@@ -2,6 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_base/utils/gloabl.dart';
 
 void main() {
+  test('group conversation keys cannot collide with private user ids', () {
+    expect(GlobalUtil.groupConversationKey(123), 'group:123');
+    expect(GlobalUtil.groupConversationKey(123), isNot('123'));
+  });
+
   group('GlobalUtil.formatChatTimestamp', () {
     final referenceTime = DateTime(2026, 8, 20, 15, 30);
 

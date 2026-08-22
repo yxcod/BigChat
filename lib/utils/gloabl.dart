@@ -37,6 +37,8 @@ class GlobalUtil {
   }
   GlobalUtil._internal();
 
+  static String groupConversationKey(Object groupId) => 'group:$groupId';
+
   UserInfoModel get userInfoModel =>
       _userInfoModel ?? UserInfoModel.formJSON({});
   String get baseURL => AppConfig.apiBaseUrl;
@@ -136,7 +138,16 @@ class GlobalUtil {
     final ownerId = userName ?? '';
     if (ownerId.isEmpty) return false;
 
-    final messages = await _chatLocalCache.load(ownerId, conversationId);
+    var messages = await _chatLocalCache.load(ownerId, conversationId);
+    if (messages.isEmpty && conversationId.startsWith('group:')) {
+      final legacyId = conversationId.substring('group:'.length);
+      messages = await _chatLocalCache.load(ownerId, legacyId);
+      if (messages.isNotEmpty) {
+        _chatStore.replaceMessages(conversationId, messages);
+        await persistChatRecords(conversationId);
+        return true;
+      }
+    }
     if (messages.isEmpty) return false;
     _chatStore.replaceMessages(conversationId, messages);
     return true;

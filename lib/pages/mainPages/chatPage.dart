@@ -179,7 +179,8 @@ class _ChatpageState extends State<Chatpage> {
     if (event.groupId <= 0 || event.senderId.isEmpty || event.messageId <= 0) {
       return;
     }
-    final conversationKey = event.groupId.toString();
+    final groupId = event.groupId.toString();
+    final conversationKey = GlobalUtil.groupConversationKey(groupId);
     final isOpenChat =
         globalUtil.isChatting == true &&
         globalUtil.currentChatUserName == conversationKey;
@@ -193,7 +194,7 @@ class _ChatpageState extends State<Chatpage> {
         isMe: false,
         time: GlobalUtil.formatChatTimestamp(event.timestamp),
         isRead: false,
-        conversationId: conversationKey,
+        conversationId: groupId,
         messageType: event.messageType == 2
             ? MessageType.image
             : MessageType.text,
@@ -230,9 +231,12 @@ class _ChatpageState extends State<Chatpage> {
 
   void _updateChatUnreadCount(String userName, int count) {
     setState(() {
-      final index = _chats.indexWhere(
-        (element) => element.userName == userName,
-      );
+      final index = _chats.indexWhere((element) {
+        final key = element.isGroup
+            ? GlobalUtil.groupConversationKey(element.userName)
+            : element.userName;
+        return key == userName;
+      });
       if (index != -1) {
         // 更新未读消息数
         final updatedChat = Chat(
@@ -515,8 +519,11 @@ class _ChatpageState extends State<Chatpage> {
 
     final results = <_ChatSearchResult>[];
     for (final chat in _chats) {
+      final conversationKey = chat.isGroup
+          ? GlobalUtil.groupConversationKey(chat.userName)
+          : chat.userName;
       final matches = globalUtil
-          .getChatRecords(chat.userName)
+          .getChatRecords(conversationKey)
           .where(
             (message) =>
                 message.messageType == MessageType.text &&
@@ -701,10 +708,11 @@ class _ChatpageState extends State<Chatpage> {
       for (var groupConversation in groupConversations) {
         final groupId = groupConversation.groupId;
         final groupIdStr = groupId.toString();
+        final conversationKey = GlobalUtil.groupConversationKey(groupIdStr);
 
         try {
-          await globalUtil.hydrateChatRecords(groupIdStr);
-          if (globalUtil.getLatestChatTimestamp(groupIdStr) >=
+          await globalUtil.hydrateChatRecords(conversationKey);
+          if (globalUtil.getLatestChatTimestamp(conversationKey) >=
               groupConversation.updateTime) {
             continue;
           }
@@ -741,7 +749,7 @@ class _ChatpageState extends State<Chatpage> {
             );
           }).toList();
 
-          await globalUtil.replaceChatRecords(groupIdStr, messages);
+          await globalUtil.mergeChatRecords(conversationKey, messages);
 
           debugPrint('成功为群聊$groupId加载${messages.length}条聊天记录');
         } catch (e) {
