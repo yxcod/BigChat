@@ -14,6 +14,26 @@ class MomentComment {
   final String displayName;
   final String content;
   final DateTime createdAt;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'userId': userId,
+    'displayName': displayName,
+    'content': content,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory MomentComment.fromJson(Map<String, dynamic> json) {
+    return MomentComment(
+      id: json['id']?.toString() ?? '',
+      userId: json['userId']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? '',
+      content: json['content']?.toString() ?? '',
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
 }
 
 class Moment {
@@ -63,6 +83,60 @@ class Moment {
       likeCount: likeCount ?? this.likeCount,
       isLiked: isLiked ?? this.isLiked,
       comments: comments ?? this.comments,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'authorId': authorId,
+    'authorName': authorName,
+    'authorAvatarUrl': authorAvatarUrl,
+    'content': content,
+    'mediaPaths': mediaPaths,
+    'createdAt': createdAt.toIso8601String(),
+    'visibility': visibility.name,
+    'location': location,
+    'likeCount': likeCount,
+    'isLiked': isLiked,
+    'comments': comments.map((comment) => comment.toJson()).toList(),
+  };
+
+  factory Moment.fromJson(Map<String, dynamic> json) {
+    final visibilityName = json['visibility']?.toString();
+    final visibility = MomentVisibility.values.firstWhere(
+      (value) => value.name == visibilityName,
+      orElse: () => MomentVisibility.public,
+    );
+    final rawComments = json['comments'];
+    final rawMediaPaths = json['mediaPaths'];
+    return Moment(
+      id: json['id']?.toString() ?? '',
+      authorId: json['authorId']?.toString() ?? '',
+      authorName: json['authorName']?.toString() ?? '',
+      authorAvatarUrl: json['authorAvatarUrl']?.toString() ?? '',
+      content: json['content']?.toString() ?? '',
+      mediaPaths: rawMediaPaths is List
+          ? rawMediaPaths.map((path) => path.toString()).toList()
+          : const [],
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      visibility: visibility,
+      location: json['location']?.toString(),
+      likeCount: json['likeCount'] is num
+          ? (json['likeCount'] as num).toInt()
+          : int.tryParse(json['likeCount']?.toString() ?? '') ?? 0,
+      isLiked: json['isLiked'] == true,
+      comments: rawComments is List
+          ? rawComments
+                .whereType<Map>()
+                .map(
+                  (comment) => MomentComment.fromJson(
+                    Map<String, dynamic>.from(comment),
+                  ),
+                )
+                .toList()
+          : const [],
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../data/moment_media_uploader.dart';
 import '../data/moments_repository.dart';
 import '../domain/moment.dart';
 
@@ -14,12 +15,14 @@ class MomentComposerPage extends StatefulWidget {
     required this.authorId,
     required this.authorName,
     required this.authorAvatarUrl,
+    this.mediaUploader,
   });
 
   final MomentsRepository repository;
   final String authorId;
   final String authorName;
   final String authorAvatarUrl;
+  final MomentMediaUploader? mediaUploader;
 
   @override
   State<MomentComposerPage> createState() => _MomentComposerPageState();
@@ -48,6 +51,7 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
     final images = await _imagePicker.pickMultiImage(
       imageQuality: 85,
       maxWidth: 2048,
+      maxHeight: 2048,
     );
     if (!mounted || images.isEmpty) return;
     setState(() {
@@ -59,13 +63,19 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
     if (!_canPublish || _isPublishing) return;
     setState(() => _isPublishing = true);
     try {
+      final mediaPaths = _mediaPaths.isEmpty
+          ? const <String>[]
+          : await (widget.mediaUploader ?? ServerMomentMediaUploader()).upload(
+              authorId: widget.authorId,
+              localPaths: _mediaPaths,
+            );
       await widget.repository.publish(
         MomentDraft(
           authorId: widget.authorId,
           authorName: widget.authorName,
           authorAvatarUrl: widget.authorAvatarUrl,
           content: _contentController.text,
-          mediaPaths: _mediaPaths,
+          mediaPaths: mediaPaths,
           visibility: _visibility,
           location: _location,
         ),

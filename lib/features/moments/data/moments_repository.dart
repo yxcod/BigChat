@@ -1,4 +1,5 @@
 import '../domain/moment.dart';
+import 'moments_local_storage.dart';
 
 abstract class MomentsRepository {
   Future<List<Moment>> fetchOwnMoments(String userId);
@@ -18,15 +19,30 @@ abstract class MomentsRepository {
 /// Frontend-only implementation. Replace this registration with an API-backed
 /// repository later; pages only depend on [MomentsRepository].
 class LocalMomentsRepository implements MomentsRepository {
-  LocalMomentsRepository();
+  LocalMomentsRepository({MomentsLocalStorage? storage})
+    : _storage = storage ?? InMemoryMomentsStorage();
 
-  static final LocalMomentsRepository instance = LocalMomentsRepository();
+  static final LocalMomentsRepository instance = LocalMomentsRepository(
+    storage: FileMomentsStorage(),
+  );
 
+  final MomentsLocalStorage _storage;
   final List<Moment> _moments = [];
   int _sequence = 0;
+  Future<void>? _loadFuture;
+
+  Future<void> _ensureLoaded() {
+    return _loadFuture ??= () async {
+      final storedMoments = await _storage.load();
+      _moments
+        ..clear()
+        ..addAll(storedMoments);
+    }();
+  }
 
   @override
   Future<List<Moment>> fetchOwnMoments(String userId) async {
+    await _ensureLoaded();
     final result =
         _moments.where((moment) => moment.authorId == userId).toList()
           ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
@@ -35,6 +51,7 @@ class LocalMomentsRepository implements MomentsRepository {
 
   @override
   Future<Moment> publish(MomentDraft draft) async {
+    await _ensureLoaded();
     final moment = Moment(
       id: _nextId('moment'),
       authorId: draft.authorId,
@@ -50,6 +67,7 @@ class LocalMomentsRepository implements MomentsRepository {
       comments: const [],
     );
     _moments.add(moment);
+    await _storage.save(_moments);
     return moment;
   }
 
@@ -58,7 +76,8 @@ class LocalMomentsRepository implements MomentsRepository {
     required String momentId,
     required String userId,
   }) async {
-    return _update(momentId, (moment) {
+    await _ensureLoaded();
+    final updated = _update(momentId, (moment) {
       final nextLiked = !moment.isLiked;
       return moment.copyWith(
         isLiked: nextLiked,
@@ -67,6 +86,8 @@ class LocalMomentsRepository implements MomentsRepository {
             .toInt(),
       );
     });
+    await _storage.save(_moments);
+    return updated;
   }
 
   @override
@@ -76,11 +97,12 @@ class LocalMomentsRepository implements MomentsRepository {
     required String displayName,
     required String content,
   }) async {
+    await _ensureLoaded();
     final normalizedContent = content.trim();
     if (normalizedContent.isEmpty) {
       throw ArgumentError.value(content, 'content', '评论不能为空');
     }
-    return _update(
+    final updated = _update(
       momentId,
       (moment) => moment.copyWith(
         comments: List<MomentComment>.unmodifiable([
@@ -95,6 +117,8 @@ class LocalMomentsRepository implements MomentsRepository {
         ]),
       ),
     );
+    await _storage.save(_moments);
+    return updated;
   }
 
   Moment _update(String momentId, Moment Function(Moment) transform) {
