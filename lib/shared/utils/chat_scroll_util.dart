@@ -10,6 +10,7 @@ class ChatScrollUtil {
   static void scheduleJumpToBottom({
     required ScrollController controller,
     required bool Function() isActive,
+    bool reversed = false,
     VoidCallback? onComplete,
     Duration settleDuration = const Duration(milliseconds: 700),
     Duration retryInterval = const Duration(milliseconds: 32),
@@ -27,7 +28,9 @@ class ChatScrollUtil {
         }
 
         if (controller.hasClients) {
-          final target = controller.position.maxScrollExtent;
+          final target = reversed
+              ? controller.position.minScrollExtent
+              : controller.position.maxScrollExtent;
           if ((controller.position.pixels - target).abs() > 0.5) {
             controller.jumpTo(target);
           }

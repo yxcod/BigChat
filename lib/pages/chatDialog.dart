@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -47,11 +46,11 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     _scrollController.addListener(() {
       // 当滚动到顶部时，加载更多聊天记录
       final atTop =
-          _scrollController.position.pixels <=
-          _scrollController.position.minScrollExtent + 5.0; // 允许5像素的误差
+          _scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 5.0; // 允许5像素的误差
 
       debugPrint(
-        '滚动位置: ${_scrollController.position.pixels}, 最小滚动位置: ${_scrollController.position.minScrollExtent}',
+        '滚动位置: ${_scrollController.position.pixels}, 最大滚动位置: ${_scrollController.position.maxScrollExtent}',
       );
       debugPrint('是否滚动到顶部: $atTop');
 
@@ -74,107 +73,22 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       final globalUtil = GlobalUtil();
       debugPrint('开始加载更多聊天记录...');
 
-      // 1. 记录当前聊天记录
-      List<Message> currentMessages = List.from(globalUtil.getChatRecords(id!));
+      final currentMessages = List<Message>.from(
+        globalUtil.getChatRecords(id!),
+      );
       debugPrint('当前记录数量: ${currentMessages.length}');
 
-      // 2. 记录当前可见区域的关键消息
-      Message? keyMessage;
-      if (_scrollController.hasClients && currentMessages.isNotEmpty) {
-        // 获取当前滚动位置
-        final scrollPosition = _scrollController.position.pixels;
-        debugPrint('当前滚动位置: $scrollPosition');
-
-        // 计算每条消息的平均高度
-        final averageItemHeight = scrollPosition > 0
-            ? scrollPosition / currentMessages.length
-            : 50.0; // 默认高度50.0
-        debugPrint('平均消息高度: $averageItemHeight');
-
-        // 计算当前可见区域中间位置的消息索引
-        int middleIndex =
-            (scrollPosition +
-                _scrollController.position.viewportDimension / 2) ~/
-            averageItemHeight;
-        debugPrint('计算的中间索引: $middleIndex');
-
-        // 确保索引在有效范围内
-        middleIndex = middleIndex.clamp(0, currentMessages.length - 1);
-        debugPrint('修正后的中间索引: $middleIndex');
-        keyMessage = currentMessages[middleIndex];
-        debugPrint('关键消息ID: ${keyMessage.msgId}');
-      }
-
-      // 3. 调用API加载更多记录
       debugPrint('调用API加载更多记录...');
       await globalUtil.loadMoreChatRecords(id!);
       debugPrint('API调用完成');
 
-      // 4. 获取新的聊天记录列表
-      List<Message> newMessages = globalUtil.getChatRecords(id!);
+      final newMessages = globalUtil.getChatRecords(id!);
       debugPrint('新记录数量: ${newMessages.length}');
 
-      // 5. 计算新添加的记录数量
-      int addedMessageCount = newMessages.length - currentMessages.length;
+      final addedMessageCount = newMessages.length - currentMessages.length;
       debugPrint('新增记录数量: $addedMessageCount');
 
-      // 6. 更新UI
-      debugPrint('更新UI...');
-      setState(() {});
-
-      // 7. 使用SchedulerBinding确保在UI更新完成后再调整滚动位置
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients && keyMessage != null) {
-          debugPrint('开始调整滚动位置...');
-          // 8. 找到关键消息在新列表中的位置
-          int newIndex = newMessages.indexWhere(
-            (msg) => msg.msgId == keyMessage!.msgId,
-          );
-          debugPrint('关键消息在新列表中的位置: $newIndex');
-
-          if (newIndex != -1) {
-            // 9. 计算新的滚动位置
-            // 目标是让关键消息保持在原来的可见位置
-            final position = _scrollController.position;
-            debugPrint('新的最大滚动范围: ${position.maxScrollExtent}');
-
-            // 计算新列表中每条消息的平均高度
-            double averageItemHeight = 0;
-            if (newMessages.isNotEmpty) {
-              averageItemHeight = position.maxScrollExtent / newMessages.length;
-              debugPrint('新列表平均消息高度: $averageItemHeight');
-            }
-
-            // 计算关键消息在旧列表中的位置
-            int oldIndex = currentMessages.indexOf(keyMessage);
-            debugPrint('关键消息在旧列表中的位置: $oldIndex');
-
-            if (oldIndex != -1) {
-              // 计算需要滚动的偏移量
-              // 关键消息在新列表中的位置比旧列表中多了addedMessageCount个位置（新消息被添加到顶部）
-              int indexDifference = newIndex - oldIndex;
-              debugPrint('位置差异: $indexDifference');
-
-              // 新的滚动位置 = 原来的滚动位置 + 新增消息占用的高度
-              final newScrollOffset =
-                  _scrollController.position.pixels +
-                  (indexDifference * averageItemHeight);
-              debugPrint('计算的新滚动位置: $newScrollOffset');
-
-              // 确保滚动位置在有效范围内
-              final safeOffset = newScrollOffset.clamp(
-                0.0,
-                position.maxScrollExtent,
-              );
-              debugPrint('修正后的安全滚动位置: $safeOffset');
-
-              // 滚动到目标位置
-              _scrollController.jumpTo(safeOffset);
-              debugPrint('滚动完成');
-            }
-          }
-        }
-      });
+      if (mounted) setState(() {});
 
       debugPrint('成功加载更多聊天记录，新增$addedMessageCount条，当前共${newMessages.length}条');
     } catch (e) {
@@ -726,6 +640,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     ChatScrollUtil.scheduleJumpToBottom(
       controller: _scrollController,
       isActive: () => mounted && request == _scrollToBottomRequest,
+      reversed: true,
       onComplete: _initialPositioningRequested
           ? () {
               if (mounted && request == _scrollToBottomRequest) {
@@ -843,7 +758,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
               Expanded(
                 child: ListView.builder(
                   padding: EdgeInsets.all(8.0),
-                  reverse: false,
+                  reverse: true,
                   controller: _scrollController,
                   // 使用当前聊天好友的全局消息列表，如果不存在则使用空列表
                   itemCount: GlobalUtil().getChatRecords(id ?? '').length,
@@ -851,7 +766,8 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                     // 获取当前聊天好友的全局消息列表
                     final globalUtil = GlobalUtil();
                     final friendMessages = globalUtil.getChatRecords(id ?? '');
-                    final message = friendMessages[index];
+                    final message =
+                        friendMessages[friendMessages.length - 1 - index];
                     return MessageBubble(
                       message: message,
                       friendInfo: friendInfo,

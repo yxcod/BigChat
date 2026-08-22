@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -75,8 +74,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     // 为滚动控制器添加监听器，实现向上滑动加载更多
     _scrollController.addListener(() {
       final atTop =
-          _scrollController.position.pixels <=
-          _scrollController.position.minScrollExtent + 5.0;
+          _scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 5.0;
 
       if (atTop && !_isInitialScrollPending) {
         _loadMoreChatRecords();
@@ -368,26 +367,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       _isLoadingMore = true;
       final globalUtil = GlobalUtil();
 
-      // 记录当前聊天记录
-      List<Message> currentMessages = List.from(
+      final currentMessages = List<Message>.from(
         globalUtil.getChatRecords(_conversationKey),
       );
-
-      // 记录当前可见区域的关键消息
-      Message? keyMessage;
-      if (_scrollController.hasClients && currentMessages.isNotEmpty) {
-        final scrollPosition = _scrollController.position.pixels;
-        final averageItemHeight = scrollPosition > 0
-            ? scrollPosition / currentMessages.length
-            : 50.0;
-
-        int middleIndex =
-            (scrollPosition +
-                _scrollController.position.viewportDimension / 2) ~/
-            averageItemHeight;
-        middleIndex = middleIndex.clamp(0, currentMessages.length - 1);
-        keyMessage = currentMessages[middleIndex];
-      }
 
       // 群聊必须使用群聊记录接口，不能复用单聊记录接口。
       await _loadGroupChatRecords(
@@ -395,46 +377,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         scrollToBottom: false,
       );
 
-      // 获取新的聊天记录列表
-      List<Message> newMessages = globalUtil.getChatRecords(_conversationKey);
-
-      // 更新UI
-      setState(() {});
-
-      // 使用SchedulerBinding确保在UI更新完成后再调整滚动位置
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients && keyMessage != null) {
-          // 找到关键消息在新列表中的位置
-          int newIndex = newMessages.indexWhere(
-            (msg) => msg.msgId == keyMessage!.msgId,
-          );
-
-          if (newIndex != -1) {
-            final position = _scrollController.position;
-            double averageItemHeight = 0;
-            if (newMessages.isNotEmpty) {
-              averageItemHeight = position.maxScrollExtent / newMessages.length;
-            }
-
-            // 计算关键消息在旧列表中的位置
-            int oldIndex = currentMessages.indexOf(keyMessage);
-
-            if (oldIndex != -1) {
-              int indexDifference = newIndex - oldIndex;
-              final newScrollOffset =
-                  _scrollController.position.pixels +
-                  (indexDifference * averageItemHeight);
-
-              final safeOffset = newScrollOffset.clamp(
-                0.0,
-                position.maxScrollExtent,
-              );
-
-              _scrollController.jumpTo(safeOffset);
-            }
-          }
-        }
-      });
+      if (mounted) setState(() {});
     } catch (e) {
       debugPrint('加载更多聊天记录失败: $e');
     } finally {
@@ -882,6 +825,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     ChatScrollUtil.scheduleJumpToBottom(
       controller: _scrollController,
       isActive: () => mounted && request == _scrollToBottomRequest,
+      reversed: true,
       onComplete: _initialPositioningRequested
           ? () {
               if (mounted && request == _scrollToBottomRequest) {
@@ -1054,7 +998,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
               Expanded(
                 child: ListView.builder(
                   padding: EdgeInsets.all(8.0),
-                  reverse: false,
+                  reverse: true,
                   controller: _scrollController,
                   // 使用当前聊天群的全局消息列表，如果不存在则使用空列表
                   itemCount: GlobalUtil()
@@ -1066,7 +1010,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                     final groupMessages = globalUtil.getChatRecords(
                       _conversationKey,
                     );
-                    final message = groupMessages[index];
+                    final message =
+                        groupMessages[groupMessages.length - 1 - index];
                     // 获取消息的未读人数
                     int unreadCount = 0; // 默认值
                     final msgStatusIndex = _messageReadStatus.indexWhere(
