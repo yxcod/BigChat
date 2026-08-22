@@ -178,6 +178,28 @@ class GlobalUtil {
     await persistChatRecords(conversationId);
   }
 
+  Future<void> mergeChatRecords(
+    String conversationId,
+    List<Message> messages,
+  ) async {
+    _chatStore.mergeMessages(conversationId, messages);
+    await persistChatRecords(conversationId);
+  }
+
+  void updateOutgoingMessageStatus(int messageId, MessageStatus status) {
+    final conversationId = _chatStore.updateMessageStatus(messageId, status);
+    if (conversationId != null) _scheduleChatCacheWrite(conversationId);
+  }
+
+  void reconcileOutgoingMessageId(int clientMessageId, int serverMessageId) {
+    if (clientMessageId <= 0 || serverMessageId <= 0) return;
+    final conversationId = _chatStore.reconcileMessageId(
+      clientMessageId,
+      serverMessageId,
+    );
+    if (conversationId != null) _scheduleChatCacheWrite(conversationId);
+  }
+
   Future<void> flushChatRecordsToLocal() async {
     for (final timer in _chatCacheWriteTimers.values) {
       timer.cancel();
@@ -229,7 +251,7 @@ class GlobalUtil {
           .toList();
 
       // 保存到_chatRecords
-      _chatStore.replaceMessages(userName, messages);
+      _chatStore.mergeMessages(userName, messages);
       await persistChatRecords(userName);
 
       debugPrint('成功加载$count条聊天记录');

@@ -71,7 +71,7 @@ class MessageModel {
 }
 
 class Message {
-  final int msgId;
+  int msgId;
   final String content;
   final bool isMe;
   final String time;

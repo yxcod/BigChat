@@ -51,6 +51,46 @@ class ChatStore {
     _chatRecords[conversationId] = messages;
   }
 
+  void mergeMessages(String conversationId, List<Message> messages) {
+    final merged = <int, Message>{
+      for (final message in _chatRecords[conversationId] ?? const <Message>[])
+        message.msgId: message,
+    };
+    for (final message in messages) {
+      merged[message.msgId] = message;
+    }
+    final result = merged.values.toList()
+      ..sort((left, right) {
+        final byTime = left.timestamp.compareTo(right.timestamp);
+        return byTime != 0 ? byTime : left.msgId.compareTo(right.msgId);
+      });
+    _chatRecords[conversationId] = result;
+  }
+
+  String? updateMessageStatus(int messageId, MessageStatus status) {
+    for (final entry in _chatRecords.entries) {
+      for (final message in entry.value) {
+        if (message.msgId == messageId && message.isMe) {
+          message.status = status;
+          return entry.key;
+        }
+      }
+    }
+    return null;
+  }
+
+  String? reconcileMessageId(int clientMessageId, int serverMessageId) {
+    for (final entry in _chatRecords.entries) {
+      for (final message in entry.value) {
+        if (message.msgId == clientMessageId && message.isMe) {
+          message.msgId = serverMessageId;
+          return entry.key;
+        }
+      }
+    }
+    return null;
+  }
+
   void clearMessages(String conversationId) {
     _chatRecords.remove(conversationId);
   }

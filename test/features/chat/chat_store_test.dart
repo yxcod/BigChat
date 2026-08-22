@@ -58,10 +58,41 @@ void main() {
       store.clearAllMessages();
       expect(store.messages('bob'), isEmpty);
     });
+
+    test('merges server history without dropping older local records', () {
+      final store = ChatStore();
+      store.replaceMessages('alice', [
+        _message(id: 1, isMe: false, timestamp: 1000),
+        _message(id: 2, isMe: true, timestamp: 2000),
+      ]);
+
+      store.mergeMessages('alice', [
+        _message(id: 2, isMe: true, timestamp: 2000),
+        _message(id: 3, isMe: false, timestamp: 3000),
+      ]);
+
+      expect(store.messages('alice').map((message) => message.msgId), [
+        1,
+        2,
+        3,
+      ]);
+    });
+
+    test('reconciles temporary group id and delivery status', () {
+      final store = ChatStore();
+      final outgoing = _message(id: 10, isMe: true);
+      outgoing.status = MessageStatus.sending;
+      store.addMessage('10001', outgoing);
+
+      expect(store.reconcileMessageId(10, 99), '10001');
+      expect(outgoing.msgId, 99);
+      expect(store.updateMessageStatus(99, MessageStatus.sent), '10001');
+      expect(outgoing.status, MessageStatus.sent);
+    });
   });
 }
 
-Message _message({required int id, required bool isMe}) {
+Message _message({required int id, required bool isMe, int? timestamp}) {
   return Message(
     msgId: id,
     content: 'message $id',
@@ -69,5 +100,6 @@ Message _message({required int id, required bool isMe}) {
     time: '12:00',
     isRead: false,
     conversationId: 'conversation',
+    timestamp: timestamp,
   );
 }

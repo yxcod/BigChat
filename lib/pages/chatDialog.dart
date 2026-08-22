@@ -234,8 +234,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
       // 使用WebSocket发送图片消息
       if (_wsManager.isConnected) {
-        // 构建并发送WebSocket消息
-        _sendWebSocketMessage(
+        final queued = _sendWebSocketMessage(
           msgId: msgId,
           content: imageName, // 图片消息的content存储图片名
           receiver: receiver,
@@ -243,14 +242,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
           messageType: MessageType.image,
         );
 
-        // 更新消息状态为发送成功
-        List<Message> friendMessages = globalUtil.getChatRecords(receiver);
-        for (var message in friendMessages) {
-          if (message.msgId == msgId && message.isMe) {
-            message.status = MessageStatus.sent;
-            break;
-          }
-        }
+        if (!queued) newMessage.status = MessageStatus.failed;
 
         // 更新UI并滚动到底部
         setState(() {});
@@ -518,7 +510,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       for (var message in friendMessages) {
         if (message.msgId == msgId && message.isMe) {
           message.isRead = true;
-          message.status = MessageStatus.sent;
+          message.status = messageData['status'] == 'failed'
+              ? MessageStatus.failed
+              : MessageStatus.sent;
           break;
         }
       }
@@ -544,7 +538,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       List<Message> friendMessages = globalUtil.getChatRecords(id!);
       for (var message in friendMessages) {
         if (message.msgId == msgId && message.isMe) {
-          message.status = MessageStatus.sent;
+          message.status = messageData['status'] == 'failed'
+              ? MessageStatus.failed
+              : MessageStatus.sent;
           break;
         }
       }
@@ -619,11 +615,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     try {
       final globalUtil = GlobalUtil();
 
-      // 先从本地恢复；只有本地无记录时才首次请求后端。
-      final restoredFromLocal = await globalUtil.hydrateChatRecords(id!);
-      if (!restoredFromLocal && globalUtil.getChatRecordsCount(id!) == 0) {
-        await globalUtil.loadChatRecords(id!, 100);
-      }
+      // 先立即展示本地缓存，再与服务端最近记录合并，避免在线期间漏收后永久缺失。
+      await globalUtil.hydrateChatRecords(id!);
+      await globalUtil.loadChatRecords(id!, 100);
 
       if (mounted) setState(() {});
 
@@ -984,7 +978,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       isRead: false,
       conversationId: conversationId,
       messageType: MessageType.text,
-      status: MessageStatus.failed, // 初始状态为失败，等待WebSocket确认
+      status: MessageStatus.sending,
     );
 
     // 添加消息到全局聊天记录
@@ -997,7 +991,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     // 使用WebSocket发送消息
     if (_wsManager.isConnected) {
       // 构建并发送WebSocket消息
-      _sendWebSocketMessage(
+      final queued = _sendWebSocketMessage(
         msgId: msgId,
         content: text,
         receiver: receiver,
@@ -1005,26 +999,20 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         messageType: MessageType.text,
       );
 
-      // 更新消息状态为发送中
-      List<Message> friendMessages = globalUtil.getChatRecords(receiver);
-      for (var message in friendMessages) {
-        if (message.msgId == msgId && message.isMe) {
-          message.status = MessageStatus.sent;
-          break;
-        }
-      }
+      if (!queued) newMessage.status = MessageStatus.failed;
 
       // 更新UI并滚动到底部
       setState(() {});
       _scrollToBottom();
     } else {
       debugPrint('WebSocket未连接,消息发送失败');
-      // 保持失败状态
+      newMessage.status = MessageStatus.failed;
+      setState(() {});
     }
   }
 
   // 发送WebSocket消息的通用方法
-  void _sendWebSocketMessage({
+  bool _sendWebSocketMessage({
     required int msgId,
     required String content,
     required String receiver,
@@ -1051,7 +1039,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     };
 
     // 发送WebSocket消息
-    _wsManager.send(messageData);
+    return _wsManager.send(messageData);
   }
 
   String _getTime() {

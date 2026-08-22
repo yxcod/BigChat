@@ -193,12 +193,12 @@ class WebSocketManager {
   }
 
   /// 发送消息
-  void send(dynamic message) {
+  bool send(dynamic message) {
     if (!isConnected) {
       if (kDebugMode) {
         print('WebSocket is not connected');
       }
-      return;
+      return false;
     }
 
     try {
@@ -207,8 +207,10 @@ class WebSocketManager {
       } else {
         _socket!.add(json.encode(message));
       }
+      return true;
     } catch (e) {
       _handleError(e);
+      return false;
     }
   }
 

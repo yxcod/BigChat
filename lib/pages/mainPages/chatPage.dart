@@ -15,6 +15,7 @@ import '../../utils/WebSocketManager.dart';
 import '../../shared/widgets/app_search_field.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
+import '../../features/chat/domain/chat_realtime_event.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
@@ -106,21 +107,102 @@ class _ChatpageState extends State<Chatpage> {
     if (message is! Map<String, dynamic>) {
       return;
     }
-    const conversationEventTypes = {
-      'chat',
-      'chatCallback',
-      'groupChat',
-      'groupChatCallback',
-    };
-    if (!conversationEventTypes.contains(message['type'])) {
-      return;
+
+    final event = ChatRealtimeEvent.parse(message);
+    switch (event.type) {
+      case ChatRealtimeEventType.privateMessage:
+        _storePrivateRealtimeMessage(event);
+        break;
+      case ChatRealtimeEventType.groupMessage:
+        _storeGroupRealtimeMessage(event);
+        break;
+      case ChatRealtimeEventType.privateDelivery:
+        globalUtil.updateOutgoingMessageStatus(
+          event.messageId,
+          event.deliveryStatus == 'failed'
+              ? MessageStatus.failed
+              : MessageStatus.sent,
+        );
+        break;
+      case ChatRealtimeEventType.groupDelivery:
+        globalUtil.reconcileOutgoingMessageId(
+          event.clientMessageId,
+          event.messageId,
+        );
+        globalUtil.updateOutgoingMessageStatus(
+          event.messageId,
+          event.code == 100 ? MessageStatus.sent : MessageStatus.failed,
+        );
+        break;
+      case ChatRealtimeEventType.readReceipt:
+      case ChatRealtimeEventType.other:
+        break;
     }
+
+    if (event.type == ChatRealtimeEventType.other) return;
     _refreshDebounceTimer?.cancel();
     _refreshDebounceTimer = Timer(const Duration(milliseconds: 400), () {
       if (mounted) {
         fetchConversations();
       }
     });
+  }
+
+  void _storePrivateRealtimeMessage(ChatRealtimeEvent event) {
+    if (event.senderId.isEmpty || event.messageId <= 0) return;
+    final isOpenChat =
+        globalUtil.isChatting == true &&
+        globalUtil.currentChatUserName == event.senderId;
+    if (isOpenChat) return;
+
+    globalUtil.addMessage(
+      event.senderId,
+      Message(
+        msgId: event.messageId,
+        content: event.content,
+        isMe: false,
+        time: GlobalUtil.formatChatTimestamp(event.timestamp),
+        isRead: false,
+        conversationId: event.conversationId,
+        messageType: event.messageType == 2
+            ? MessageType.image
+            : MessageType.text,
+        status: MessageStatus.sent,
+        senderId: event.senderId,
+        timestamp: event.timestamp,
+      ),
+    );
+    globalUtil.addUnreadMessage(event.senderId, event.messageId);
+  }
+
+  void _storeGroupRealtimeMessage(ChatRealtimeEvent event) {
+    if (event.groupId <= 0 || event.senderId.isEmpty || event.messageId <= 0) {
+      return;
+    }
+    final conversationKey = event.groupId.toString();
+    final isOpenChat =
+        globalUtil.isChatting == true &&
+        globalUtil.currentChatUserName == conversationKey;
+    if (isOpenChat) return;
+
+    globalUtil.addMessage(
+      conversationKey,
+      Message(
+        msgId: event.messageId,
+        content: event.content,
+        isMe: false,
+        time: GlobalUtil.formatChatTimestamp(event.timestamp),
+        isRead: false,
+        conversationId: conversationKey,
+        messageType: event.messageType == 2
+            ? MessageType.image
+            : MessageType.text,
+        status: MessageStatus.sent,
+        senderId: event.senderId,
+        timestamp: event.timestamp,
+      ),
+    );
+    globalUtil.addUnreadMessage(conversationKey, event.messageId);
   }
 
   void updateChat(String userName, Chat chat) {

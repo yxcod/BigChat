@@ -57,6 +57,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   @override
   void initState() {
     super.initState();
+    final globalUtil = GlobalUtil();
+    globalUtil.isChatting = true;
+    globalUtil.currentChatUserName = widget.groupId.toString();
 
     // 初始化群名称
     _currentGroupName = widget.groupName;
@@ -463,7 +466,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         isRead: false,
         conversationId: conversationId,
         messageType: MessageType.image,
-        status: MessageStatus.failed,
+        status: MessageStatus.sending,
         senderId: globalUtil.userName,
       );
 
@@ -478,7 +481,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       // 使用WebSocket发送消息
       if (_wsManager.isConnected) {
         // 构建并发送WebSocket消息
-        _sendWebSocketMessage(
+        final queued = _sendWebSocketMessage(
           msgId: msgId,
           content: imageName,
           receiver: widget.groupId,
@@ -486,16 +489,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           messageType: MessageType.image,
         );
 
-        // 更新消息状态为发送中
-        List<Message> groupMessages = globalUtil.getChatRecords(
-          widget.groupId.toString(),
-        );
-        for (var message in groupMessages) {
-          if (message.msgId == msgId && message.isMe) {
-            message.status = MessageStatus.sent;
-            break;
-          }
-        }
+        if (!queued) newMessage.status = MessageStatus.failed;
 
         // 更新UI并滚动到底部
         setState(() {});
@@ -717,6 +711,20 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   void _handleChatCallback(Map<String, dynamic> messageData) {
     final globalUtil = GlobalUtil();
     int msgId = _parseInt(messageData['msgId']);
+    final clientMsgId = _parseInt(messageData['clientMsgId']);
+    if (clientMsgId > 0) {
+      globalUtil.reconcileOutgoingMessageId(clientMsgId, msgId);
+      final statusIndex = _messageReadStatus.indexWhere(
+        (status) => _parseInt(status['msgId']) == clientMsgId,
+      );
+      if (statusIndex != -1) _messageReadStatus[statusIndex]['msgId'] = msgId;
+      globalUtil.updateOutgoingMessageStatus(
+        msgId,
+        _parseInt(messageData['code']) == 100
+            ? MessageStatus.sent
+            : MessageStatus.failed,
+      );
+    }
     String status = messageData['status']?.toString() ?? '';
     String sender = messageData['sender']?.toString() ?? '';
     String sessionId = messageData['sessionId']?.toString() ?? '';
@@ -1195,7 +1203,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       isRead: false,
       conversationId: conversationId,
       messageType: MessageType.text,
-      status: MessageStatus.failed, // 初始状态为失败，等待WebSocket确认
+      status: MessageStatus.sending,
       senderId: globalUtil.userName,
     );
 
@@ -1212,7 +1220,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     // 使用WebSocket发送消息
     if (_wsManager.isConnected) {
       // 构建并发送WebSocket消息
-      _sendWebSocketMessage(
+      final queued = _sendWebSocketMessage(
         msgId: msgId,
         content: text,
         receiver: widget.groupId,
@@ -1220,28 +1228,20 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         messageType: MessageType.text,
       );
 
-      // 更新消息状态为发送中
-      List<Message> groupMessages = globalUtil.getChatRecords(
-        widget.groupId.toString(),
-      );
-      for (var message in groupMessages) {
-        if (message.msgId == msgId && message.isMe) {
-          message.status = MessageStatus.sent;
-          break;
-        }
-      }
+      if (!queued) newMessage.status = MessageStatus.failed;
 
       // 更新UI并滚动到底部
       setState(() {});
       _scrollToBottom();
     } else {
       debugPrint('WebSocket未连接,消息发送失败');
-      // 保持失败状态
+      newMessage.status = MessageStatus.failed;
+      setState(() {});
     }
   }
 
   // 发送WebSocket消息的通用方法
-  void _sendWebSocketMessage({
+  bool _sendWebSocketMessage({
     required int msgId,
     required String content,
     required int receiver,
@@ -1273,8 +1273,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     debugPrint('WebSocket连接状态: ${_wsManager.isConnected}');
 
     // 发送WebSocket消息
-    _wsManager.send(messageData);
+    final queued = _wsManager.send(messageData);
     debugPrint('消息已发送');
+    return queued;
   }
 
   String _getTime() {
