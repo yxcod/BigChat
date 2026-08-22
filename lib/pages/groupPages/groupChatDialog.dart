@@ -708,6 +708,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   void _handleChatCallback(Map<String, dynamic> messageData) {
     final globalUtil = GlobalUtil();
     int msgId = _parseInt(messageData['msgId']);
+    String sessionId = messageData['sessionId']?.toString() ?? '';
+    if (sessionId != widget.groupId.toString()) {
+      return;
+    }
     final clientMsgId = _parseInt(messageData['clientMsgId']);
     if (clientMsgId > 0) {
       globalUtil.reconcileOutgoingMessageId(clientMsgId, msgId);
@@ -724,15 +728,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     }
     String status = messageData['status']?.toString() ?? '';
     String sender = messageData['sender']?.toString() ?? '';
-    String sessionId = messageData['sessionId']?.toString() ?? '';
     int readTime = _parseInt(
       messageData['readTime'],
       fallback: DateTime.now().millisecondsSinceEpoch,
     );
-    if (sessionId != widget.groupId.toString()) {
-      return;
-    }
-
     // 更新消息状态
     List<Message> groupMessages = globalUtil.getChatRecords(_conversationKey);
     for (var message in groupMessages) {

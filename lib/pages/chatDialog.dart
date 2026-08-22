@@ -572,7 +572,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         'type': 'chatCallback',
         'msgId': msgId,
         'receiveId': friendInfo?.userName,
-        'sender': GlobalUtil().userInfoModel.userName,
+        'sender': GlobalUtil().userName,
         'sessionId': _generateConversationId(),
       });
     }
@@ -1028,7 +1028,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       'msgType': msgType, // 1文本 2图片
       'msgId': msgId,
       'msgContent': content,
-      'sendUserId': GlobalUtil().userInfoModel.userName,
+      'sendUserId': GlobalUtil().userName,
       'receiveId': receiver,
       'sendTime': GlobalUtil.getCurrentTimestamp(),
       'readTime': 0,
@@ -1056,7 +1056,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   // 生成会话ID，规则：较大的手机号放在前面，用下划线分隔
   String _generateConversationId() {
     final globalUtil = GlobalUtil();
-    String myUserName = globalUtil.userInfoModel.userName ?? '';
+    String myUserName = globalUtil.userName ?? '';
     String otherUserName = friendInfo?.userName ?? '';
     return GlobalUtil.generateSessionId(myUserName, otherUserName);
   }
