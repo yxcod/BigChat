@@ -29,9 +29,7 @@ class MomentComment {
       userId: json['userId']?.toString() ?? '',
       displayName: json['displayName']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
-      createdAt:
-          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0),
+      createdAt: _parseMomentDateTime(json['createdAt']),
     );
   }
 }
@@ -102,11 +100,7 @@ class Moment {
   };
 
   factory Moment.fromJson(Map<String, dynamic> json) {
-    final visibilityName = json['visibility']?.toString();
-    final visibility = MomentVisibility.values.firstWhere(
-      (value) => value.name == visibilityName,
-      orElse: () => MomentVisibility.public,
-    );
+    final visibility = _parseMomentVisibility(json['visibility']);
     final rawComments = json['comments'];
     final rawMediaPaths = json['mediaPaths'];
     return Moment(
@@ -118,9 +112,7 @@ class Moment {
       mediaPaths: rawMediaPaths is List
           ? rawMediaPaths.map((path) => path.toString()).toList()
           : const [],
-      createdAt:
-          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0),
+      createdAt: _parseMomentDateTime(json['createdAt']),
       visibility: visibility,
       location: json['location']?.toString(),
       likeCount: json['likeCount'] is num
@@ -139,6 +131,32 @@ class Moment {
           : const [],
     );
   }
+}
+
+DateTime _parseMomentDateTime(Object? value) {
+  if (value is num) {
+    final raw = value.toInt();
+    final milliseconds = raw.abs() < 100000000000 ? raw * 1000 : raw;
+    return DateTime.fromMillisecondsSinceEpoch(milliseconds);
+  }
+  final text = value?.toString() ?? '';
+  final numeric = int.tryParse(text);
+  if (numeric != null) return _parseMomentDateTime(numeric);
+  return DateTime.tryParse(text) ?? DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+MomentVisibility _parseMomentVisibility(Object? value) {
+  final index = value is num
+      ? value.toInt()
+      : int.tryParse(value?.toString() ?? '');
+  if (index != null && index >= 0 && index < MomentVisibility.values.length) {
+    return MomentVisibility.values[index];
+  }
+  final name = value?.toString();
+  return MomentVisibility.values.firstWhere(
+    (visibility) => visibility.name == name,
+    orElse: () => MomentVisibility.public,
+  );
 }
 
 class MomentDraft {

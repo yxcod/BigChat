@@ -8,6 +8,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../core/cache/app_image_cache.dart';
 import '../../../utils/gloabl.dart';
 import '../data/moments_repository.dart';
+import '../data/server_moments_repository.dart';
 import '../domain/moment.dart';
 import 'moment_composer_page.dart';
 
@@ -41,7 +42,7 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
   void initState() {
     super.initState();
     final global = GlobalUtil();
-    _repository = widget.repository ?? LocalMomentsRepository.instance;
+    _repository = widget.repository ?? ServerMomentsRepository.instance;
     _userId = widget.userId ?? global.userName ?? '';
     _displayName =
         widget.displayName ??
