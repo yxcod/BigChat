@@ -24,7 +24,8 @@ void main() {
 
     expect(find.text('我的旅行记录'), findsOneWidget);
     expect(find.text('好友不应出现'), findsNothing);
-    expect(find.byKey(const Key('moment_compose_button')), findsOneWidget);
+    expect(find.byIcon(Icons.camera_alt_outlined), findsNothing);
+    expect(find.byKey(const Key('moment_publish_fab')), findsOneWidget);
   });
 
   testWidgets('page supports liking an own moment', (tester) async {

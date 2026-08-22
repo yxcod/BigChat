@@ -186,18 +186,9 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
-      appBar: AppBar(
-        title: const Text('我的动态'),
-        actions: [
-          IconButton(
-            key: const Key('moment_compose_button'),
-            tooltip: '发布动态',
-            onPressed: _openComposer,
-            icon: const Icon(Icons.camera_alt_outlined),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('我的动态')),
       floatingActionButton: FloatingActionButton.extended(
+        key: const Key('moment_publish_fab'),
         onPressed: _openComposer,
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
