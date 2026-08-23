@@ -45,7 +45,11 @@ class ChatMessageMapper {
           ? readUserIds.isNotEmpty
           : readUserIds.contains(currentUserId),
       conversationId: conversationId,
-      messageType: record.msgType == 2 ? MessageType.image : MessageType.text,
+      messageType: switch (record.msgType) {
+        2 => MessageType.image,
+        4 => MessageType.video,
+        _ => MessageType.text,
+      },
       status: MessageStatus.sent,
       senderId: record.senderId,
       timestamp: record.sendTime,

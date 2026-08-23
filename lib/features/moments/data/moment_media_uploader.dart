@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../../../utils/gloabl.dart';
 import '../../../utils/http.dart';
+import '../../../core/media/video_media.dart';
 
 abstract class MomentMediaUploader {
   Future<List<String>> upload({
@@ -34,6 +35,19 @@ class ServerMomentMediaUploader implements MomentMediaUploader {
 
       final file = File(path);
       if (!await file.exists()) throw Exception('动态图片不存在');
+      if (isVideoPath(path)) {
+        await validateVideoFile(path);
+        final timestamp = DateTime.now().microsecondsSinceEpoch;
+        final videoName =
+            '${authorId}_moment_${timestamp}_$index.${videoExtension(path)}';
+        await _httpUtil.uploadVideoFile(
+          videoName,
+          file.path,
+          userName: authorId,
+        );
+        uploadedUrls.add(_globalUtil.getVideoURL(authorId, videoName));
+        continue;
+      }
       if (await file.length() > 5 * 1024 * 1024) {
         throw Exception('第${index + 1}张图片压缩后仍超过5MB');
       }

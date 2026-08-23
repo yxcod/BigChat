@@ -246,9 +246,11 @@ class _ChatpageState extends State<Chatpage> {
         time: GlobalUtil.formatChatTimestamp(event.timestamp),
         isRead: false,
         conversationId: event.conversationId,
-        messageType: event.messageType == 2
-            ? MessageType.image
-            : MessageType.text,
+        messageType: switch (event.messageType) {
+          2 => MessageType.image,
+          4 => MessageType.video,
+          _ => MessageType.text,
+        },
         status: MessageStatus.sent,
         senderId: event.senderId,
         timestamp: event.timestamp,
@@ -279,9 +281,11 @@ class _ChatpageState extends State<Chatpage> {
         time: GlobalUtil.formatChatTimestamp(event.timestamp),
         isRead: false,
         conversationId: groupId,
-        messageType: event.messageType == 2
-            ? MessageType.image
-            : MessageType.text,
+        messageType: switch (event.messageType) {
+          2 => MessageType.image,
+          4 => MessageType.video,
+          _ => MessageType.text,
+        },
         status: MessageStatus.sent,
         senderId: event.senderId,
         timestamp: event.timestamp,
@@ -914,6 +918,9 @@ class _ChatpageState extends State<Chatpage> {
                 break;
               case 2:
                 messageType = MessageType.image;
+                break;
+              case 4:
+                messageType = MessageType.video;
                 break;
               default:
                 messageType = MessageType.text;

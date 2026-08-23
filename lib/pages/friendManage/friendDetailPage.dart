@@ -10,6 +10,8 @@ import '../../utils/gloabl.dart';
 import '../../utils/WebSocketManager.dart';
 import '../videoCallPage.dart';
 import '../../shared/widgets/fullscreen_image_viewer.dart';
+import '../../core/media/video_media.dart';
+import '../../shared/widgets/app_video_player.dart';
 
 class FriendDetailPage extends StatefulWidget {
   final Map<String, dynamic> friendData;
@@ -288,27 +290,36 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                   mainAxisSpacing: 8,
                 ),
                 itemCount: previewImages.length,
-                itemBuilder: (context, index) => GestureDetector(
-                  onTap: () => showFullscreenImage(
-                    context,
-                    imageProvider: AppImageCache.provider(previewImages[index]),
-                  ),
-                  child: ClipRRect(
-                    key: ValueKey('friend_moment_preview_image_$index'),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image(
-                      image: AppImageCache.provider(previewImages[index]),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => ColoredBox(
-                        color: Colors.grey[200]!,
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: Colors.grey[400],
+                itemBuilder: (context, index) =>
+                    isVideoPath(previewImages[index])
+                    ? AppVideoPreview(
+                        source: previewImages[index],
+                        width: double.infinity,
+                        height: double.infinity,
+                      )
+                    : GestureDetector(
+                        onTap: () => showFullscreenImage(
+                          context,
+                          imageProvider: AppImageCache.provider(
+                            previewImages[index],
+                          ),
+                        ),
+                        child: ClipRRect(
+                          key: ValueKey('friend_moment_preview_image_$index'),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image(
+                            image: AppImageCache.provider(previewImages[index]),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => ColoredBox(
+                              color: Colors.grey[200]!,
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                color: Colors.grey[400],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
               ),
             if (_latestVisibleMoment!.content.isNotEmpty) ...[
               if (previewImages.isNotEmpty) const SizedBox(height: 10),

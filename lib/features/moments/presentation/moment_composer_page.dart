@@ -8,6 +8,8 @@ import '../data/moment_media_uploader.dart';
 import '../../../shared/widgets/fullscreen_image_viewer.dart';
 import '../data/moments_repository.dart';
 import '../domain/moment.dart';
+import '../../../core/media/video_media.dart';
+import '../../../shared/widgets/app_video_player.dart';
 
 class MomentComposerPage extends StatefulWidget {
   const MomentComposerPage({
@@ -47,6 +49,7 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
   }
 
   Future<void> _pickImages() async {
+    if (_mediaPaths.any(isVideoPath)) return;
     final remaining = 9 - _mediaPaths.length;
     if (remaining <= 0) return;
     final images = await _imagePicker.pickMultiImage(
@@ -58,6 +61,53 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
     setState(() {
       _mediaPaths.addAll(images.take(remaining).map((image) => image.path));
     });
+  }
+
+  Future<void> _pickVideo() async {
+    try {
+      final video = await _imagePicker.pickVideo(source: ImageSource.gallery);
+      if (video == null) return;
+      await validateVideoFile(video.path);
+      if (mounted)
+        setState(() {
+          _mediaPaths
+            ..clear()
+            ..add(video.path);
+        });
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('无法选择视频：$error')));
+    }
+  }
+
+  Future<void> _chooseMedia() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('选择图片'),
+              subtitle: const Text('最多9张'),
+              onTap: () => Navigator.pop(context, 'image'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.video_library_outlined),
+              title: const Text('选择视频'),
+              subtitle: const Text('单个视频不超过300MB'),
+              onTap: () => Navigator.pop(context, 'video'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == 'image') await _pickImages();
+    if (choice == 'video') await _pickVideo();
   }
 
   Future<void> _publish() async {
@@ -208,7 +258,7 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
           const SizedBox(height: 12),
           _MediaGrid(
             paths: _mediaPaths,
-            onAdd: _pickImages,
+            onAdd: _chooseMedia,
             onRemove: (path) => setState(() => _mediaPaths.remove(path)),
           ),
           const SizedBox(height: 24),
@@ -266,7 +316,8 @@ class _MediaGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final count = paths.length + (paths.length < 9 ? 1 : 0);
+    final hasVideo = paths.any(isVideoPath);
+    final count = paths.length + (!hasVideo && paths.length < 9 ? 1 : 0);
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -293,7 +344,7 @@ class _MediaGrid extends StatelessWidget {
                 children: [
                   Icon(Icons.add_photo_alternate_outlined, size: 30),
                   SizedBox(height: 6),
-                  Text('图片', style: TextStyle(fontSize: 12)),
+                  Text('图片/视频', style: TextStyle(fontSize: 12)),
                 ],
               ),
             ),
@@ -303,16 +354,24 @@ class _MediaGrid extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            GestureDetector(
-              onTap: () => showFullscreenImage(
-                context,
-                imageProvider: FileImage(File(path)),
+            if (isVideoPath(path))
+              AppVideoPreview(
+                source: path,
+                isLocal: true,
+                width: double.infinity,
+                height: double.infinity,
+              )
+            else
+              GestureDetector(
+                onTap: () => showFullscreenImage(
+                  context,
+                  imageProvider: FileImage(File(path)),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.file(File(path), fit: BoxFit.cover),
+                ),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.file(File(path), fit: BoxFit.cover),
-              ),
-            ),
             Positioned(
               top: 4,
               right: 4,

@@ -26,6 +26,8 @@ import '../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../shared/utils/chat_scroll_util.dart';
 import '../../shared/widgets/chat_background.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
+import '../../core/media/video_media.dart';
+import '../../shared/widgets/app_video_player.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -54,7 +56,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   bool _initialPositioningRequested = false;
   int _scrollToBottomRequest = 0;
   bool _isUploadingImage = false;
+  bool _isUploadingVideo = false;
+  double _videoUploadProgress = 0;
   CancelToken? _imageUploadCancelToken;
+  CancelToken? _videoUploadCancelToken;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
   final Set<int> _sentReadAckMessageIds = {};
   int _loadedMessageLimit = 100;
@@ -542,6 +547,71 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     }
   }
 
+  Future<void> _pickVideo() async {
+    if (_isUploadingVideo || _isUploadingImage) return;
+    try {
+      final video = await ImagePicker().pickVideo(source: ImageSource.gallery);
+      if (video == null) return;
+      await validateVideoFile(video.path);
+      if (!_wsManager.isConnected) throw Exception('当前网络未连接，请稍后重试');
+      if (mounted)
+        setState(() {
+          _isUploadingVideo = true;
+          _videoUploadProgress = 0;
+        });
+      final cancelToken = CancelToken();
+      _videoUploadCancelToken = cancelToken;
+      final global = GlobalUtil();
+      final msgId = DateTime.now().millisecondsSinceEpoch;
+      final videoName =
+          '${global.userName}_${widget.groupId}_$msgId.${videoExtension(video.path)}';
+      await HttpUtil().uploadVideoFile(
+        videoName,
+        video.path,
+        cancelToken: cancelToken,
+        onSendProgress: (sent, total) {
+          if (mounted && total > 0)
+            setState(() => _videoUploadProgress = sent / total);
+        },
+      );
+      final message = Message(
+        msgId: msgId,
+        content: videoName,
+        isMe: true,
+        time: _getTime(),
+        isRead: false,
+        conversationId: widget.groupId.toString(),
+        messageType: MessageType.video,
+        status: MessageStatus.sending,
+        senderId: global.userName,
+      );
+      global.addMessage(_conversationKey, message);
+      _initializeOutgoingReadStatus(msgId);
+      final queued = _sendWebSocketMessage(
+        msgId: msgId,
+        content: videoName,
+        receiver: widget.groupId,
+        conversationId: message.conversationId,
+        messageType: MessageType.video,
+      );
+      if (!queued) message.status = MessageStatus.failed;
+      if (mounted) setState(() {});
+      _scrollToBottom();
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('视频发送失败：$error')));
+    } finally {
+      _videoUploadCancelToken = null;
+      if (mounted)
+        setState(() {
+          _isUploadingVideo = false;
+          _videoUploadProgress = 0;
+        });
+    }
+  }
+
   // 处理WebSocket消息
   void _handleWebSocketMessage(dynamic message) {
     debugPrint('=== 收到WebSocket消息 ===');
@@ -719,7 +789,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           time: sendTime,
           isRead: false,
           conversationId: widget.groupId.toString(),
-          messageType: msgType == 2 ? MessageType.image : MessageType.text,
+          messageType: switch (msgType) {
+            2 => MessageType.image,
+            4 => MessageType.video,
+            _ => MessageType.text,
+          },
           status: MessageStatus.sent,
           senderId: sender,
           timestamp: normalizedTimestamp,
@@ -1012,6 +1086,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   void dispose() {
     GroupRouteRegistry.leave(widget.groupId);
     _imageUploadCancelToken?.cancel('群聊页面已关闭');
+    _videoUploadCancelToken?.cancel('群聊页面已关闭');
     // 离开页面前再次提交已读水位，避免会话列表重新出现已读消息红点。
     _sendReadAcksForLoadedMessages();
     _textController.dispose();
@@ -1213,7 +1288,20 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                 ),
               ),
             ),
-            IconButton(icon: Icon(Icons.attach_file), onPressed: () {}),
+            IconButton(
+              icon: _isUploadingVideo
+                  ? SizedBox.square(
+                      dimension: 24,
+                      child: CircularProgressIndicator(
+                        value: _videoUploadProgress > 0
+                            ? _videoUploadProgress
+                            : null,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.video_library_outlined),
+              onPressed: _isUploadingVideo ? null : _pickVideo,
+            ),
             _isUploadingImage
                 ? const Padding(
                     padding: EdgeInsets.all(12),
@@ -1308,7 +1396,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     required MessageType messageType,
   }) {
     // 根据消息类型设置msgType
-    int msgType = messageType == MessageType.image ? 2 : 1;
+    final msgType = switch (messageType) {
+      MessageType.image => 2,
+      MessageType.video => 4,
+      _ => 1,
+    };
 
     // 构建消息数据
     Map<String, dynamic> messageData = {
@@ -1730,9 +1822,16 @@ class GroupMessageBubble extends StatelessWidget {
                 onLongPress: message.messageType == MessageType.text
                     ? () => _showTextContextMenu(context)
                     : null,
-                child: message.messageType == MessageType.text
-                    ? _buildTextBubble(context)
-                    : _buildImageBubble(context),
+                child: switch (message.messageType) {
+                  MessageType.text => _buildTextBubble(context),
+                  MessageType.video => AppVideoPreview(
+                    source: globalUtil.getVideoURL(
+                      message.senderId ?? globalUtil.userName ?? '',
+                      message.content,
+                    ),
+                  ),
+                  _ => _buildImageBubble(context),
+                },
               ),
               // 自己的头像
               if (message.isMe) ...[

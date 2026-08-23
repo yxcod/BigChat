@@ -6,8 +6,10 @@ import 'package:intl/intl.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../core/cache/app_image_cache.dart';
+import '../../../core/media/video_media.dart';
 import '../../../utils/gloabl.dart';
 import '../../../shared/widgets/fullscreen_image_viewer.dart';
+import '../../../shared/widgets/app_video_player.dart';
 import '../data/moments_repository.dart';
 import '../data/server_moments_repository.dart';
 import '../domain/moment.dart';
@@ -573,6 +575,16 @@ class _MomentMediaGrid extends StatelessWidget {
               itemCount: count,
               itemBuilder: (context, index) {
                 final path = paths[index];
+                if (isVideoPath(path)) {
+                  return AppVideoPreview(
+                    source: path,
+                    isLocal:
+                        !(path.startsWith('http://') ||
+                            path.startsWith('https://')),
+                    width: double.infinity,
+                    height: double.infinity,
+                  );
+                }
                 final imageProvider =
                     path.startsWith('http://') || path.startsWith('https://')
                     ? AppImageCache.provider(path)

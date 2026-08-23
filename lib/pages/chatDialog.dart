@@ -17,6 +17,8 @@ import '../core/cache/app_image_cache.dart';
 import '../shared/widgets/fullscreen_image_viewer.dart';
 import '../shared/utils/chat_scroll_util.dart';
 import '../shared/widgets/chat_background.dart';
+import '../core/media/video_media.dart';
+import '../shared/widgets/app_video_player.dart';
 import 'videoCallPage.dart';
 
 class ChatDialogPage extends StatefulWidget {
@@ -37,7 +39,10 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   bool _initialPositioningRequested = false;
   int _scrollToBottomRequest = 0;
   bool _isUploadingImage = false;
+  bool _isUploadingVideo = false;
+  double _videoUploadProgress = 0;
   CancelToken? _imageUploadCancelToken;
+  CancelToken? _videoUploadCancelToken;
 
   @override
   void initState() {
@@ -239,6 +244,72 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     }
   }
 
+  Future<void> _pickVideo() async {
+    if (_isUploadingVideo || _isUploadingImage) return;
+    try {
+      final video = await ImagePicker().pickVideo(source: ImageSource.gallery);
+      if (video == null) return;
+      await validateVideoFile(video.path);
+      if (mounted)
+        setState(() {
+          _isUploadingVideo = true;
+          _videoUploadProgress = 0;
+        });
+      final cancelToken = CancelToken();
+      _videoUploadCancelToken = cancelToken;
+      final receiver = friendInfo?.userName ?? '';
+      if (receiver.isEmpty) throw Exception('无法获取接收者信息');
+      if (!_wsManager.isConnected) throw Exception('当前网络未连接，请稍后重试');
+      final global = GlobalUtil();
+      final msgId = DateTime.now().millisecondsSinceEpoch;
+      final videoName =
+          '${global.userName}_${receiver}_${msgId}.${videoExtension(video.path)}';
+      await HttpUtil().uploadVideoFile(
+        videoName,
+        video.path,
+        cancelToken: cancelToken,
+        onSendProgress: (sent, total) {
+          if (mounted && total > 0)
+            setState(() => _videoUploadProgress = sent / total);
+        },
+      );
+      final message = Message(
+        msgId: msgId,
+        content: videoName,
+        isMe: true,
+        time: _getTime(),
+        isRead: false,
+        conversationId: _generateConversationId(),
+        messageType: MessageType.video,
+        status: MessageStatus.sending,
+        senderId: global.userName,
+      );
+      global.addMessage(receiver, message);
+      final queued = _sendWebSocketMessage(
+        msgId: msgId,
+        content: videoName,
+        receiver: receiver,
+        conversationId: message.conversationId,
+        messageType: MessageType.video,
+      );
+      if (!queued) message.status = MessageStatus.failed;
+      if (mounted) setState(() {});
+      _scrollToBottom();
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('视频发送失败：$error')));
+    } finally {
+      _videoUploadCancelToken = null;
+      if (mounted)
+        setState(() {
+          _isUploadingVideo = false;
+          _videoUploadProgress = 0;
+        });
+    }
+  }
+
   // 处理WebSocket接收的消息
   void _handleWebSocketMessage(dynamic message) {
     try {
@@ -367,10 +438,15 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     debugPrint('Is chatting: ${globalUtil.isChatting}');
 
     // 根据msgType判断消息类型：1文本 2图片
-    int msgType = messageData['msgType'] ?? 1;
-    MessageType messageType = msgType == 2
-        ? MessageType.image
-        : MessageType.text;
+    final rawMsgType = messageData['msgType'];
+    final msgType = rawMsgType is num
+        ? rawMsgType.toInt()
+        : int.tryParse(rawMsgType?.toString() ?? '') ?? 1;
+    final messageType = switch (msgType) {
+      2 => MessageType.image,
+      4 => MessageType.video,
+      _ => MessageType.text,
+    };
 
     // 创建新消息对象
     Message newMessage = Message(
@@ -382,6 +458,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       conversationId: _generateConversationId(),
       messageType: messageType,
       status: MessageStatus.sent,
+      senderId: sender,
     );
 
     // 无论是否在当前聊天界面，都将消息添加到全局聊天记录中
@@ -822,7 +899,20 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                 ),
               ),
             ),
-            IconButton(icon: Icon(Icons.attach_file), onPressed: () {}),
+            IconButton(
+              icon: _isUploadingVideo
+                  ? SizedBox.square(
+                      dimension: 24,
+                      child: CircularProgressIndicator(
+                        value: _videoUploadProgress > 0
+                            ? _videoUploadProgress
+                            : null,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.video_library_outlined),
+              onPressed: _isUploadingVideo ? null : _pickVideo,
+            ),
             _isUploadingImage
                 ? const Padding(
                     padding: EdgeInsets.all(12),
@@ -919,7 +1009,11 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     required MessageType messageType,
   }) {
     // 根据消息类型设置msgType
-    int msgType = messageType == MessageType.image ? 2 : 1;
+    final msgType = switch (messageType) {
+      MessageType.image => 2,
+      MessageType.video => 4,
+      _ => 1,
+    };
 
     // 构建消息数据
     Map<String, dynamic> messageData = {
@@ -963,6 +1057,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   @override
   void dispose() {
     _imageUploadCancelToken?.cancel('聊天页面已关闭');
+    _videoUploadCancelToken?.cancel('聊天页面已关闭');
     _messageSubscription?.cancel();
     _textController.dispose();
     _textFieldFocusNode.dispose();
@@ -1414,6 +1509,13 @@ class MessageBubble extends StatelessWidget {
     return globalUtil.getImageURL(friendInfo?.userName ?? "", message.content);
   }
 
+  String _resolveVideoUrl() {
+    final owner = message.isMe
+        ? (globalUtil.userName ?? '')
+        : (message.senderId ?? friendInfo?.userName ?? '');
+    return globalUtil.getVideoURL(owner, message.content);
+  }
+
   Widget _buildImageMessage() {
     final imageURL = _resolveImageUrl();
 
@@ -1519,7 +1621,12 @@ class MessageBubble extends StatelessWidget {
                   ),
 
                 // 消息气泡
-                message.messageType == MessageType.image
+                message.messageType == MessageType.video
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: AppVideoPreview(source: _resolveVideoUrl()),
+                      )
+                    : message.messageType == MessageType.image
                     ? // 图片消息：使用不同的样式，没有背景色
                       GestureDetector(
                         onTap: () => showFullscreenImage(

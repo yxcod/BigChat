@@ -290,6 +290,62 @@ class HttpUtil {
     }
   }
 
+  DioMediaType _videoMediaType(String videoName) {
+    final extension = videoName.contains('.')
+        ? videoName.split('.').last.toLowerCase()
+        : 'mp4';
+    return switch (extension) {
+      'mov' => DioMediaType('video', 'quicktime'),
+      'm4v' => DioMediaType('video', 'x-m4v'),
+      _ => DioMediaType('video', 'mp4'),
+    };
+  }
+
+  Future<bool> uploadVideoFile(
+    String videoName,
+    String filePath, {
+    String? userName,
+    CancelToken? cancelToken,
+    ProgressCallback? onSendProgress,
+  }) async {
+    final finalUserName = userName ?? (_globalUtil.userName ?? '');
+    if (finalUserName.isEmpty) throw Exception('无法获取当前用户信息');
+    final file = await MultipartFile.fromFile(
+      filePath,
+      filename: videoName,
+      contentType: _videoMediaType(videoName),
+    );
+    final response = await _dio.post(
+      '/api/video/upload',
+      data: FormData.fromMap({'file': file}),
+      queryParameters: {'userName': finalUserName, 'videoName': videoName},
+      options: Options(
+        sendTimeout: const Duration(minutes: 20),
+        receiveTimeout: const Duration(minutes: 2),
+      ),
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+    );
+    final data = response.data;
+    if (data is Map && data['code'] == 100) return true;
+    throw Exception(data is Map ? (data['message'] ?? '视频上传失败') : '视频上传失败');
+  }
+
+  Future<Response<dynamic>> downloadFile(
+    String url,
+    String savePath, {
+    CancelToken? cancelToken,
+    ProgressCallback? onReceiveProgress,
+  }) {
+    return _dio.download(
+      url,
+      savePath,
+      cancelToken: cancelToken,
+      onReceiveProgress: onReceiveProgress,
+      options: Options(receiveTimeout: const Duration(minutes: 20)),
+    );
+  }
+
   // 下载文件
   Future<Response> download(
     String url,

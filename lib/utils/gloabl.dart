@@ -404,6 +404,17 @@ class GlobalUtil {
         .toString();
   }
 
+  // 根据视频名生成支持 HTTP Range 分段播放的视频 URL。
+  String getVideoURL(String userName, String videoName) {
+    final baseUri = Uri.parse(baseURL);
+    return baseUri
+        .replace(
+          path: '${baseUri.path}/api/video/download',
+          queryParameters: {'userName': userName, 'videoName': videoName},
+        )
+        .toString();
+  }
+
   String getChatWebSocketURL(String userName) {
     final baseUri = Uri.parse(baseWebSocketURL);
     return baseUri
