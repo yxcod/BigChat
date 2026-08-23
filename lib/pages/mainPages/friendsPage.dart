@@ -11,6 +11,7 @@ import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../utils/presence_event.dart';
+import '../../utils/friend_sort_util.dart';
 
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
@@ -193,18 +194,28 @@ class _FriendsPage extends State<Friendspage>
 
   List<Friend> get _filteredFriends {
     final keyword = _searchQuery.trim();
-    if (keyword.isEmpty) {
-      return friends;
-    }
-    return friends
-        .where(
-          (friend) => FriendSearchUtil.matches(
-            keyword: keyword,
-            displayName: friend.name,
-            nickname: friend.nickName,
-          ),
-        )
-        .toList();
+    final result = keyword.isEmpty
+        ? List<Friend>.from(friends)
+        : friends
+              .where(
+                (friend) => FriendSearchUtil.matches(
+                  keyword: keyword,
+                  displayName: friend.name,
+                  nickname: friend.nickName,
+                ),
+              )
+              .toList();
+    result.sort(
+      (left, right) => FriendSortUtil.compare(
+        leftOnline: left.isOnline,
+        leftDisplayName: left.name,
+        leftUserName: left.userName,
+        rightOnline: right.isOnline,
+        rightDisplayName: right.name,
+        rightUserName: right.userName,
+      ),
+    );
+    return result;
   }
 
   void _openFriendDetail(Friend friend) {
