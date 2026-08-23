@@ -6,6 +6,7 @@ enum ChatRealtimeEventType {
   privateDelivery,
   groupDelivery,
   groupReadReceipt,
+  groupHistoryDeleted,
   readReceipt,
   other,
 }
@@ -26,6 +27,7 @@ class ChatRealtimeEvent {
           when data.containsKey('clientMsgId') && data['status'] != 'read' =>
         ChatRealtimeEventType.groupDelivery,
       'groupChatReadCallback' => ChatRealtimeEventType.groupReadReceipt,
+      'groupChatHistoryDeleted' => ChatRealtimeEventType.groupHistoryDeleted,
       'read_ack' ||
       'chatCallback' ||
       'groupChatCallback' => ChatRealtimeEventType.readReceipt,

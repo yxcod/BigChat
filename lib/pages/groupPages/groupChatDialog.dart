@@ -59,6 +59,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   late Timer _groupInfoTimer; // 定时器，用于定期获取群信息
   late Timer _groupMembersTimer; // 定时器，用于定期检查群成员列表
   String _currentGroupName = ''; // 当前显示的群名称
+  bool _isHandlingHistoryDeletion = false;
 
   @override
   void initState() {
@@ -160,14 +161,18 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           .toList();
 
       final loadedMessageIds = messages.map((message) => message.msgId).toSet();
-      for (final entry in existingById.entries) {
-        if (!loadedMessageIds.contains(entry.key)) {
-          messages.add(
-            ChatMessageMapper.rebindOwnership(
-              entry.value,
-              currentUserId: currentUserId,
-            ),
-          );
+      // 服务端明确返回空列表时必须覆盖旧缓存，避免其他设备删除记录后
+      // 本机在下次进入群聊时又把历史消息恢复出来。
+      if (groupRecord.messages.isNotEmpty) {
+        for (final entry in existingById.entries) {
+          if (!loadedMessageIds.contains(entry.key)) {
+            messages.add(
+              ChatMessageMapper.rebindOwnership(
+                entry.value,
+                currentUserId: currentUserId,
+              ),
+            );
+          }
         }
       }
       messages.sort((left, right) {
@@ -576,6 +581,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         case 'groupChatReadCallback':
           _handleGroupReadCallback(parsedMessage);
           break;
+        case 'groupChatHistoryDeleted':
+          unawaited(_handleGroupHistoryDeleted(parsedMessage));
+          break;
         case 'videoCallInvite':
           _handleVideoCallInvite(parsedMessage);
           break;
@@ -596,6 +604,50 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         '消息格式不正确，不是Map<String, dynamic>类型: ${parsedMessage.runtimeType}',
       );
     }
+  }
+
+  Future<void> _handleGroupHistoryDeleted(
+    Map<String, dynamic> messageData,
+  ) async {
+    if (_parseInt(messageData['groupId']) != widget.groupId ||
+        _isHandlingHistoryDeletion) {
+      return;
+    }
+    _isHandlingHistoryDeletion = true;
+    await GlobalUtil().deleteChatRecords(_conversationKey);
+    _messageReadStatus.clear();
+    _sentReadAckMessageIds.clear();
+    if (!mounted) return;
+
+    final navigator = Navigator.of(context);
+    var removedGroupChatRoute = false;
+    navigator.popUntil((route) {
+      if (route.settings.name == '/groupChatDialog') {
+        removedGroupChatRoute = true;
+        return false;
+      }
+      if (route.settings.name == '/groupChatSettings') return false;
+      // 先关闭可能存在的已读列表、图片预览等匿名弹层，再移除群聊页面。
+      return removedGroupChatRoute;
+    });
+    final notification =
+        messageData['message']?.toString() ?? '群主已删除当前群聊的全部聊天记录';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!navigator.mounted) return;
+      showDialog<void>(
+        context: navigator.context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('群聊通知'),
+          content: Text(notification),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   // 处理聊天消息
@@ -1043,7 +1095,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                   'groupName': _currentGroupName,
                 },
               );
-              if (deleted == true && mounted) setState(() {});
+              if (deleted == true && mounted) {
+                await _handleGroupHistoryDeleted({
+                  'groupId': widget.groupId,
+                  'message': '群聊记录已删除',
+                });
+              }
             },
           ),
         ],
@@ -1390,9 +1447,42 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                               final initial = displayName.isEmpty
                                   ? '?'
                                   : displayName.characters.first;
+                              String? avatarUrl;
+                              if (member != null) {
+                                try {
+                                  avatarUrl = GlobalUtil().getImageURL(
+                                    userId,
+                                    member.avatar.trim().isEmpty
+                                        ? 'head.jpg'
+                                        : member.avatar.trim(),
+                                  );
+                                } catch (error) {
+                                  debugPrint('生成已读成员头像地址失败: $error');
+                                }
+                              }
                               return ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: CircleAvatar(child: Text(initial)),
+                                leading: CircleAvatar(
+                                  backgroundColor: Colors.grey[200],
+                                  child: avatarUrl == null
+                                      ? Text(initial)
+                                      : ClipOval(
+                                          child: CachedNetworkImage(
+                                            cacheManager: AppImageCache.manager,
+                                            imageUrl: avatarUrl,
+                                            cacheKey: AppImageCache.cacheKey(
+                                              avatarUrl,
+                                            ),
+                                            width: 40,
+                                            height: 40,
+                                            fit: BoxFit.cover,
+                                            errorWidget:
+                                                (context, url, error) => Center(
+                                                  child: Text(initial),
+                                                ),
+                                          ),
+                                        ),
+                                ),
                                 title: Text(displayName),
                                 subtitle: displayName == userId
                                     ? null

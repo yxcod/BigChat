@@ -115,7 +115,6 @@ class _ChatpageState extends State<Chatpage> {
     if (message is! Map<String, dynamic>) {
       return;
     }
-
     final event = ChatRealtimeEvent.parse(message);
     switch (event.type) {
       case ChatRealtimeEventType.privateMessage:
@@ -162,18 +161,50 @@ class _ChatpageState extends State<Chatpage> {
           );
         }
         break;
+      case ChatRealtimeEventType.groupHistoryDeleted:
+        unawaited(_handleGroupHistoryDeleted(message));
+        break;
       case ChatRealtimeEventType.readReceipt:
       case ChatRealtimeEventType.other:
         break;
     }
 
-    if (event.type == ChatRealtimeEventType.other) return;
+    if (event.type == ChatRealtimeEventType.other ||
+        event.type == ChatRealtimeEventType.groupHistoryDeleted) {
+      return;
+    }
     _refreshDebounceTimer?.cancel();
     _refreshDebounceTimer = Timer(const Duration(milliseconds: 400), () {
       if (mounted) {
         fetchConversations();
       }
     });
+  }
+
+  Future<void> _handleGroupHistoryDeleted(Map<String, dynamic> message) async {
+    final groupId = int.tryParse(message['groupId']?.toString() ?? '') ?? 0;
+    if (groupId <= 0) return;
+    final conversationKey = GlobalUtil.groupConversationKey(groupId);
+    final isOpenChat =
+        globalUtil.isChatting == true &&
+        globalUtil.currentChatUserName == conversationKey;
+
+    await globalUtil.deleteChatRecords(conversationKey);
+    _locallyReadGroupIds.remove(groupId);
+    if (!mounted) return;
+    setState(() {
+      _chats.removeWhere(
+        (chat) => chat.isGroup && chat.userName == groupId.toString(),
+      );
+      _notifyUnreadCountChanged();
+    });
+    if (!isOpenChat) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message['message']?.toString() ?? '群主已删除当前群聊的全部聊天记录'),
+        ),
+      );
+    }
   }
 
   void _storePrivateRealtimeMessage(ChatRealtimeEvent event) {

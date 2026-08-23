@@ -53,4 +53,16 @@ void main() {
     expect(event.readerId, 'bob');
     expect(event.readThroughMessageId, 99);
   });
+
+  test('parses a group history deletion notification', () {
+    final event = ChatRealtimeEvent.parse({
+      'type': 'groupChatHistoryDeleted',
+      'groupId': '42',
+      'operatorId': 'owner',
+      'message': '群主已删除当前群聊的全部聊天记录',
+    });
+
+    expect(event.type, ChatRealtimeEventType.groupHistoryDeleted);
+    expect(event.groupId, 42);
+  });
 }
