@@ -19,16 +19,29 @@ void main() {
       writeString: (key, value) async {
         strings[key] = value;
       },
+      importFile: (ownerId, sourcePath) async => '/app/background.jpg',
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: SettingsPage(repository: repository)),
+      MaterialApp(
+        home: SettingsPage(
+          repository: repository,
+          pickChatBackground: () async => '/gallery/background.jpg',
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('隐私模式'), findsOneWidget);
     expect(find.text('位置信息'), findsOneWidget);
     expect(find.text('通知'), findsOneWidget);
+    expect(find.text('聊天背景设置'), findsOneWidget);
+    expect(find.text('默认'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chat_background_settings_entry')));
+    await tester.pumpAndSettle();
+    expect(find.text('已设置'), findsOneWidget);
+    expect((await repository.load()).chatBackgroundPath, '/app/background.jpg');
 
     await tester.tap(find.byKey(const Key('privacy_mode_switch')));
     await tester.pump();

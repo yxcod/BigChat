@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../../../utils/storageUtil.dart';
 import '../domain/app_settings.dart';
 
@@ -5,6 +7,8 @@ typedef SettingsBoolReader = bool? Function(String key);
 typedef SettingsStringReader = String? Function(String key);
 typedef SettingsBoolWriter = Future<void> Function(String key, bool value);
 typedef SettingsStringWriter = Future<void> Function(String key, String value);
+typedef SettingsFileImporter =
+    Future<String> Function(String ownerId, String sourcePath);
 
 class AppSettingsRepository {
   AppSettingsRepository({
@@ -13,17 +17,20 @@ class AppSettingsRepository {
     SettingsStringReader? readString,
     SettingsBoolWriter? writeBool,
     SettingsStringWriter? writeString,
+    SettingsFileImporter? importFile,
   }) : _ownerId = ownerId.trim().isEmpty ? 'device' : ownerId.trim(),
        _readBool = readBool,
        _readString = readString,
        _writeBool = writeBool,
-       _writeString = writeString;
+       _writeString = writeString,
+       _importFile = importFile;
 
   final String _ownerId;
   final SettingsBoolReader? _readBool;
   final SettingsStringReader? _readString;
   final SettingsBoolWriter? _writeBool;
   final SettingsStringWriter? _writeString;
+  final SettingsFileImporter? _importFile;
 
   String _key(String name) =>
       'app_settings_${Uri.encodeComponent(_ownerId)}_$name';
@@ -38,6 +45,7 @@ class AppSettingsRepository {
       messageSoundEnabled: _getBool('message_sound_enabled') ?? true,
       messageSoundId:
           _getString('message_sound_id') ?? NotificationSound.systemDefaultId,
+      chatBackgroundPath: _getString('chat_background_path') ?? '',
     );
   }
 
@@ -52,6 +60,22 @@ class AppSettingsRepository {
       _setBool('message_sound_enabled', value);
   Future<void> setMessageSoundId(String value) =>
       _setString('message_sound_id', NotificationSound.byId(value).id);
+
+  /// 将相册图片复制到应用持久目录，再保存当前账号对应的路径。
+  Future<String> importChatBackground(String sourcePath) async {
+    final normalizedPath = sourcePath.trim();
+    if (normalizedPath.isEmpty) throw ArgumentError('聊天背景图片路径不能为空');
+
+    final persistedPath = _importFile != null
+        ? await _importFile(_ownerId, normalizedPath)
+        : await StorageUtil.saveImage(
+            key: 'chat_background_${Uri.encodeComponent(_ownerId)}',
+            imageBytes: await File(normalizedPath).readAsBytes(),
+            subDir: 'chat_backgrounds',
+          );
+    await _setString('chat_background_path', persistedPath);
+    return persistedPath;
+  }
 
   bool? _getBool(String name) =>
       _readBool?.call(_key(name)) ?? StorageUtil.getBool(_key(name));

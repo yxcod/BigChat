@@ -17,6 +17,7 @@ void main() {
       expect(defaults.bannerEnabled, isTrue);
       expect(defaults.messageSoundEnabled, isTrue);
       expect(defaults.messageSoundId, NotificationSound.systemDefaultId);
+      expect(defaults.chatBackgroundPath, isEmpty);
 
       await repository.setPrivacyMode(true);
       await repository.setLocationEnabled(false);
@@ -45,6 +46,33 @@ void main() {
 
     expect((await alice.load()).privacyMode, isTrue);
     expect((await bob.load()).privacyMode, isFalse);
+  });
+
+  test('imports and persists a per-account chat background', () async {
+    final bools = <String, bool>{};
+    final strings = <String, String>{};
+    final repository = AppSettingsRepository(
+      ownerId: 'alice',
+      readBool: (key) => bools[key],
+      readString: (key) => strings[key],
+      writeBool: (key, value) async => bools[key] = value,
+      writeString: (key, value) async => strings[key] = value,
+      importFile: (ownerId, sourcePath) async {
+        expect(ownerId, 'alice');
+        expect(sourcePath, '/gallery/background.jpg');
+        return '/app/chat_backgrounds/alice.jpg';
+      },
+    );
+
+    final path = await repository.importChatBackground(
+      '/gallery/background.jpg',
+    );
+
+    expect(path, '/app/chat_backgrounds/alice.jpg');
+    expect(
+      (await repository.load()).chatBackgroundPath,
+      '/app/chat_backgrounds/alice.jpg',
+    );
   });
 }
 

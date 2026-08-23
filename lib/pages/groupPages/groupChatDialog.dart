@@ -24,6 +24,7 @@ import '../../core/config/refresh_intervals.dart';
 import '../../core/media/app_media_url.dart';
 import '../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../shared/utils/chat_scroll_util.dart';
+import '../../shared/widgets/chat_background.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -1110,17 +1111,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           // 点击空白区域隐藏键盘
           FocusScope.of(context).unfocus();
         },
-        child: Container(
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              //聊天背景图
-              image: AppImageCache.provider(
-                'https://images.unsplash.com/photo-1518837695005-2083093ee35b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-              ),
-              fit: BoxFit.cover,
-              opacity: 0.2,
-            ),
-          ),
+        child: ChatBackground(
           child: Column(
             //聊天气泡
             children: [

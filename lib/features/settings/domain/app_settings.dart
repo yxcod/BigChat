@@ -6,6 +6,7 @@ class AppSettings {
     this.bannerEnabled = true,
     this.messageSoundEnabled = true,
     this.messageSoundId = NotificationSound.systemDefaultId,
+    this.chatBackgroundPath = '',
   });
 
   final bool privacyMode;
@@ -14,6 +15,7 @@ class AppSettings {
   final bool bannerEnabled;
   final bool messageSoundEnabled;
   final String messageSoundId;
+  final String chatBackgroundPath;
 
   AppSettings copyWith({
     bool? privacyMode,
@@ -22,6 +24,7 @@ class AppSettings {
     bool? bannerEnabled,
     bool? messageSoundEnabled,
     String? messageSoundId,
+    String? chatBackgroundPath,
   }) {
     return AppSettings(
       privacyMode: privacyMode ?? this.privacyMode,
@@ -30,6 +33,7 @@ class AppSettings {
       bannerEnabled: bannerEnabled ?? this.bannerEnabled,
       messageSoundEnabled: messageSoundEnabled ?? this.messageSoundEnabled,
       messageSoundId: messageSoundId ?? this.messageSoundId,
+      chatBackgroundPath: chatBackgroundPath ?? this.chatBackgroundPath,
     );
   }
 }
