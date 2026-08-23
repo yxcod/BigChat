@@ -10,6 +10,7 @@ import '../data/moments_repository.dart';
 import '../domain/moment.dart';
 import '../../../core/media/video_media.dart';
 import '../../../shared/widgets/app_video_player.dart';
+import '../../location/data/app_location_service.dart';
 
 class MomentComposerPage extends StatefulWidget {
   const MomentComposerPage({
@@ -38,6 +39,7 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
   MomentVisibility _visibility = MomentVisibility.public;
   String? _location;
   bool _isPublishing = false;
+  bool _isLocating = false;
 
   bool get _canPublish =>
       _contentController.text.trim().isNotEmpty || _mediaPaths.isNotEmpty;
@@ -173,7 +175,26 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
   }
 
   Future<void> _editLocation() async {
+    if (_isLocating) return;
     var editedLocation = _location ?? '';
+    setState(() => _isLocating = true);
+    try {
+      final place = await AppLocationService().locate().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('定位超时'),
+      );
+      editedLocation = place.address;
+      if (mounted) setState(() => _location = place.address);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('自动定位失败：$error，可手动填写位置')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
+    if (!mounted) return;
     final location = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -268,16 +289,21 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.location_on_outlined),
             title: const Text('所在位置'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _location ?? '不显示',
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-                const Icon(Icons.chevron_right),
-              ],
-            ),
+            trailing: _isLocating
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _location ?? '不显示',
+                        style: const TextStyle(color: AppColors.textSecondary),
+                      ),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
             onTap: _editLocation,
           ),
           const Divider(height: 1),

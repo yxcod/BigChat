@@ -42,6 +42,8 @@ dependencies:
   video_player: ^2.11.1
   pinyin: ^3.3.0
   file_picker: ^11.0.3
+  geolocator: 14.0.2
+  geocoding: ^5.0.0
   # image_gallery_saver: ^2.0.3 # 暂时移除，等待修复兼容性问题
   cached_network_image: ^3.4.1
   # Agora Flutter SDK for real-time audio and video communication

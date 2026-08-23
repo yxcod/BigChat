@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../utils/gloabl.dart';
+import '../../location/data/app_location_service.dart';
 import '../data/app_settings_repository.dart';
 import '../domain/app_settings.dart';
 import 'notification_settings_page.dart';
@@ -51,6 +52,11 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _setLocationEnabled(bool value) async {
     setState(() => _settings = _settings.copyWith(locationEnabled: value));
     await _repository.setLocationEnabled(value);
+    if (!value) {
+      try {
+        await AppLocationService().clearServerLocation();
+      } catch (_) {}
+    }
   }
 
   Future<void> _selectChatBackground() async {

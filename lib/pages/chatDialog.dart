@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,7 @@ import '../core/cache/app_image_cache.dart';
 import '../shared/widgets/fullscreen_image_viewer.dart';
 import '../shared/utils/chat_scroll_util.dart';
 import '../shared/widgets/chat_background.dart';
+import '../features/location/data/app_location_service.dart';
 import '../core/media/video_media.dart';
 import '../shared/widgets/app_video_player.dart';
 import 'videoCallPage.dart';
@@ -43,6 +45,11 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   double _videoUploadProgress = 0;
   CancelToken? _imageUploadCancelToken;
   CancelToken? _videoUploadCancelToken;
+  Timer? _distanceTimer;
+  String? _distanceStartedFor;
+  int? _distanceMeters;
+  bool _distanceLoading = false;
+  String? _distanceStatus;
 
   @override
   void initState() {
@@ -676,6 +683,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     setState(() {
       friendInfo = foundFriend;
     });
+    _startDistanceRefresh();
 
     // 处理未读消息：进入聊天界面时标记所有未读消息为已读
     if (id != null) {
@@ -696,6 +704,45 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
     // 通知聊天列表页面清除该聊天的未读消息数
     _clearUnreadCount();
+  }
+
+  void _startDistanceRefresh() {
+    final peer = id;
+    if (peer == null || peer.isEmpty || _distanceStartedFor == peer) return;
+    _distanceStartedFor = peer;
+    _distanceTimer?.cancel();
+    unawaited(_refreshDistance());
+    _distanceTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => unawaited(_refreshDistance()),
+    );
+  }
+
+  Future<void> _refreshDistance() async {
+    final peer = id;
+    if (peer == null || peer.isEmpty || _distanceLoading) return;
+    if (mounted) {
+      setState(() {
+        _distanceLoading = true;
+        _distanceStatus = null;
+      });
+    }
+    try {
+      final distance = await AppLocationService().refreshDistance(peer);
+      if (!mounted) return;
+      setState(() {
+        _distanceMeters = distance;
+        _distanceStatus = distance == null ? '对方暂无位置' : null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        final message = error.toString();
+        _distanceStatus = message.contains('设置中开启') ? '位置已关闭' : '无法定位';
+      });
+    } finally {
+      if (mounted) setState(() => _distanceLoading = false);
+    }
   }
 
   void _clearUnreadCount() {
@@ -768,6 +815,26 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         backgroundColor: Colors.white,
         elevation: 1,
         actions: [
+          TextButton.icon(
+            onPressed: _distanceLoading ? null : _refreshDistance,
+            icon: _distanceLoading
+                ? const SizedBox.square(
+                    dimension: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.near_me_outlined, size: 17),
+            label: SizedBox(
+              width: 52,
+              child: Text(
+                _distanceMeters != null
+                    ? formatDistance(_distanceMeters!)
+                    : (_distanceStatus ?? '距离'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11),
+              ),
+            ),
+          ),
           IconButton(
             icon: Icon(Icons.phone, color: Colors.black),
             onPressed: () {
@@ -1058,6 +1125,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   void dispose() {
     _imageUploadCancelToken?.cancel('聊天页面已关闭');
     _videoUploadCancelToken?.cancel('聊天页面已关闭');
+    _distanceTimer?.cancel();
     _messageSubscription?.cancel();
     _textController.dispose();
     _textFieldFocusNode.dispose();

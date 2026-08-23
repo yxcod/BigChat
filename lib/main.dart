@@ -11,6 +11,7 @@ import './utils/WebSocketManager.dart';
 import './core/network/app_connection_monitor.dart';
 import './features/chat/domain/chat_realtime_event.dart';
 import './features/groups/presentation/group_route_registry.dart';
+import './features/location/data/app_location_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +35,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   AppConnectionStatus _lastConnectionStatus = AppConnectionStatus.unknown;
   AppConnectionStatus? _connectionNoticeStatus;
   late final WebSocketMessageSubscription _groupEventSubscription;
+  Timer? _locationSyncTimer;
   final Set<int> _handlingRemovedGroups = {};
 
   @override
@@ -48,6 +50,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _groupEventSubscription = WebSocketManager().addMessageListener(
       _handleGlobalGroupEvent,
     );
+    _locationSyncTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => _syncLocationIfPermitted(),
+    );
+    _syncLocationIfPermitted();
   }
 
   @override
@@ -56,6 +63,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _connectionMonitor.removeListener(_handleConnectionStatusChanged);
     _groupEventSubscription.cancel();
+    _locationSyncTimer?.cancel();
     super.dispose();
   }
 
@@ -126,10 +134,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       case AppLifecycleState.resumed:
         unawaited(_connectionMonitor.checkNow());
         WebSocketManager().reconnectNow();
+        _syncLocationIfPermitted();
         break;
       default:
         break;
     }
+  }
+
+  void _syncLocationIfPermitted() {
+    if ((GlobalUtil().userName ?? '').isEmpty) return;
+    unawaited(AppLocationService().syncIfPermitted().catchError((_) {}));
   }
 
   void _handleConnectionStatusChanged() {
