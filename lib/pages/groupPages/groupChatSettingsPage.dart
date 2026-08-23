@@ -19,6 +19,9 @@ import '../../features/groups/domain/group_role_policy.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
 import '../../features/chat/domain/chat_realtime_event.dart';
 import '../../utils/WebSocketManager.dart';
+import '../../features/group_resources/presentation/group_resources_page.dart';
+import '../../features/group_resources/presentation/group_resource_list_page.dart';
+import '../../features/group_resources/domain/group_resource.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
@@ -742,6 +745,55 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _openGroupResources() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GroupResourcesPage(
+          groupId: int.parse(widget.groupId),
+          groupName: _groupName,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResourceShortcut({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required GroupResourceType type,
+  }) {
+    return InkWell(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => GroupResourceListPage(
+            groupId: int.parse(widget.groupId),
+            groupName: _groupName,
+            type: type,
+          ),
+        ),
+      ),
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: EdgeInsets.all(6),
+        child: Column(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: Colors.white, size: 29),
+            ),
+            SizedBox(height: 6),
+            Text(label, style: TextStyle(fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _editMyNickname() async {
     final result = await showDialog<String>(
       context: context,
@@ -1101,6 +1153,52 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                       }
                     },
                   ),
+                ),
+              ],
+            ),
+          ),
+
+          // 群聊信息
+          Container(
+            margin: EdgeInsets.only(top: 12.0),
+            padding: EdgeInsets.all(16.0),
+            decoration: BoxDecoration(color: Colors.white),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: _openGroupResources,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '群资源',
+                        style: TextStyle(
+                          fontSize: 16.0,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: Colors.grey[400]),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 18),
+                Row(
+                  children: [
+                    _buildResourceShortcut(
+                      icon: Icons.folder_rounded,
+                      color: Color(0xFFFFB41F),
+                      label: '群文件',
+                      type: GroupResourceType.file,
+                    ),
+                    SizedBox(width: 42),
+                    _buildResourceShortcut(
+                      icon: Icons.photo_library_rounded,
+                      color: Color(0xFF2B9DF4),
+                      label: '群相册',
+                      type: GroupResourceType.photo,
+                    ),
+                  ],
                 ),
               ],
             ),
