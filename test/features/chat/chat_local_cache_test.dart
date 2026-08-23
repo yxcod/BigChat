@@ -68,6 +68,25 @@ void main() {
 
     expect(await cache.latestTimestamp('me', 'alice'), 1787277603000);
   });
+
+  test(
+    'deletes the cached conversation for only the requested owner',
+    () async {
+      final storage = <String, String>{};
+      final cache = ChatLocalCache(
+        readString: (key) async => storage[key],
+        writeString: (key, value) async => storage[key] = value,
+        deleteString: (key) async => storage.remove(key),
+      );
+      await cache.save('me', 'alice', [_message(1, 1787277601000)]);
+      await cache.save('other', 'alice', [_message(2, 1787277602000)]);
+
+      await cache.delete('me', 'alice');
+
+      expect(await cache.load('me', 'alice'), isEmpty);
+      expect(await cache.load('other', 'alice'), hasLength(1));
+    },
+  );
 }
 
 Message _message(int id, int timestamp) {

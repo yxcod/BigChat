@@ -1033,9 +1033,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           ),
           IconButton(
             icon: Icon(Icons.more_vert, color: Colors.black),
-            onPressed: () {
+            onPressed: () async {
               // 进入群聊设置页面
-              Navigator.pushNamed(
+              final deleted = await Navigator.pushNamed(
                 context,
                 '/groupChatSettings',
                 arguments: {
@@ -1043,6 +1043,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                   'groupName': _currentGroupName,
                 },
               );
+              if (deleted == true && mounted) setState(() {});
             },
           ),
         ],

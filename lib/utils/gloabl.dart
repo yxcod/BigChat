@@ -322,6 +322,25 @@ class GlobalUtil {
     _chatStore.clearMessages(userName);
   }
 
+  // 删除内存及磁盘中的指定会话记录，防止下次启动从本地缓存恢复。
+  Future<void> deleteChatRecords(String conversationId) async {
+    _chatCacheWriteTimers.remove(conversationId)?.cancel();
+    _chatStore.clearMessages(conversationId);
+    _chatStore.clearUnreadMessages(conversationId);
+
+    final ownerId = userName ?? '';
+    if (ownerId.isNotEmpty) {
+      await _chatLocalCache.delete(ownerId, conversationId);
+      if (conversationId.startsWith('group:')) {
+        final legacyId = conversationId.substring('group:'.length);
+        await _chatLocalCache.delete(ownerId, legacyId);
+      }
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      onUnreadCountChanged?.call(conversationId, 0);
+    });
+  }
+
   // 清除所有聊天记录
   void clearAllChatRecords() {
     _chatStore.clearAllMessages();

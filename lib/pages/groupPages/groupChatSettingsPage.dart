@@ -10,6 +10,7 @@ import '../../model/groupMemberModel.dart';
 import '../../model/groupInfoModel.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../api/getGroupInfoAPI.dart';
+import '../../api/delete_chat_history_api.dart';
 import '../../utils/gloabl.dart';
 import '../../utils/http.dart';
 import '../../core/cache/app_image_cache.dart';
@@ -671,6 +672,61 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     );
   }
 
+  void _showDeleteChatHistoryDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('删除群聊记录'),
+        content: Text('将永久删除该群在服务器和本机保存的全部聊天记录，所有群成员均无法再查看。确定继续吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('取消'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              final currentUserName = globalUtil.userName ?? '';
+              if (currentUserName.isEmpty) {
+                _showSnackBar('当前用户未登录');
+                return;
+              }
+              try {
+                final response = await deleteGroupChatHistoryApi(
+                  userName: currentUserName,
+                  groupId: int.parse(widget.groupId),
+                );
+                if (response['code'] != 100) {
+                  throw Exception(response['msg'] ?? '服务器删除失败');
+                }
+                await globalUtil.deleteChatRecords(
+                  GlobalUtil.groupConversationKey(widget.groupId),
+                );
+                if (!mounted) return;
+                _showSnackBar('群聊记录已删除');
+                Navigator.pop(context, true);
+              } catch (error) {
+                debugPrint('删除群聊记录失败: $error');
+                if (mounted) _showSnackBar('删除群聊记录失败，请重试');
+              }
+            },
+            child: Text('删除'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   void _editMyNickname() async {
     final result = await showDialog<String>(
       context: context,
@@ -756,7 +812,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Column(
+      body: ListView(
         children: [
           // 群聊基本信息
           Container(
@@ -1306,9 +1362,27 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
             ),
           ),
 
+          if (_isOwner)
+            Container(
+              margin: EdgeInsets.only(top: 24.0),
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: OutlinedButton(
+                onPressed: _showDeleteChatHistoryDialog,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: BorderSide(color: Colors.red),
+                  minimumSize: Size(double.infinity, 48.0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                ),
+                child: Text('删除群聊记录', style: TextStyle(fontSize: 16.0)),
+              ),
+            ),
+
           // 退出群聊按钮
           Container(
-            margin: EdgeInsets.only(top: 24.0, bottom: 32.0),
+            margin: EdgeInsets.only(top: 12.0, bottom: 32.0),
             padding: EdgeInsets.symmetric(horizontal: 16.0),
             child: ElevatedButton(
               onPressed: _exitGroup,

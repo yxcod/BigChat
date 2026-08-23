@@ -84,4 +84,34 @@ void main() {
     expect(find.text('最近一条动态'), findsOneWidget);
     expect(find.byKey(const Key('moment_publish_fab')), findsNothing);
   });
+
+  testWidgets('delete chat history is placed above delete friend', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FriendDetailPage(
+          friendData: {
+            'userName': 'friend',
+            'nickname': '小李',
+            'avatar': '',
+            'isFriend': true,
+          },
+          momentsRepository: LocalMomentsRepository(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.pumpAndSettle();
+
+    final deleteHistory = find.text('删除聊天记录');
+    final deleteFriend = find.text('删除好友');
+    expect(deleteHistory, findsOneWidget);
+    expect(deleteFriend, findsOneWidget);
+    expect(
+      tester.getTopLeft(deleteHistory).dy,
+      lessThan(tester.getTopLeft(deleteFriend).dy),
+    );
+  });
 }

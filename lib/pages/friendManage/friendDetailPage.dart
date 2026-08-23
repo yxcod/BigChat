@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../api/getFriendRequestsAPI.dart';
+import '../../api/delete_chat_history_api.dart';
 import '../../features/moments/data/moments_repository.dart';
 import '../../features/moments/data/server_moments_repository.dart';
 import '../../features/moments/domain/moment.dart';
@@ -110,6 +111,10 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                       child: Text('修改备注'),
                     ),
                     PopupMenuItem<String>(
+                      value: 'deleteChatHistory',
+                      child: Text('删除聊天记录'),
+                    ),
+                    PopupMenuItem<String>(
                       value: 'deleteFriend',
                       child: Text('删除好友'),
                     ),
@@ -117,6 +122,8 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                   onSelected: (String value) {
                     if (value == 'editRemark') {
                       _showEditRemarkDialog();
+                    } else if (value == 'deleteChatHistory') {
+                      _showDeleteChatHistoryDialog();
                     } else if (value == 'deleteFriend') {
                       _showDeleteFriendDialog();
                     }
@@ -478,6 +485,57 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
           ],
         );
       },
+    );
+  }
+
+  // 显示删除聊天记录对话框
+  void _showDeleteChatHistoryDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('删除聊天记录'),
+        content: Text('将永久删除你与该好友在服务器和本机保存的全部聊天记录，双方均无法再查看。确定继续吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('取消'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              final currentUserName = _globalUtil.userName ?? '';
+              if (currentUserName.isEmpty || _targetUserName.isEmpty) {
+                _showMessage('获取用户信息失败');
+                return;
+              }
+              try {
+                final sessionId = GlobalUtil.generateSessionId(
+                  currentUserName,
+                  _targetUserName,
+                );
+                final response = await deletePrivateChatHistoryApi(
+                  userName: currentUserName,
+                  peerUserName: _targetUserName,
+                  conversationId: sessionId,
+                );
+                if (response['code'] != 100) {
+                  throw Exception(response['msg'] ?? '服务器删除失败');
+                }
+                await _globalUtil.deleteChatRecords(_targetUserName);
+                if (mounted) _showMessage('聊天记录已删除');
+              } catch (error) {
+                debugPrint('删除聊天记录失败: $error');
+                if (mounted) _showMessage('删除聊天记录失败，请重试');
+              }
+            },
+            child: Text('删除'),
+          ),
+        ],
+      ),
     );
   }
 
