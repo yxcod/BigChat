@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -55,6 +56,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   CancelToken? _imageUploadCancelToken;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
   final Set<int> _sentReadAckMessageIds = {};
+  final Queue<MapEntry<int, String>> _pendingReadAcks = Queue();
+  bool _isDrainingReadAcks = false;
   int _loadedMessageLimit = 100;
   late Timer _groupInfoTimer; // 定时器，用于定期获取群信息
   late Timer _groupMembersTimer; // 定时器，用于定期检查群成员列表
@@ -323,8 +326,29 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             );
       if (!readMembers.contains(currentUserId) &&
           _sentReadAckMessageIds.add(message.msgId)) {
-        _sendReadAck(message.msgId, message.senderId!);
+        _pendingReadAcks.add(MapEntry(message.msgId, message.senderId!));
       }
+    }
+    _drainPendingReadAcks();
+  }
+
+  Future<void> _drainPendingReadAcks() async {
+    if (_isDrainingReadAcks) {
+      return;
+    }
+    _isDrainingReadAcks = true;
+    try {
+      while (mounted && _pendingReadAcks.isNotEmpty) {
+        if (!_wsManager.isConnected) {
+          return;
+        }
+        final pending = _pendingReadAcks.removeFirst();
+        _sendReadAck(pending.key, pending.value);
+        // 打开群聊最多会补发 100 条已读回执，分散发送以保护服务端连接池。
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      }
+    } finally {
+      _isDrainingReadAcks = false;
     }
   }
 
@@ -887,6 +911,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   @override
   void dispose() {
     _imageUploadCancelToken?.cancel('群聊页面已关闭');
+    _pendingReadAcks.clear();
     _textController.dispose();
     _textFieldFocusNode.dispose();
     _scrollController.dispose();
