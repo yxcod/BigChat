@@ -88,4 +88,24 @@ void main() {
     expect(viewedByBob.senderId, 'alice');
     expect(viewedByBob.timestamp, 1000);
   });
+
+  test('maps server voice type to an audio message', () {
+    final record = MessageDetailModel(
+      msgId: 31,
+      groupId: 5,
+      senderId: 'alice',
+      msgContent: '{"audioName":"voice.m4a","durationMs":2400}',
+      msgType: 3,
+      sendTime: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    final message = ChatMessageMapper.fromGroupRecord(
+      record,
+      currentUserId: 'me',
+      conversationId: '5',
+    );
+
+    expect(message.messageType, MessageType.audio);
+    expect(message.senderId, 'alice');
+  });
 }

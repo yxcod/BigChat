@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -28,6 +29,9 @@ import '../../shared/widgets/chat_background.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
 import '../../core/media/video_media.dart';
 import '../../shared/widgets/app_video_player.dart';
+import '../../shared/widgets/app_voice_message.dart';
+import '../../shared/widgets/hold_to_record_field.dart';
+import '../../core/media/voice_message.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -60,6 +64,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   double _videoUploadProgress = 0;
   CancelToken? _imageUploadCancelToken;
   CancelToken? _videoUploadCancelToken;
+  CancelToken? _audioUploadCancelToken;
+  bool _isUploadingAudio = false;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
   final Set<int> _sentReadAckMessageIds = {};
   int _loadedMessageLimit = 100;
@@ -791,6 +797,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           conversationId: widget.groupId.toString(),
           messageType: switch (msgType) {
             2 => MessageType.image,
+            3 => MessageType.audio,
             4 => MessageType.video,
             _ => MessageType.text,
           },
@@ -1087,6 +1094,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     GroupRouteRegistry.leave(widget.groupId);
     _imageUploadCancelToken?.cancel('群聊页面已关闭');
     _videoUploadCancelToken?.cancel('群聊页面已关闭');
+    _audioUploadCancelToken?.cancel('群聊页面已关闭');
     // 离开页面前再次提交已读水位，避免会话列表重新出现已读消息红点。
     _sendReadAcksForLoadedMessages();
     _textController.dispose();
@@ -1254,40 +1262,25 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         child: Row(
           children: [
             Flexible(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                padding: EdgeInsets.symmetric(horizontal: 15),
-                margin: EdgeInsets.symmetric(vertical: 4.0),
-                child: TextField(
-                  controller: _textController,
-                  focusNode: _textFieldFocusNode,
-                  onChanged: (String text) {
-                    setState(() {
-                      _isComposing = text.isNotEmpty;
-                    });
-                  },
-                  //监测键盘回车按键自动将当前TextField中的文本内容作为参数传递给 _handleSubmitted
-                  onSubmitted: _handleSubmitted,
-                  decoration: InputDecoration.collapsed(hintText: '输入消息...'),
-                  // 确保点击时可以获取焦点并弹出键盘
-                  autofocus: false,
-                  // 简化焦点获取逻辑
-                  onTap: () {
-                    // 请求当前输入框获取焦点
-                    _textFieldFocusNode.requestFocus();
-                  },
-                  // 确保在web端也能正常工作的属性
-                  enableInteractiveSelection: true,
-                  enableSuggestions: true,
-                  autocorrect: true,
-                  // 确保输入框可以接收用户输入
-                  readOnly: false,
-                ),
+              child: HoldToRecordField(
+                controller: _textController,
+                focusNode: _textFieldFocusNode,
+                enabled: !_isUploadingAudio,
+                onChanged: (text) =>
+                    setState(() => _isComposing = text.trim().isNotEmpty),
+                onSubmitted: _handleSubmitted,
+                onRecorded: _handleVoiceRecorded,
+                onError: _showVoiceError,
               ),
             ),
+            if (_isUploadingAudio)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox.square(
+                  dimension: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
             IconButton(
               icon: _isUploadingVideo
                   ? SizedBox.square(
@@ -1325,6 +1318,70 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         ),
       ),
     );
+  }
+
+  void _showVoiceError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _handleVoiceRecorded(VoiceRecordingResult recording) async {
+    final global = GlobalUtil();
+    final sender = global.userName ?? '';
+    if (sender.isEmpty || _isUploadingAudio) return;
+    final msgId = DateTime.now().millisecondsSinceEpoch;
+    final audioName = '${sender}_${widget.groupId}_$msgId.m4a';
+    final cancelToken = CancelToken();
+    _audioUploadCancelToken = cancelToken;
+    setState(() => _isUploadingAudio = true);
+    try {
+      await HttpUtil().uploadAudioFile(
+        audioName,
+        recording.path,
+        userName: sender,
+        cancelToken: cancelToken,
+      );
+      final payload = VoiceMessagePayload(
+        audioName: audioName,
+        durationMs: recording.durationMs,
+      ).encode();
+      final message = Message(
+        msgId: msgId,
+        content: payload,
+        isMe: true,
+        time: _getTime(),
+        isRead: false,
+        conversationId: widget.groupId.toString(),
+        messageType: MessageType.audio,
+        status: MessageStatus.sending,
+        senderId: sender,
+      );
+      global.addMessage(_conversationKey, message);
+      _initializeOutgoingReadStatus(msgId);
+      final queued = _sendWebSocketMessage(
+        msgId: msgId,
+        content: payload,
+        receiver: widget.groupId,
+        conversationId: message.conversationId,
+        messageType: MessageType.audio,
+      );
+      if (!queued) message.status = MessageStatus.failed;
+      if (mounted) {
+        setState(() {});
+        _scrollToBottom();
+      }
+    } catch (error) {
+      if (error is! DioException || !CancelToken.isCancel(error)) {
+        _showVoiceError('语音发送失败，请稍后重试');
+      }
+    } finally {
+      _audioUploadCancelToken = null;
+      final file = File(recording.path);
+      if (await file.exists()) await file.delete();
+      if (mounted) setState(() => _isUploadingAudio = false);
+    }
   }
 
   void _handleSubmitted(String text) {
@@ -1398,6 +1455,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     // 根据消息类型设置msgType
     final msgType = switch (messageType) {
       MessageType.image => 2,
+      MessageType.audio => 3,
       MessageType.video => 4,
       _ => 1,
     };
@@ -1829,6 +1887,14 @@ class GroupMessageBubble extends StatelessWidget {
                       message.senderId ?? globalUtil.userName ?? '',
                       message.content,
                     ),
+                  ),
+                  MessageType.audio => AppVoiceMessage(
+                    source: globalUtil.getAudioURL(
+                      message.senderId ?? globalUtil.userName ?? '',
+                      VoiceMessagePayload.parse(message.content).audioName,
+                    ),
+                    payload: VoiceMessagePayload.parse(message.content),
+                    isMe: message.isMe,
                   ),
                   _ => _buildImageBubble(context),
                 },

@@ -5,6 +5,7 @@ import '../../api/getConversationAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../model/friendInfoModel.dart';
 import '../../model/messageModel.dart';
+import '../../core/media/voice_message.dart';
 import '../../model/groupConversationModel.dart';
 import '../../api/groupChatRecordAPI.dart';
 import '../../api/getGroupInfoAPI.dart';
@@ -451,7 +452,7 @@ class _ChatpageState extends State<Chatpage> {
                     : friend.nickName!
               : friend.remarks!,
           avatar: avatarURL,
-          lastMessage: conversation.lastMsg ?? '',
+          lastMessage: chatVoicePreview(conversation.lastMsg ?? ''),
           time: formattedTime.substring(11, 16), // 只显示时分
           unreadCount: conversation.unreadCount,
           userName: targetUserName,
@@ -574,7 +575,7 @@ class _ChatpageState extends State<Chatpage> {
             Chat(
               name: groupInfo.groupName,
               avatar: avatarURL,
-              lastMessage: groupConversation.lastMsg,
+              lastMessage: chatVoicePreview(groupConversation.lastMsg),
               time: formattedTime.substring(11, 16), // 只显示时分
               unreadCount: locallyRead ? 0 : serverUnreadCount,
               userName: groupIdStr,
@@ -918,6 +919,9 @@ class _ChatpageState extends State<Chatpage> {
                 break;
               case 2:
                 messageType = MessageType.image;
+                break;
+              case 3:
+                messageType = MessageType.audio;
                 break;
               case 4:
                 messageType = MessageType.video;

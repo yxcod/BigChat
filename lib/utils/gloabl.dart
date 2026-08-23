@@ -415,6 +415,16 @@ class GlobalUtil {
         .toString();
   }
 
+  String getAudioURL(String userName, String audioName) {
+    final baseUri = Uri.parse(baseURL);
+    return baseUri
+        .replace(
+          path: '${baseUri.path}/api/audio/download',
+          queryParameters: {'userName': userName, 'audioName': audioName},
+        )
+        .toString();
+  }
+
   String getChatWebSocketURL(String userName) {
     final baseUri = Uri.parse(baseWebSocketURL);
     return baseUri

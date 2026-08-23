@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +22,9 @@ import '../shared/widgets/chat_background.dart';
 import '../features/location/data/app_location_service.dart';
 import '../core/media/video_media.dart';
 import '../shared/widgets/app_video_player.dart';
+import '../shared/widgets/app_voice_message.dart';
+import '../shared/widgets/hold_to_record_field.dart';
+import '../core/media/voice_message.dart';
 import 'videoCallPage.dart';
 
 class ChatDialogPage extends StatefulWidget {
@@ -45,6 +49,8 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   double _videoUploadProgress = 0;
   CancelToken? _imageUploadCancelToken;
   CancelToken? _videoUploadCancelToken;
+  CancelToken? _audioUploadCancelToken;
+  bool _isUploadingAudio = false;
   Timer? _distanceTimer;
   String? _distanceStartedFor;
   int? _distanceMeters;
@@ -451,6 +457,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         : int.tryParse(rawMsgType?.toString() ?? '') ?? 1;
     final messageType = switch (msgType) {
       2 => MessageType.image,
+      3 => MessageType.audio,
       4 => MessageType.video,
       _ => MessageType.text,
     };
@@ -932,40 +939,25 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         child: Row(
           children: [
             Flexible(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                padding: EdgeInsets.symmetric(horizontal: 15),
-                margin: EdgeInsets.symmetric(vertical: 4.0),
-                child: TextField(
-                  controller: _textController,
-                  focusNode: _textFieldFocusNode,
-                  onChanged: (String text) {
-                    setState(() {
-                      _isComposing = text.isNotEmpty;
-                    });
-                  },
-                  //监测键盘回车按键自动将当前TextField中的文本内容作为参数传递给 _handleSubmitted
-                  onSubmitted: _handleSubmitted,
-                  decoration: InputDecoration.collapsed(hintText: '输入消息...'),
-                  // 确保点击时可以获取焦点并弹出键盘
-                  autofocus: false,
-                  // 简化焦点获取逻辑
-                  onTap: () {
-                    // 请求当前输入框获取焦点
-                    _textFieldFocusNode.requestFocus();
-                  },
-                  // 确保在web端也能正常工作的属性
-                  enableInteractiveSelection: true,
-                  enableSuggestions: true,
-                  autocorrect: true,
-                  // 确保输入框可以接收用户输入
-                  readOnly: false,
-                ),
+              child: HoldToRecordField(
+                controller: _textController,
+                focusNode: _textFieldFocusNode,
+                enabled: !_isUploadingAudio,
+                onChanged: (text) =>
+                    setState(() => _isComposing = text.trim().isNotEmpty),
+                onSubmitted: _handleSubmitted,
+                onRecorded: _handleVoiceRecorded,
+                onError: _showVoiceError,
               ),
             ),
+            if (_isUploadingAudio)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox.square(
+                  dimension: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
             IconButton(
               icon: _isUploadingVideo
                   ? SizedBox.square(
@@ -1003,6 +995,70 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         ),
       ),
     );
+  }
+
+  void _showVoiceError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _handleVoiceRecorded(VoiceRecordingResult recording) async {
+    final receiver = friendInfo?.userName ?? id ?? '';
+    final sender = GlobalUtil().userName ?? '';
+    if (receiver.isEmpty || sender.isEmpty || _isUploadingAudio) return;
+    final msgId = DateTime.now().millisecondsSinceEpoch;
+    final audioName = '${sender}_${receiver}_$msgId.m4a';
+    final cancelToken = CancelToken();
+    _audioUploadCancelToken = cancelToken;
+    setState(() => _isUploadingAudio = true);
+    try {
+      await HttpUtil().uploadAudioFile(
+        audioName,
+        recording.path,
+        userName: sender,
+        cancelToken: cancelToken,
+      );
+      final payload = VoiceMessagePayload(
+        audioName: audioName,
+        durationMs: recording.durationMs,
+      ).encode();
+      final conversationId = _generateConversationId();
+      final message = Message(
+        msgId: msgId,
+        content: payload,
+        isMe: true,
+        time: _getTime(),
+        isRead: false,
+        conversationId: conversationId,
+        messageType: MessageType.audio,
+        status: MessageStatus.sending,
+        senderId: sender,
+      );
+      GlobalUtil().addMessage(receiver, message);
+      final queued = _sendWebSocketMessage(
+        msgId: msgId,
+        content: payload,
+        receiver: receiver,
+        conversationId: conversationId,
+        messageType: MessageType.audio,
+      );
+      if (!queued) message.status = MessageStatus.failed;
+      if (mounted) {
+        setState(() {});
+        _scrollToBottom();
+      }
+    } catch (error) {
+      if (error is! DioException || !CancelToken.isCancel(error)) {
+        _showVoiceError('语音发送失败，请稍后重试');
+      }
+    } finally {
+      _audioUploadCancelToken = null;
+      final file = File(recording.path);
+      if (await file.exists()) await file.delete();
+      if (mounted) setState(() => _isUploadingAudio = false);
+    }
   }
 
   void _handleSubmitted(String text) {
@@ -1078,6 +1134,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     // 根据消息类型设置msgType
     final msgType = switch (messageType) {
       MessageType.image => 2,
+      MessageType.audio => 3,
       MessageType.video => 4,
       _ => 1,
     };
@@ -1125,6 +1182,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   void dispose() {
     _imageUploadCancelToken?.cancel('聊天页面已关闭');
     _videoUploadCancelToken?.cancel('聊天页面已关闭');
+    _audioUploadCancelToken?.cancel('聊天页面已关闭');
     _distanceTimer?.cancel();
     _messageSubscription?.cancel();
     _textController.dispose();
@@ -1584,6 +1642,14 @@ class MessageBubble extends StatelessWidget {
     return globalUtil.getVideoURL(owner, message.content);
   }
 
+  String _resolveAudioUrl() {
+    final owner = message.isMe
+        ? (globalUtil.userName ?? '')
+        : (message.senderId ?? friendInfo?.userName ?? '');
+    final payload = VoiceMessagePayload.parse(message.content);
+    return globalUtil.getAudioURL(owner, payload.audioName);
+  }
+
   Widget _buildImageMessage() {
     final imageURL = _resolveImageUrl();
 
@@ -1693,6 +1759,12 @@ class MessageBubble extends StatelessWidget {
                     ? Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2),
                         child: AppVideoPreview(source: _resolveVideoUrl()),
+                      )
+                    : message.messageType == MessageType.audio
+                    ? AppVoiceMessage(
+                        source: _resolveAudioUrl(),
+                        payload: VoiceMessagePayload.parse(message.content),
+                        isMe: message.isMe,
                       )
                     : message.messageType == MessageType.image
                     ? // 图片消息：使用不同的样式，没有背景色

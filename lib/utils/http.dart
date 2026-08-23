@@ -331,6 +331,36 @@ class HttpUtil {
     throw Exception(data is Map ? (data['message'] ?? '视频上传失败') : '视频上传失败');
   }
 
+  Future<bool> uploadAudioFile(
+    String audioName,
+    String filePath, {
+    String? userName,
+    CancelToken? cancelToken,
+    ProgressCallback? onSendProgress,
+  }) async {
+    final finalUserName = userName ?? (_globalUtil.userName ?? '');
+    if (finalUserName.isEmpty) throw Exception('无法获取当前用户信息');
+    final file = await MultipartFile.fromFile(
+      filePath,
+      filename: audioName,
+      contentType: DioMediaType('audio', 'mp4'),
+    );
+    final response = await _dio.post(
+      '/api/audio/upload',
+      data: FormData.fromMap({'file': file}),
+      queryParameters: {'userName': finalUserName, 'audioName': audioName},
+      options: Options(
+        sendTimeout: const Duration(minutes: 2),
+        receiveTimeout: const Duration(minutes: 1),
+      ),
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+    );
+    final data = response.data;
+    if (data is Map && data['code'] == 100) return true;
+    throw Exception(data is Map ? (data['message'] ?? '语音上传失败') : '语音上传失败');
+  }
+
   Future<Response<dynamic>> downloadFile(
     String url,
     String savePath, {

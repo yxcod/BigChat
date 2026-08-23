@@ -47,6 +47,7 @@ class ChatMessageMapper {
       conversationId: conversationId,
       messageType: switch (record.msgType) {
         2 => MessageType.image,
+        3 => MessageType.audio,
         4 => MessageType.video,
         _ => MessageType.text,
       },
