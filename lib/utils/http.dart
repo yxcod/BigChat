@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import './gloabl.dart';
+import '../core/network/app_connection_monitor.dart';
 
 class HttpUtil {
   static final HttpUtil _instance = HttpUtil._internal();
@@ -34,6 +35,7 @@ class HttpUtil {
           return handler.next(options);
         },
         onResponse: (response, handler) {
+          AppConnectionMonitor.instance.reportHttpReachable();
           // 统一处理响应数据
           if (response.statusCode == 200) {
             return handler.next(response);
@@ -48,6 +50,11 @@ class HttpUtil {
           }
         },
         onError: (DioException e, handler) {
+          if (e.response != null) {
+            AppConnectionMonitor.instance.reportHttpReachable();
+          } else if (e.type != DioExceptionType.cancel) {
+            AppConnectionMonitor.instance.reportHttpUnavailable();
+          }
           // 统一处理错误
           String errorMsg = '网络请求失败';
           if (e.type == DioExceptionType.connectionTimeout) {

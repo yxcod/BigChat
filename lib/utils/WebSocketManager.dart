@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../pages/videoCallInviteWaitingPage.dart';
+import '../core/network/app_connection_monitor.dart';
 import 'gloabl.dart';
 import 'GlobalNavigatorKey.dart';
 
@@ -71,7 +72,9 @@ class WebSocketManager {
   static final WebSocketManager _instance = WebSocketManager._internal();
   factory WebSocketManager() => _instance;
 
-  WebSocketManager._internal();
+  WebSocketManager._internal() {
+    AppConnectionMonitor.instance.addBackendReachableListener(reconnectNow);
+  }
 
   String? _url;
   WebSocketStatus _status = WebSocketStatus.disconnected;
@@ -84,7 +87,7 @@ class WebSocketManager {
   Timer? _heartbeatTimer;
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
-  int _maxReconnectAttempts = 50;
+  int? _maxReconnectAttempts;
   Duration _reconnectDelay = const Duration(seconds: 2);
   Duration _heartbeatInterval = const Duration(seconds: 15);
   bool _shouldReconnect = true;
@@ -103,6 +106,7 @@ class WebSocketManager {
   }) async {
     _shouldReconnect = true;
     _url = url;
+    AppConnectionMonitor.instance.expectRealtimeConnection(true);
     if (onStatusChanged != null) {
       _statusListeners.add(onStatusChanged);
     }
@@ -173,6 +177,7 @@ class WebSocketManager {
       _socket = await WebSocket.connect(_url!);
       _reconnectAttempts = 0;
       _setStatus(WebSocketStatus.connected);
+      AppConnectionMonitor.instance.reportRealtimeConnected();
 
       // 监听消息
       _socket!.listen(
@@ -320,6 +325,9 @@ class WebSocketManager {
     }
 
     _setStatus(WebSocketStatus.error);
+    if (_shouldReconnect) {
+      AppConnectionMonitor.instance.reportRealtimeUnavailable();
+    }
     for (final listener in List.of(_errorListeners)) {
       listener(error);
     }
@@ -336,6 +344,7 @@ class WebSocketManager {
 
     _setStatus(WebSocketStatus.disconnected);
     if (_shouldReconnect) {
+      AppConnectionMonitor.instance.reportRealtimeUnavailable();
       _attemptReconnect();
     }
   }
@@ -345,7 +354,8 @@ class WebSocketManager {
     if (!_shouldReconnect || _reconnectTimer?.isActive == true) {
       return;
     }
-    if (_reconnectAttempts >= _maxReconnectAttempts) {
+    if (_maxReconnectAttempts != null &&
+        _reconnectAttempts >= _maxReconnectAttempts!) {
       if (kDebugMode) {
         print('Max reconnect attempts reached');
       }
@@ -355,15 +365,43 @@ class WebSocketManager {
     _stopReconnectTimer();
     _setStatus(WebSocketStatus.reconnecting);
 
-    _reconnectTimer = Timer(_reconnectDelay * (_reconnectAttempts + 1), () {
+    final delay = reconnectDelayForAttempt(
+      _reconnectAttempts,
+      baseDelay: _reconnectDelay,
+    );
+    _reconnectTimer = Timer(delay, () {
       _reconnectAttempts++;
       if (kDebugMode) {
         print(
-          'Attempting to reconnect ($_reconnectAttempts/$_maxReconnectAttempts)...',
+          'Attempting to reconnect ($_reconnectAttempts/${_maxReconnectAttempts ?? 'unlimited'})...',
         );
       }
       _connect();
     });
+  }
+
+  @visibleForTesting
+  static Duration reconnectDelayForAttempt(
+    int attempt, {
+    Duration baseDelay = const Duration(seconds: 2),
+    Duration maximumDelay = const Duration(seconds: 30),
+  }) {
+    final exponent = attempt.clamp(0, 10);
+    final milliseconds = baseDelay.inMilliseconds * (1 << exponent);
+    return Duration(
+      milliseconds: milliseconds.clamp(0, maximumDelay.inMilliseconds),
+    );
+  }
+
+  void reconnectNow() {
+    if (!_shouldReconnect ||
+        _url == null ||
+        _status == WebSocketStatus.connected ||
+        _status == WebSocketStatus.connecting) {
+      return;
+    }
+    _stopReconnectTimer();
+    unawaited(_connect());
   }
 
   /// 停止重连计时器
@@ -380,6 +418,7 @@ class WebSocketManager {
     _socket?.close();
     _socket = null;
     _setStatus(WebSocketStatus.disconnected);
+    AppConnectionMonitor.instance.expectRealtimeConnection(false);
   }
 
   /// 重置WebSocket
@@ -390,6 +429,9 @@ class WebSocketManager {
     _errorListeners.clear();
     _url = null;
     _reconnectAttempts = 0;
+    _maxReconnectAttempts = null;
+    _reconnectDelay = const Duration(seconds: 2);
+    _heartbeatInterval = const Duration(seconds: 15);
   }
 
   /// 更新连接状态

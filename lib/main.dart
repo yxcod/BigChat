@@ -7,6 +7,8 @@ import './utils/GlobalNavigatorKey.dart';
 import './core/config/app_config.dart';
 import './app/theme/app_theme.dart';
 import './utils/gloabl.dart';
+import './utils/WebSocketManager.dart';
+import './core/network/app_connection_monitor.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,24 +19,35 @@ Future<void> main() async {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key, this.connectionMonitor});
+
+  final AppConnectionMonitor? connectionMonitor;
 
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  late final AppConnectionMonitor _connectionMonitor;
+  AppConnectionStatus _lastConnectionStatus = AppConnectionStatus.unknown;
+  AppConnectionStatus? _connectionNoticeStatus;
+
   @override
   void initState() {
     super.initState();
+    _connectionMonitor =
+        widget.connectionMonitor ?? AppConnectionMonitor.instance;
     // 添加应用生命周期监听
     WidgetsBinding.instance.addObserver(this);
+    _lastConnectionStatus = _connectionMonitor.status;
+    _connectionMonitor.addListener(_handleConnectionStatusChanged);
   }
 
   @override
   void dispose() {
     // 移除应用生命周期监听
     WidgetsBinding.instance.removeObserver(this);
+    _connectionMonitor.removeListener(_handleConnectionStatusChanged);
     super.dispose();
   }
 
@@ -58,9 +71,73 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         debugPrint('应用即将被销毁');
 
         break;
+      case AppLifecycleState.resumed:
+        unawaited(_connectionMonitor.checkNow());
+        WebSocketManager().reconnectNow();
+        break;
       default:
         break;
     }
+  }
+
+  void _handleConnectionStatusChanged() {
+    final currentStatus = _connectionMonitor.status;
+    final previousStatus = _lastConnectionStatus;
+    if (currentStatus == previousStatus) {
+      return;
+    }
+    _lastConnectionStatus = currentStatus;
+
+    if (currentStatus == AppConnectionStatus.disconnected) {
+      if (mounted) {
+        setState(() {
+          _connectionNoticeStatus = AppConnectionStatus.disconnected;
+        });
+      }
+    } else if (currentStatus == AppConnectionStatus.connected &&
+        previousStatus == AppConnectionStatus.disconnected) {
+      if (mounted) {
+        setState(() {
+          _connectionNoticeStatus = AppConnectionStatus.connected;
+        });
+      }
+    }
+  }
+
+  void _dismissConnectionNotice() {
+    if (mounted) {
+      setState(() => _connectionNoticeStatus = null);
+    }
+  }
+
+  Widget _buildConnectionNotice() {
+    final disconnected =
+        _connectionNoticeStatus == AppConnectionStatus.disconnected;
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          ModalBarrier(
+            dismissible: true,
+            onDismiss: _dismissConnectionNotice,
+            color: Colors.black54,
+          ),
+          Center(
+            child: AlertDialog(
+              title: Text(disconnected ? '连接已断开' : '连接已恢复'),
+              content: Text(
+                disconnected ? '当前无法连接网络或后端服务器，应用正在自动重连。' : '网络和服务器连接已恢复。',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: _dismissConnectionNotice,
+                  child: const Text('知道了'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -72,6 +149,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       initialRoute: '/login',
       routes: getRoutes(),
       onGenerateRoute: generateRoute,
+      builder: (context, child) => Stack(
+        children: [
+          if (child != null) child,
+          if (_connectionNoticeStatus != null) _buildConnectionNotice(),
+        ],
+      ),
     );
   }
 }
