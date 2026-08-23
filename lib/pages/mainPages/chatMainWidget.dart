@@ -60,7 +60,12 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
       builder: (context) {
         return AlertDialog(
           title: Text('提示'),
-          content: Text('您已被移除出群聊'),
+          content: Text(
+            (ModalRoute.of(context)?.settings.arguments
+                        as Map<String, dynamic>?)?['message']
+                    ?.toString() ??
+                '您已被移出该群聊',
+          ),
           actions: [
             TextButton(
               onPressed: () {

@@ -9,6 +9,8 @@ import './app/theme/app_theme.dart';
 import './utils/gloabl.dart';
 import './utils/WebSocketManager.dart';
 import './core/network/app_connection_monitor.dart';
+import './features/chat/domain/chat_realtime_event.dart';
+import './features/groups/presentation/group_route_registry.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +33,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final AppConnectionMonitor _connectionMonitor;
   AppConnectionStatus _lastConnectionStatus = AppConnectionStatus.unknown;
   AppConnectionStatus? _connectionNoticeStatus;
+  late final WebSocketMessageSubscription _groupEventSubscription;
+  final Set<int> _handlingRemovedGroups = {};
 
   @override
   void initState() {
@@ -41,6 +45,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _lastConnectionStatus = _connectionMonitor.status;
     _connectionMonitor.addListener(_handleConnectionStatusChanged);
+    _groupEventSubscription = WebSocketManager().addMessageListener(
+      _handleGlobalGroupEvent,
+    );
   }
 
   @override
@@ -48,7 +55,52 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // 移除应用生命周期监听
     WidgetsBinding.instance.removeObserver(this);
     _connectionMonitor.removeListener(_handleConnectionStatusChanged);
+    _groupEventSubscription.cancel();
     super.dispose();
+  }
+
+  void _handleGlobalGroupEvent(dynamic rawMessage) {
+    if (rawMessage is! Map<String, dynamic>) return;
+    final event = ChatRealtimeEvent.parse(rawMessage);
+    if (event.type != ChatRealtimeEventType.groupMemberRemoved ||
+        event.groupId <= 0 ||
+        !_handlingRemovedGroups.add(event.groupId)) {
+      return;
+    }
+    unawaited(_handleRemovedFromGroup(event));
+  }
+
+  Future<void> _handleRemovedFromGroup(ChatRealtimeEvent event) async {
+    final groupId = event.groupId;
+    await GlobalUtil().deleteChatRecords(
+      GlobalUtil.groupConversationKey(groupId),
+    );
+    if (!mounted) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navigator = GlobalNavigatorKey.navigatorState;
+      if (navigator == null) {
+        _handlingRemovedGroups.remove(groupId);
+        return;
+      }
+      final message = event.data['message']?.toString() ?? '您已被移出该群聊';
+      if (GroupRouteRegistry.isActive(groupId)) {
+        navigator.pushNamedAndRemoveUntil(
+          '/mainWidget',
+          (route) => false,
+          arguments: {
+            'isRemovedFromGroup': true,
+            'removedGroupId': groupId,
+            'message': message,
+          },
+        );
+      } else {
+        ScaffoldMessenger.maybeOf(
+          navigator.context,
+        )?.showSnackBar(SnackBar(content: Text(message)));
+      }
+      _handlingRemovedGroups.remove(groupId);
+    });
   }
 
   @override

@@ -25,6 +25,7 @@ import '../../core/media/app_media_url.dart';
 import '../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../shared/utils/chat_scroll_util.dart';
 import '../../shared/widgets/chat_background.dart';
+import '../../features/groups/presentation/group_route_registry.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -65,6 +66,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   @override
   void initState() {
     super.initState();
+    GroupRouteRegistry.enter(widget.groupId);
     final globalUtil = GlobalUtil();
     globalUtil.isChatting = true;
     globalUtil.currentChatUserName = _conversationKey;
@@ -632,7 +634,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       return removedGroupChatRoute;
     });
     final notification =
-        messageData['message']?.toString() ?? '群主已删除当前群聊的全部聊天记录';
+        messageData['message']?.toString() ?? '群主或管理员已删除当前群聊的全部聊天记录';
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!navigator.mounted) return;
       showDialog<void>(
@@ -1008,6 +1010,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   @override
   void dispose() {
+    GroupRouteRegistry.leave(widget.groupId);
     _imageUploadCancelToken?.cancel('群聊页面已关闭');
     // 离开页面前再次提交已读水位，避免会话列表重新出现已读消息红点。
     _sendReadAcksForLoadedMessages();

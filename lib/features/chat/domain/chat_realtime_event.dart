@@ -7,6 +7,8 @@ enum ChatRealtimeEventType {
   groupDelivery,
   groupReadReceipt,
   groupHistoryDeleted,
+  groupMemberRemoved,
+  groupMemberRoleUpdated,
   readReceipt,
   other,
 }
@@ -28,6 +30,8 @@ class ChatRealtimeEvent {
         ChatRealtimeEventType.groupDelivery,
       'groupChatReadCallback' => ChatRealtimeEventType.groupReadReceipt,
       'groupChatHistoryDeleted' => ChatRealtimeEventType.groupHistoryDeleted,
+      'groupMemberRemoved' => ChatRealtimeEventType.groupMemberRemoved,
+      'groupMemberRoleUpdated' => ChatRealtimeEventType.groupMemberRoleUpdated,
       'read_ack' ||
       'chatCallback' ||
       'groupChatCallback' => ChatRealtimeEventType.readReceipt,

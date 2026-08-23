@@ -70,22 +70,16 @@ Future<int> minuGroup(int groupId, List<String> userNames) async {
 }
 
 // 更新群成员信息
-Future<int> updateGroupMemberInfo(
+Future<int> updateGroupMemberNickname(
   String userName,
   int groupId,
   String nickName,
-  int role,
 ) async {
   try {
     final httpUtil = HttpUtil();
     final response = await httpUtil.post(
       '/api/group/updateGroupMemberInfo',
-      data: {
-        'userName': userName,
-        'groupId': groupId,
-        'nickName': nickName,
-        'role': role,
-      },
+      data: {'userName': userName, 'groupId': groupId, 'nickName': nickName},
     );
 
     if (response.statusCode == 200) {
@@ -95,6 +89,24 @@ Future<int> updateGroupMemberInfo(
     }
   } catch (e) {
     debugPrint('更新群成员信息失败: $e');
+    rethrow;
+  }
+}
+
+Future<int> updateGroupMemberRole(
+  String userName,
+  int groupId,
+  int role,
+) async {
+  try {
+    final response = await HttpUtil().post(
+      '/api/group/updateGroupMemberInfo',
+      data: {'userName': userName, 'groupId': groupId, 'role': role},
+    );
+    if (response.statusCode == 200) return response.data['code'] ?? 0;
+    throw Exception('更新群成员角色失败: ${response.statusCode}');
+  } catch (e) {
+    debugPrint('更新群成员角色失败: $e');
     rethrow;
   }
 }

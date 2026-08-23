@@ -15,6 +15,10 @@ import '../../utils/gloabl.dart';
 import '../../utils/http.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
+import '../../features/groups/domain/group_role_policy.dart';
+import '../../features/groups/presentation/group_route_registry.dart';
+import '../../features/chat/domain/chat_realtime_event.dart';
+import '../../utils/WebSocketManager.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
@@ -44,8 +48,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   // 静态缓存已经加载成功的头像 URL，避免重复加载
   static Map<String, String> _avatarCache = {};
 
-  // 当前用户是否为群主
-  bool _isOwner = false;
+  int _myRole = GroupRolePolicy.member;
+  bool get _canManageMembers => GroupRolePolicy.canManageMembers(_myRole);
+  WebSocketMessageSubscription? _groupEventSubscription;
   // 当前用户的本群昵称
   String _myNickname = '';
   // 群的创建时间
@@ -241,6 +246,10 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   @override
   void initState() {
     super.initState();
+    GroupRouteRegistry.enter(int.tryParse(widget.groupId) ?? 0);
+    _groupEventSubscription = WebSocketManager().addMessageListener(
+      _handleGroupEvent,
+    );
     _groupName = widget.groupName;
     _groupAnnouncement = '未设置';
     _groupDescription = '未设置';
@@ -302,6 +311,8 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
 
   @override
   void dispose() {
+    GroupRouteRegistry.leave(int.tryParse(widget.groupId) ?? 0);
+    _groupEventSubscription?.cancel();
     // 清理所有定时器
     _timer.cancel();
     _groupInfoTimer.cancel();
@@ -310,6 +321,15 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
       _uploadCancelToken!.cancel('页面已关闭');
     }
     super.dispose();
+  }
+
+  void _handleGroupEvent(dynamic rawMessage) {
+    if (rawMessage is! Map<String, dynamic>) return;
+    final event = ChatRealtimeEvent.parse(rawMessage);
+    if (event.groupId != int.tryParse(widget.groupId)) return;
+    if (event.type == ChatRealtimeEventType.groupMemberRoleUpdated) {
+      unawaited(_fetchGroupMembers());
+    }
   }
 
   Future<void> _fetchGroupMembers() async {
@@ -323,7 +343,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         String? currentUserId = globalUtil.userName;
         bool foundUser = false;
         String? userGroupNickName = '';
-        bool isOwner = false;
+        int myRole = GroupRolePolicy.member;
 
         for (var member in members) {
           print(
@@ -332,12 +352,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           if (currentUserId != null && member.userId == currentUserId) {
             // 获取当前用户的本群昵称
             userGroupNickName = member.groupNickName;
-            // 检查是否为群主
-            if (member.role == 2) {
-              isOwner = true;
-            } else {
-              isOwner = false;
-            }
+            myRole = member.role;
             foundUser = true;
             break;
           }
@@ -363,7 +378,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         // 在 setState 中更新 UI 相关的变量
         setState(() {
           _myNickname = userGroupNickName ?? '';
-          _isOwner = isOwner;
+          _myRole = myRole;
         });
 
         print('更新后的 _myNickname: $_myNickname');
@@ -765,15 +780,11 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         // 将 groupId 转换为 int 类型
         int groupIdInt = int.parse(widget.groupId);
 
-        // 保持当前用户的角色不变（我们只更新昵称）
-        int role = _isOwner ? 2 : 1; // 2 是群主，1 是成员
-
         // 调用 API 更新信息
-        int code = await updateGroupMemberInfo(
+        int code = await updateGroupMemberNickname(
           currentUserId,
           groupIdInt,
           result,
-          role,
         );
 
         if (code == 100) {
@@ -932,9 +943,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                   height: 70.0,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    itemCount:
-                        _members.length +
-                        (_isOwner ? 2 : 1), // +1 用于邀请按钮, 只有群主才显示移除按钮
+                    itemCount: _members.length + (_canManageMembers ? 2 : 1),
                     itemBuilder: (context, index) {
                       if (index < _members.length) {
                         final member = _members[index];
@@ -1041,8 +1050,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                             ),
                           ),
                         );
-                      } else if (_isOwner && index == _members.length + 1) {
-                        // 移除按钮，只有群主才显示
+                      } else if (_canManageMembers &&
+                          index == _members.length + 1) {
+                        // 群主和管理员均可进入移除成员页面，后端会按目标角色再次校验。
                         return Container(
                           margin: EdgeInsets.only(right: 16.0),
                           child: GestureDetector(
@@ -1362,7 +1372,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
             ),
           ),
 
-          if (_isOwner)
+          if (_canManageMembers)
             Container(
               margin: EdgeInsets.only(top: 24.0),
               padding: EdgeInsets.symmetric(horizontal: 16.0),

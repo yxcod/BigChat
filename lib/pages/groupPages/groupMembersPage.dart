@@ -7,6 +7,10 @@ import '../../core/config/refresh_intervals.dart';
 import '../../model/groupMemberModel.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../utils/gloabl.dart';
+import '../../features/groups/presentation/group_route_registry.dart';
+import '../../features/groups/domain/group_role_policy.dart';
+import '../../features/chat/domain/chat_realtime_event.dart';
+import '../../utils/WebSocketManager.dart';
 
 class GroupMembersPage extends StatefulWidget {
   final String groupId;
@@ -30,10 +34,16 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
   final globalUtil = GlobalUtil();
   // 静态缓存已经加载成功的头像 URL，避免重复加载
   static Map<String, String> _avatarCache = {};
+  int _myRole = GroupRolePolicy.member;
+  WebSocketMessageSubscription? _groupEventSubscription;
 
   @override
   void initState() {
     super.initState();
+    GroupRouteRegistry.enter(int.tryParse(widget.groupId) ?? 0);
+    _groupEventSubscription = WebSocketManager().addMessageListener(
+      _handleGroupEvent,
+    );
     print('初始化群成员页面');
     // 直接设置 _filteredMembers，避免 _filterMembers 方法可能的问题
     _filteredMembers = _groupMembers;
@@ -49,6 +59,8 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
 
   @override
   void dispose() {
+    GroupRouteRegistry.leave(int.tryParse(widget.groupId) ?? 0);
+    _groupEventSubscription?.cancel();
     _timer.cancel();
     super.dispose();
   }
@@ -59,18 +71,88 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
 
       List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
 
+      final currentUserId = globalUtil.userName;
+      final currentMember = members.where(
+        (member) => member.userId == currentUserId,
+      );
+      final myRole = currentMember.isEmpty
+          ? GroupRolePolicy.member
+          : currentMember.first.role;
+
       // 确保成员列表不为空
       if (members.isEmpty) {
         print('获取到的成员列表为空，使用模拟数据');
       }
+      if (!mounted) return;
       setState(() {
         _groupMembers = members;
         // 直接设置 _filteredMembers，避免 _filterMembers 方法可能的问题
         _filteredMembers = members;
+        _myRole = myRole;
         print('更新状态成功，_filteredMembers 数量: ${_filteredMembers.length}');
       });
     } catch (e) {
       print('获取群成员失败: $e');
+    }
+  }
+
+  void _handleGroupEvent(dynamic rawMessage) {
+    if (rawMessage is! Map<String, dynamic>) return;
+    final event = ChatRealtimeEvent.parse(rawMessage);
+    if (event.groupId == int.tryParse(widget.groupId) &&
+        event.type == ChatRealtimeEventType.groupMemberRoleUpdated) {
+      unawaited(_fetchGroupMembers());
+    }
+  }
+
+  Future<void> _showRoleAction(GroupMemberModel member) async {
+    if (!GroupRolePolicy.canChangeRole(
+      actorRole: _myRole,
+      targetRole: member.role,
+    )) {
+      return;
+    }
+    final promote = member.role == GroupRolePolicy.member;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                promote ? '设为管理员' : '取消管理员',
+                textAlign: TextAlign.center,
+              ),
+              onTap: () => Navigator.pop(sheetContext, true),
+            ),
+            ListTile(
+              title: const Text('取消', textAlign: TextAlign.center),
+              onTap: () => Navigator.pop(sheetContext, false),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final code = await updateGroupMemberRole(
+        member.userId,
+        int.parse(widget.groupId),
+        promote ? GroupRolePolicy.administrator : GroupRolePolicy.member,
+      );
+      if (code != 100) throw Exception('服务器返回错误码 $code');
+      await _fetchGroupMembers();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(promote ? '已设为管理员' : '已取消管理员')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('修改成员角色失败：$error')));
     }
   }
 
@@ -168,7 +250,11 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
                           height: 40,
                           errorWidget: (context, error, stackTrace) {
                             print('加载头像失败: $error');
-                            return Text(member.groupNickName.substring(0, 1));
+                            return Text(
+                              member.groupNickName.isEmpty
+                                  ? '?'
+                                  : member.groupNickName.substring(0, 1),
+                            );
                           },
                         ),
                       ),
@@ -187,6 +273,14 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
                       ],
                     ),
                     subtitle: Text('ID: ${member.userId}'),
+                    trailing:
+                        GroupRolePolicy.canChangeRole(
+                          actorRole: _myRole,
+                          targetRole: member.role,
+                        )
+                        ? const Icon(Icons.chevron_right)
+                        : null,
+                    onTap: () => _showRoleAction(member),
                   );
                 },
               ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../model/friendInfoModel.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../utils/gloabl.dart';
+import '../../features/groups/presentation/group_route_registry.dart';
 import '../../core/cache/app_image_cache.dart';
 
 class SelectContactsPage extends StatefulWidget {
@@ -28,7 +29,16 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
   @override
   void initState() {
     super.initState();
+    GroupRouteRegistry.enter(int.tryParse(widget.groupId) ?? 0);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    GroupRouteRegistry.leave(int.tryParse(widget.groupId) ?? 0);
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {

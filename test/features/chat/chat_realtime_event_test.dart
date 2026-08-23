@@ -65,4 +65,20 @@ void main() {
     expect(event.type, ChatRealtimeEventType.groupHistoryDeleted);
     expect(event.groupId, 42);
   });
+
+  test('parses group membership management events', () {
+    final removed = ChatRealtimeEvent.parse({
+      'type': 'groupMemberRemoved',
+      'groupId': '1001',
+    });
+    final roleUpdated = ChatRealtimeEvent.parse({
+      'type': 'groupMemberRoleUpdated',
+      'groupId': 1001,
+      'role': 1,
+    });
+
+    expect(removed.type, ChatRealtimeEventType.groupMemberRemoved);
+    expect(removed.groupId, 1001);
+    expect(roleUpdated.type, ChatRealtimeEventType.groupMemberRoleUpdated);
+  });
 }

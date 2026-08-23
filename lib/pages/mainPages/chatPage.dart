@@ -164,13 +164,19 @@ class _ChatpageState extends State<Chatpage> {
       case ChatRealtimeEventType.groupHistoryDeleted:
         unawaited(_handleGroupHistoryDeleted(message));
         break;
+      case ChatRealtimeEventType.groupMemberRemoved:
+        unawaited(_handleRemovedGroup(event.groupId));
+        break;
+      case ChatRealtimeEventType.groupMemberRoleUpdated:
+        break;
       case ChatRealtimeEventType.readReceipt:
       case ChatRealtimeEventType.other:
         break;
     }
 
     if (event.type == ChatRealtimeEventType.other ||
-        event.type == ChatRealtimeEventType.groupHistoryDeleted) {
+        event.type == ChatRealtimeEventType.groupHistoryDeleted ||
+        event.type == ChatRealtimeEventType.groupMemberRemoved) {
       return;
     }
     _refreshDebounceTimer?.cancel();
@@ -201,10 +207,26 @@ class _ChatpageState extends State<Chatpage> {
     if (!isOpenChat) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message['message']?.toString() ?? '群主已删除当前群聊的全部聊天记录'),
+          content: Text(
+            message['message']?.toString() ?? '群主或管理员已删除当前群聊的全部聊天记录',
+          ),
         ),
       );
     }
+  }
+
+  Future<void> _handleRemovedGroup(int groupId) async {
+    if (groupId <= 0) return;
+    final conversationKey = GlobalUtil.groupConversationKey(groupId);
+    await globalUtil.deleteChatRecords(conversationKey);
+    _locallyReadGroupIds.remove(groupId);
+    if (!mounted) return;
+    setState(() {
+      _chats.removeWhere(
+        (chat) => chat.isGroup && chat.userName == groupId.toString(),
+      );
+      _notifyUnreadCountChanged();
+    });
   }
 
   void _storePrivateRealtimeMessage(ChatRealtimeEvent event) {

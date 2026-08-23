@@ -3,6 +3,8 @@ import '../../model/groupMemberModel.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../features/groups/presentation/group_route_registry.dart';
+import '../../features/groups/domain/group_role_policy.dart';
 
 class SelectGroupMembersToRemovePage extends StatefulWidget {
   final String groupId;
@@ -26,15 +28,26 @@ class _SelectGroupMembersToRemovePageState
   Map<String, List<GroupMemberModel>> _membersByAlphabet = {};
   Map<String, GlobalKey> _alphabetKeys = {};
   bool _isLoading = true;
+  int _actorRole = GroupRolePolicy.member;
 
   @override
   void initState() {
     super.initState();
+    GroupRouteRegistry.enter(int.tryParse(widget.groupId) ?? 0);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    GroupRouteRegistry.leave(int.tryParse(widget.groupId) ?? 0);
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
     await _fetchGroupMembers();
+    if (!mounted) return;
     _loadMembers();
     setState(() {
       _isLoading = false;
@@ -79,6 +92,10 @@ class _SelectGroupMembersToRemovePageState
         return;
       }
 
+      final actor = members.where((member) => member.userId == currentUserName);
+      _actorRole = actor.isEmpty ? GroupRolePolicy.member : actor.first.role;
+
+      if (!mounted) return;
       setState(() {
         _allMembers = members;
       });
@@ -94,7 +111,11 @@ class _SelectGroupMembersToRemovePageState
 
     // 过滤出不是当前用户的群成员
     List<GroupMemberModel> filteredMembers = _allMembers.where((member) {
-      return currentUserName == null || member.userId != currentUserName;
+      return member.userId != currentUserName &&
+          GroupRolePolicy.canRemove(
+            actorRole: _actorRole,
+            targetRole: member.role,
+          );
     }).toList();
 
     // 按字母分组
@@ -140,7 +161,11 @@ class _SelectGroupMembersToRemovePageState
 
       // 过滤出不是当前用户的群成员
       List<GroupMemberModel> filteredMembers = _allMembers.where((member) {
-        return currentUserName == null || member.userId != currentUserName;
+        return member.userId != currentUserName &&
+            GroupRolePolicy.canRemove(
+              actorRole: _actorRole,
+              targetRole: member.role,
+            );
       }).toList();
 
       for (var member in filteredMembers) {
@@ -169,7 +194,11 @@ class _SelectGroupMembersToRemovePageState
       // 根据搜索结果重新分组，只显示不是当前用户的群成员
       String? currentUserName = GlobalUtil().userName;
       _filteredMembers = _allMembers.where((member) {
-        return (currentUserName == null || member.userId != currentUserName) &&
+        return member.userId != currentUserName &&
+            GroupRolePolicy.canRemove(
+              actorRole: _actorRole,
+              targetRole: member.role,
+            ) &&
             member.groupNickName.toLowerCase().contains(query.toLowerCase());
       }).toList();
 
