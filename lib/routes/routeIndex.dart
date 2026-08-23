@@ -17,6 +17,12 @@ import '../pages/profileEditPage.dart';
 import '../pages/LoginPages/registerPage.dart';
 import '../model/friendRequestModel.dart';
 import '../features/moments/presentation/my_moments_page.dart';
+import '../features/settings/presentation/settings_page.dart';
+import '../features/settings/presentation/notification_settings_page.dart';
+import '../features/settings/presentation/sound_selection_page.dart';
+import '../features/settings/data/app_settings_repository.dart';
+import '../features/settings/domain/app_settings.dart';
+import '../utils/gloabl.dart';
 
 int _parseIntRouteArgument(dynamic value) {
   if (value is int) {
@@ -59,6 +65,23 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       );
     case '/myMoments':
       return MaterialPageRoute(builder: (context) => const MyMomentsPage());
+    case '/settings':
+      return MaterialPageRoute(builder: (context) => const SettingsPage());
+    case '/notificationSettings':
+      return MaterialPageRoute(
+        builder: (context) => NotificationSettingsPage(
+          repository: AppSettingsRepository(
+            ownerId: GlobalUtil().userName ?? '',
+          ),
+        ),
+      );
+    case '/soundSelection':
+      final selectedSoundId =
+          settings.arguments?.toString() ?? NotificationSound.systemDefaultId;
+      return MaterialPageRoute(
+        builder: (context) =>
+            SoundSelectionPage(selectedSoundId: selectedSoundId),
+      );
     case '/groupChatDialog':
       final groupData = settings.arguments as Map<String, dynamic>;
       return MaterialPageRoute(

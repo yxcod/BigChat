@@ -206,7 +206,7 @@ class _ProfilePageState extends State<ProfilePage>
                     color: Colors.grey,
                     size: 16,
                   ),
-                  onTap: () {},
+                  onTap: () => Navigator.pushNamed(context, '/settings'),
                 ),
                 const Divider(height: 1, indent: 56, color: Color(0xFFE5E5E5)),
                 ListTile(
