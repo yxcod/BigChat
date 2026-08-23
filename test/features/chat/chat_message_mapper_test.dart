@@ -66,4 +66,26 @@ void main() {
     expect(incomingMessage.messageType, MessageType.image);
     expect(incomingMessage.senderId, 'alice');
   });
+
+  test('rebinds cached group ownership to the currently logged-in user', () {
+    final cachedForAlice = Message(
+      msgId: 30,
+      content: 'cached',
+      isMe: true,
+      time: '10:00',
+      isRead: false,
+      conversationId: '5',
+      senderId: 'alice',
+      timestamp: 1000,
+    );
+
+    final viewedByBob = ChatMessageMapper.rebindOwnership(
+      cachedForAlice,
+      currentUserId: 'bob',
+    );
+
+    expect(viewedByBob.isMe, isFalse);
+    expect(viewedByBob.senderId, 'alice');
+    expect(viewedByBob.timestamp, 1000);
+  });
 }

@@ -57,10 +57,34 @@ class GlobalUtil {
   }
 
   set userName(String? value) {
+    final previousValue = _userName ?? StorageUtil.getString('global_userName');
+    if (previousValue != null &&
+        previousValue.isNotEmpty &&
+        value != null &&
+        value.isNotEmpty &&
+        previousValue != value) {
+      resetSessionState();
+    }
     _userName = value;
     if (value != null) {
       StorageUtil.setString('global_userName', value);
     }
+  }
+
+  void resetSessionState() {
+    for (final timer in _chatCacheWriteTimers.values) {
+      timer.cancel();
+    }
+    _chatCacheWriteTimers.clear();
+    _chatStore.clearAllMessages();
+    _chatStore.clearAllUnreadMessages();
+    _groupMemberCache.clear();
+    _userInfoModel = null;
+    _isChatting = false;
+    _currentChatUserName = null;
+    onUnreadCountChanged = null;
+    _userName = null;
+    _token = null;
   }
 
   set isLoading(bool? value) {

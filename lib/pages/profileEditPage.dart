@@ -244,6 +244,9 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Future<void> _performLogout() async {
     // 断开WebSocket连接
     WebSocketManager().disconnect();
+    final globalUtil = GlobalUtil();
+    await globalUtil.flushChatRecordsToLocal();
+    globalUtil.resetSessionState();
     await StorageUtil.logout();
     if (!mounted) return;
     Navigator.pushReplacementNamed(context, '/login');

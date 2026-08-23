@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -56,8 +55,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   CancelToken? _imageUploadCancelToken;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
   final Set<int> _sentReadAckMessageIds = {};
-  final Queue<MapEntry<int, String>> _pendingReadAcks = Queue();
-  bool _isDrainingReadAcks = false;
   int _loadedMessageLimit = 100;
   late Timer _groupInfoTimer; // 定时器，用于定期获取群信息
   late Timer _groupMembersTimer; // 定时器，用于定期检查群成员列表
@@ -70,6 +67,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     globalUtil.isChatting = true;
     globalUtil.currentChatUserName = _conversationKey;
     globalUtil.clearUnreadMessages(_conversationKey);
+    // isMe 属于当前账号的视图状态，不能直接信任上一个登录账号留下的缓存。
+    unawaited(_normalizeCachedMessageOwnership());
 
     // 初始化群名称
     _currentGroupName = widget.groupName;
@@ -105,9 +104,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   Future<void> _initializeGroupChatData() async {
     final restored = await GlobalUtil().hydrateChatRecords(_conversationKey);
-    if (restored && mounted) {
-      setState(() {});
-      _scrollToBottom();
+    if (restored) {
+      await _normalizeCachedMessageOwnership();
+      if (mounted) {
+        setState(() {});
+        _scrollToBottom();
+      }
     }
     await _checkGroupMembership();
     if (!mounted) {
@@ -160,10 +162,18 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       final loadedMessageIds = messages.map((message) => message.msgId).toSet();
       for (final entry in existingById.entries) {
         if (!loadedMessageIds.contains(entry.key)) {
-          messages.add(entry.value);
+          messages.add(
+            ChatMessageMapper.rebindOwnership(
+              entry.value,
+              currentUserId: currentUserId,
+            ),
+          );
         }
       }
-      messages.sort((left, right) => left.msgId.compareTo(right.msgId));
+      messages.sort((left, right) {
+        final byTime = left.timestamp.compareTo(right.timestamp);
+        return byTime != 0 ? byTime : left.msgId.compareTo(right.msgId);
+      });
 
       await globalUtil.replaceChatRecords(_conversationKey, messages);
 
@@ -179,6 +189,29 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       _sendReadAcksForLoadedMessages();
     } catch (e) {
       debugPrint('加载群聊记录及已读状态失败: $e');
+    }
+  }
+
+  Future<void> _normalizeCachedMessageOwnership() async {
+    final globalUtil = GlobalUtil();
+    final currentUserId = globalUtil.userName ?? '';
+    if (currentUserId.isEmpty) return;
+    final messages =
+        globalUtil
+            .getChatRecords(_conversationKey)
+            .map(
+              (message) => ChatMessageMapper.rebindOwnership(
+                message,
+                currentUserId: currentUserId,
+              ),
+            )
+            .toList()
+          ..sort((left, right) {
+            final byTime = left.timestamp.compareTo(right.timestamp);
+            return byTime != 0 ? byTime : left.msgId.compareTo(right.msgId);
+          });
+    if (messages.isNotEmpty) {
+      await globalUtil.replaceChatRecords(_conversationKey, messages);
     }
   }
 
@@ -310,46 +343,21 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       return;
     }
 
-    for (final message in globalUtil.getChatRecords(_conversationKey)) {
-      if (message.isMe ||
-          message.senderId == null ||
-          message.senderId!.isEmpty) {
-        continue;
-      }
-      final statusIndex = _messageReadStatus.indexWhere(
-        (status) => status['msgId'] == message.msgId,
-      );
-      final readMembers = statusIndex == -1
-          ? <String>[]
-          : List<String>.from(
-              _messageReadStatus[statusIndex]['readMembers'] ?? const [],
-            );
-      if (!readMembers.contains(currentUserId) &&
-          _sentReadAckMessageIds.add(message.msgId)) {
-        _pendingReadAcks.add(MapEntry(message.msgId, message.senderId!));
-      }
-    }
-    _drainPendingReadAcks();
-  }
-
-  Future<void> _drainPendingReadAcks() async {
-    if (_isDrainingReadAcks) {
-      return;
-    }
-    _isDrainingReadAcks = true;
-    try {
-      while (mounted && _pendingReadAcks.isNotEmpty) {
-        if (!_wsManager.isConnected) {
-          return;
-        }
-        final pending = _pendingReadAcks.removeFirst();
-        _sendReadAck(pending.key, pending.value);
-        // 打开群聊最多会补发 100 条已读回执，分散发送以保护服务端连接池。
-        await Future<void>.delayed(const Duration(milliseconds: 25));
-      }
-    } finally {
-      _isDrainingReadAcks = false;
-    }
+    final incomingMessageIds = globalUtil
+        .getChatRecords(_conversationKey)
+        .where((message) => !message.isMe && message.msgId > 0)
+        .map((message) => message.msgId);
+    if (incomingMessageIds.isEmpty) return;
+    final readThroughMsgId = incomingMessageIds.reduce(
+      (current, next) => next > current ? next : current,
+    );
+    _wsManager.send({
+      'type': 'groupChatRead',
+      'reader': currentUserId,
+      'groupId': widget.groupId,
+      'sessionId': widget.groupId,
+      'readThroughMsgId': readThroughMsgId,
+    });
   }
 
   // 获取群信息
@@ -565,6 +573,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           debugPrint('处理群聊回调...');
           _handleChatCallback(parsedMessage);
           break;
+        case 'groupChatReadCallback':
+          _handleGroupReadCallback(parsedMessage);
+          break;
         case 'videoCallInvite':
           _handleVideoCallInvite(parsedMessage);
           break;
@@ -600,6 +611,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     String sender = messageData['sendUserId']?.toString() ?? '';
     String content = messageData['msgContent']?.toString() ?? '';
     int msgId = _parseInt(messageData['msgId']);
+    final clientMsgId = _parseInt(messageData['clientMsgId']);
     int msgType = _parseInt(messageData['msgType'], fallback: 1);
     int receiveId = _parseInt(messageData['receiveId']);
     int receiveType = _parseInt(messageData['receiveType'], fallback: 2);
@@ -612,7 +624,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     } else if (rawSendTime is String) {
       timestamp = int.tryParse(rawSendTime) ?? 0;
     }
-    String sendTime = _formatTimestamp(timestamp);
+    final normalizedTimestamp = timestamp <= 0
+        ? DateTime.now().millisecondsSinceEpoch
+        : timestamp < 1000000000000
+        ? timestamp * 1000
+        : timestamp;
+    String sendTime = _formatTimestamp(normalizedTimestamp);
 
     debugPrint('解析后的数据:');
     debugPrint('  发送者: $sender');
@@ -650,6 +667,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           messageType: msgType == 2 ? MessageType.image : MessageType.text,
           status: MessageStatus.sent,
           senderId: sender,
+          timestamp: normalizedTimestamp,
         );
 
         debugPrint(
@@ -671,12 +689,37 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         // 发送已读确认（只发送给发送者，不发送给自己发的消息）
         if (sender != globalUtil.userName) {
           _sentReadAckMessageIds.add(msgId);
-          _sendReadAck(msgId, sender);
+          _sendReadAck(msgId, sender, clientMsgId: clientMsgId);
         }
       }
     } else {
       debugPrint('消息数据无效: sender=$sender, content=$content');
     }
+  }
+
+  void _handleGroupReadCallback(Map<String, dynamic> messageData) {
+    if (_parseInt(messageData['code']) != 100 ||
+        _parseInt(messageData['groupId']) != widget.groupId) {
+      return;
+    }
+    final reader = messageData['reader']?.toString() ?? '';
+    final readThroughMsgId = _parseInt(messageData['readThroughMsgId']);
+    final readTime = _parseInt(messageData['readTime']);
+    if (reader.isEmpty || readThroughMsgId <= 0) return;
+
+    final currentUserId = GlobalUtil().userName;
+    if (reader == currentUserId) {
+      GlobalUtil().clearUnreadMessages(_conversationKey);
+    }
+    if (reader != currentUserId) {
+      for (final message in GlobalUtil().getChatRecords(_conversationKey)) {
+        if (message.isMe && message.msgId <= readThroughMsgId) {
+          message.isRead = true;
+          _updateMessageReadStatus(message.msgId, reader, readTime);
+        }
+      }
+    }
+    if (mounted) setState(() {});
   }
 
   // 处理聊天确认回调
@@ -802,15 +845,17 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   // 发送已读确认
-  void _sendReadAck(int msgId, String receiveId) {
+  void _sendReadAck(int msgId, String receiveId, {int clientMsgId = 0}) {
     if (_wsManager.isConnected) {
       _wsManager.send({
         'type': 'groupChatCallback',
         'msgId': msgId,
         'receiveId': receiveId,
         'sender': GlobalUtil().userName,
-        'sessionId': widget.groupId.toString(),
+        'groupId': widget.groupId,
+        'sessionId': widget.groupId,
         'status': 'read',
+        if (clientMsgId > 0) 'clientMsgId': clientMsgId,
       });
     }
   }
@@ -911,7 +956,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   @override
   void dispose() {
     _imageUploadCancelToken?.cancel('群聊页面已关闭');
-    _pendingReadAcks.clear();
+    // 离开页面前再次提交已读水位，避免会话列表重新出现已读消息红点。
+    _sendReadAcksForLoadedMessages();
     _textController.dispose();
     _textFieldFocusNode.dispose();
     _scrollController.dispose();

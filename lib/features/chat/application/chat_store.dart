@@ -24,6 +24,10 @@ class ChatStore {
     _unreadMessages.remove(conversationId);
   }
 
+  void clearAllUnreadMessages() {
+    _unreadMessages.clear();
+  }
+
   bool addMessage(String conversationId, Message message) {
     final messages = _chatRecords.putIfAbsent(conversationId, () => []);
     if (messages.any((item) => item.msgId == message.msgId)) {

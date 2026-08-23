@@ -28,6 +28,7 @@ void main() {
     });
     final read = ChatRealtimeEvent.parse({
       'type': 'groupChatCallback',
+      'clientMsgId': 10,
       'msgId': 25,
       'status': 'read',
     });
@@ -36,5 +37,20 @@ void main() {
     expect(delivery.clientMessageId, 10);
     expect(delivery.messageId, 25);
     expect(read.type, ChatRealtimeEventType.readReceipt);
+  });
+
+  test('parses a group read watermark acknowledgement', () {
+    final event = ChatRealtimeEvent.parse({
+      'type': 'groupChatReadCallback',
+      'code': 100,
+      'groupId': '42',
+      'reader': 'bob',
+      'readThroughMsgId': '99',
+    });
+
+    expect(event.type, ChatRealtimeEventType.groupReadReceipt);
+    expect(event.groupId, 42);
+    expect(event.readerId, 'bob');
+    expect(event.readThroughMessageId, 99);
   });
 }

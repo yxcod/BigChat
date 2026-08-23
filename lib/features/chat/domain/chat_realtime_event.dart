@@ -5,6 +5,7 @@ enum ChatRealtimeEventType {
   groupMessage,
   privateDelivery,
   groupDelivery,
+  groupReadReceipt,
   readReceipt,
   other,
 }
@@ -21,8 +22,10 @@ class ChatRealtimeEvent {
       'message' => ChatRealtimeEventType.privateMessage,
       'groupChat' => ChatRealtimeEventType.groupMessage,
       'delivery_ack' => ChatRealtimeEventType.privateDelivery,
-      'groupChatCallback' when data.containsKey('clientMsgId') =>
+      'groupChatCallback'
+          when data.containsKey('clientMsgId') && data['status'] != 'read' =>
         ChatRealtimeEventType.groupDelivery,
+      'groupChatReadCallback' => ChatRealtimeEventType.groupReadReceipt,
       'read_ack' ||
       'chatCallback' ||
       'groupChatCallback' => ChatRealtimeEventType.readReceipt,
@@ -38,10 +41,15 @@ class ChatRealtimeEvent {
     fallback: DateTime.now().millisecondsSinceEpoch,
   );
   int get messageType => JsonValueParser.intValue(data['msgType'], fallback: 1);
-  int get groupId => JsonValueParser.intValue(data['receiveId']);
+  int get groupId => JsonValueParser.intValue(
+    data['groupId'] ?? data['sessionId'] ?? data['receiveId'],
+  );
   int get code => JsonValueParser.intValue(data['code']);
   String get senderId => JsonValueParser.stringValue(data['sendUserId']);
   String get content => JsonValueParser.stringValue(data['msgContent']);
   String get conversationId => JsonValueParser.stringValue(data['sessionId']);
   String get deliveryStatus => JsonValueParser.stringValue(data['status']);
+  String get readerId => JsonValueParser.stringValue(data['reader']);
+  int get readThroughMessageId =>
+      JsonValueParser.intValue(data['readThroughMsgId']);
 }

@@ -16,6 +16,7 @@ import '../../shared/widgets/app_search_field.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
 import '../../features/chat/domain/chat_realtime_event.dart';
+import '../../features/chat/domain/chat_message_mapper.dart';
 import '../../features/chat/data/hidden_conversations_store.dart';
 import '../../shared/widgets/swipe_action_cell.dart';
 
@@ -61,6 +62,7 @@ class _ChatpageState extends State<Chatpage> {
       HiddenConversationsStore();
   Map<String, int> _hiddenConversations = {};
   String _hiddenConversationsOwner = '';
+  final Set<int> _locallyReadGroupIds = {};
   // 头像 URL 缓存，用于避免重复加载
   Map<String, String> _avatarCache = {};
 
@@ -150,6 +152,16 @@ class _ChatpageState extends State<Chatpage> {
           event.code == 100 ? MessageStatus.sent : MessageStatus.failed,
         );
         break;
+      case ChatRealtimeEventType.groupReadReceipt:
+        if (event.code == 100 &&
+            event.readerId == globalUtil.userName &&
+            event.groupId > 0) {
+          _locallyReadGroupIds.add(event.groupId);
+          globalUtil.clearUnreadMessages(
+            GlobalUtil.groupConversationKey(event.groupId),
+          );
+        }
+        break;
       case ChatRealtimeEventType.readReceipt:
       case ChatRealtimeEventType.other:
         break;
@@ -203,6 +215,7 @@ class _ChatpageState extends State<Chatpage> {
         globalUtil.isChatting == true &&
         globalUtil.currentChatUserName == conversationKey;
     if (isOpenChat) return;
+    _locallyReadGroupIds.remove(event.groupId);
 
     globalUtil.addMessage(
       conversationKey,
@@ -493,13 +506,20 @@ class _ChatpageState extends State<Chatpage> {
           }
 
           // 创建群聊 Chat 对象
+          final serverUnreadCount = groupConversation.unreadCount;
+          final locallyRead = _locallyReadGroupIds.contains(
+            groupConversation.groupId,
+          );
+          if (serverUnreadCount == 0) {
+            _locallyReadGroupIds.remove(groupConversation.groupId);
+          }
           chatList.add(
             Chat(
               name: groupInfo.groupName,
               avatar: avatarURL,
               lastMessage: groupConversation.lastMsg,
               time: formattedTime.substring(11, 16), // 只显示时分
-              unreadCount: groupConversation.unreadCount,
+              unreadCount: locallyRead ? 0 : serverUnreadCount,
               userName: groupIdStr,
               isGroup: true,
               lastSenderName: lastSenderName,
@@ -622,15 +642,26 @@ class _ChatpageState extends State<Chatpage> {
     return results;
   }
 
-  void _openChat(Chat chat) {
+  Future<void> _openChat(Chat chat) async {
     if (chat.isGroup) {
-      Navigator.pushNamed(
+      final groupId = int.tryParse(chat.userName);
+      if (groupId != null) _locallyReadGroupIds.add(groupId);
+      final conversationKey = GlobalUtil.groupConversationKey(chat.userName);
+      globalUtil.clearUnreadMessages(conversationKey);
+      await Navigator.pushNamed(
         context,
         '/groupChatDialog',
         arguments: {'groupId': chat.userName, 'groupName': chat.name},
       );
+      if (!mounted) return;
+      globalUtil.clearUnreadMessages(conversationKey);
+      await fetchConversations();
     } else {
-      Navigator.pushNamed(context, '/chatDialog', arguments: chat.userName);
+      await Navigator.pushNamed(
+        context,
+        '/chatDialog',
+        arguments: chat.userName,
+      );
     }
   }
 
@@ -791,6 +822,28 @@ class _ChatpageState extends State<Chatpage> {
 
         try {
           await globalUtil.hydrateChatRecords(conversationKey);
+          final normalizedMessages =
+              globalUtil
+                  .getChatRecords(conversationKey)
+                  .map(
+                    (message) => ChatMessageMapper.rebindOwnership(
+                      message,
+                      currentUserId: currentUserName,
+                    ),
+                  )
+                  .toList()
+                ..sort((left, right) {
+                  final byTime = left.timestamp.compareTo(right.timestamp);
+                  return byTime != 0
+                      ? byTime
+                      : left.msgId.compareTo(right.msgId);
+                });
+          if (normalizedMessages.isNotEmpty) {
+            await globalUtil.replaceChatRecords(
+              conversationKey,
+              normalizedMessages,
+            );
+          }
           if (globalUtil.getLatestChatTimestamp(conversationKey) >=
               groupConversation.updateTime) {
             continue;

@@ -51,4 +51,22 @@ class ChatMessageMapper {
       timestamp: record.sendTime,
     );
   }
+
+  static Message rebindOwnership(
+    Message message, {
+    required String currentUserId,
+  }) {
+    return Message(
+      msgId: message.msgId,
+      content: message.content,
+      isMe: message.senderId == currentUserId,
+      time: message.time,
+      isRead: message.isRead,
+      conversationId: message.conversationId,
+      messageType: message.messageType,
+      status: message.status,
+      senderId: message.senderId,
+      timestamp: message.timestamp,
+    );
+  }
 }

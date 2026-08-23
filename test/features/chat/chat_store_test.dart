@@ -17,6 +17,9 @@ void main() {
 
       store.clearUnreadMessages('alice');
       expect(store.unreadCount('alice'), 0);
+
+      store.clearAllUnreadMessages();
+      expect(store.unreadCount('bob'), 0);
     });
   });
 
