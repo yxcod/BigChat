@@ -52,4 +52,16 @@ void main() {
       1,
     );
   });
+
+  test('voice transcription response parses cache and duration fields', () {
+    final result = VoiceTranscriptionResult.fromJson({
+      'text': '今天下午见。',
+      'audioDurationMs': 2180,
+      'cached': true,
+    });
+
+    expect(result.text, '今天下午见。');
+    expect(result.audioDurationMs, 2180);
+    expect(result.cached, isTrue);
+  });
 }

@@ -62,6 +62,27 @@ class VoiceMessagePayload {
   }
 }
 
+class VoiceTranscriptionResult {
+  const VoiceTranscriptionResult({
+    required this.text,
+    required this.audioDurationMs,
+    required this.cached,
+  });
+
+  final String text;
+  final int audioDurationMs;
+  final bool cached;
+
+  factory VoiceTranscriptionResult.fromJson(Map<dynamic, dynamic> json) {
+    return VoiceTranscriptionResult(
+      text: json['text']?.toString() ?? '',
+      audioDurationMs:
+          int.tryParse(json['audioDurationMs']?.toString() ?? '') ?? 0,
+      cached: json['cached'] == true,
+    );
+  }
+}
+
 String chatVoicePreview(String content) {
   try {
     final decoded = jsonDecode(content);

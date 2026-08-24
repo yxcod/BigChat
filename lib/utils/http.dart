@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import './gloabl.dart';
 import '../core/network/app_connection_monitor.dart';
+import '../core/media/voice_message.dart';
 
 class HttpUtil {
   static final HttpUtil _instance = HttpUtil._internal();
@@ -359,6 +360,41 @@ class HttpUtil {
     final data = response.data;
     if (data is Map && data['code'] == 100) return true;
     throw Exception(data is Map ? (data['message'] ?? '语音上传失败') : '语音上传失败');
+  }
+
+  Future<VoiceTranscriptionResult> transcribeAudio({
+    required String ownerId,
+    required String audioName,
+  }) async {
+    final userName = _globalUtil.userName ?? '';
+    if (userName.isEmpty || ownerId.isEmpty || audioName.isEmpty) {
+      throw Exception('语音信息不完整');
+    }
+    try {
+      final response = await _dio.post(
+        '/api/audio/transcribe',
+        data: {
+          'userName': userName,
+          'ownerId': ownerId,
+          'audioName': audioName,
+        },
+        options: Options(
+          sendTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 25),
+        ),
+      );
+      final data = response.data;
+      if (data is Map && data['code'] == 100) {
+        return VoiceTranscriptionResult.fromJson(data);
+      }
+      throw Exception(data is Map ? (data['message'] ?? '语音转文字失败') : '语音转文字失败');
+    } on DioException catch (error) {
+      final data = error.response?.data;
+      if (data is Map && data['message']?.toString().isNotEmpty == true) {
+        throw Exception(data['message'].toString());
+      }
+      rethrow;
+    }
   }
 
   Future<Response<dynamic>> downloadFile(

@@ -9,17 +9,25 @@ import '../../core/media/voice_media.dart';
 import '../../core/media/voice_message.dart';
 import '../../utils/http.dart';
 
+typedef VoiceTranscriber =
+    Future<VoiceTranscriptionResult> Function({
+      required String ownerId,
+      required String audioName,
+    });
+
 class AppVoiceMessage extends StatefulWidget {
   const AppVoiceMessage({
     super.key,
     required this.source,
     required this.payload,
     required this.isMe,
+    this.transcriber,
   });
 
   final String source;
   final VoiceMessagePayload payload;
   final bool isMe;
+  final VoiceTranscriber? transcriber;
 
   @override
   State<AppVoiceMessage> createState() => _AppVoiceMessageState();
@@ -39,6 +47,9 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   CancelToken? _downloadCancelToken;
   String? _loadedSource;
   Future<void>? _cachedPreload;
+  bool _transcribing = false;
+  bool _transcriptVisible = false;
+  String? _transcript;
 
   @override
   void initState() {
@@ -214,6 +225,57 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
     }
   }
 
+  String get _audioOwnerId {
+    final payloadOwner = widget.payload.ownerId?.trim() ?? '';
+    if (payloadOwner.isNotEmpty) return payloadOwner;
+    try {
+      return Uri.parse(widget.source).queryParameters['userName'] ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<void> _toggleTranscription() async {
+    if (_transcribing) return;
+    if (_transcript != null) {
+      setState(() => _transcriptVisible = !_transcriptVisible);
+      return;
+    }
+    final ownerId = _audioOwnerId;
+    if (ownerId.isEmpty) {
+      _showTranscriptionError('无法确定语音发送者');
+      return;
+    }
+    setState(() => _transcribing = true);
+    try {
+      final transcriber = widget.transcriber ?? HttpUtil().transcribeAudio;
+      final result = await transcriber(
+        ownerId: ownerId,
+        audioName: widget.payload.audioName,
+      );
+      if (!mounted) return;
+      setState(() {
+        _transcript = result.text.trim().isEmpty
+            ? '未识别到文字'
+            : result.text.trim();
+        _transcriptVisible = true;
+      });
+    } catch (error) {
+      _showTranscriptionError(
+        error.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
+      );
+    } finally {
+      if (mounted) setState(() => _transcribing = false);
+    }
+  }
+
+  void _showTranscriptionError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message.isEmpty ? '语音转文字失败，请稍后重试' : message)),
+    );
+  }
+
   @override
   void didUpdateWidget(covariant AppVoiceMessage oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -224,6 +286,9 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
       _position = Duration.zero;
       _dragFraction = null;
       _dragging = false;
+      _transcribing = false;
+      _transcriptVisible = false;
+      _transcript = null;
       unawaited(_player.stop());
     }
   }
@@ -245,98 +310,149 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
     final foregroundColor = widget.isMe
         ? const Color(0xFF1769AA)
         : const Color(0xFF333333);
-    return Material(
-      color: widget.isMe ? Colors.blue[100] : Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        width: width,
-        height: 50,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            children: [
-              SizedBox.square(
-                dimension: 34,
-                child: _loading
-                    ? const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : IconButton(
-                        key: const ValueKey('voice_play_button'),
-                        padding: EdgeInsets.zero,
-                        onPressed: _toggle,
-                        icon: Icon(
-                          _playing
-                              ? Icons.pause_circle_filled_rounded
-                              : Icons.play_circle_fill_rounded,
-                          size: 30,
-                          color: foregroundColor,
-                        ),
-                      ),
+    return Column(
+      crossAxisAlignment: widget.isMe
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: widget.isMe ? Colors.blue[100] : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            width: width,
+            height: 50,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  SizedBox.square(
+                    dimension: 34,
+                    child: _loading
+                        ? const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : IconButton(
+                            key: const ValueKey('voice_play_button'),
+                            padding: EdgeInsets.zero,
+                            onPressed: _toggle,
+                            icon: Icon(
+                              _playing
+                                  ? Icons.pause_circle_filled_rounded
+                                  : Icons.play_circle_fill_rounded,
+                              size: 30,
+                              color: foregroundColor,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final progress = _progressFraction;
+                        final barCount = (constraints.maxWidth / 5)
+                            .floor()
+                            .clamp(10, 34);
+                        return Semantics(
+                          label: '语音播放进度',
+                          value: '${(progress * 100).round()}%',
+                          child: GestureDetector(
+                            key: const ValueKey('voice_progress_track'),
+                            behavior: HitTestBehavior.opaque,
+                            onTapUp: (details) => _tapSeek(
+                              details.localPosition.dx,
+                              constraints.maxWidth,
+                            ),
+                            onHorizontalDragStart: (details) => _startSeeking(
+                              details.localPosition.dx,
+                              constraints.maxWidth,
+                            ),
+                            onHorizontalDragUpdate: (details) => _updateSeeking(
+                              details.localPosition.dx,
+                              constraints.maxWidth,
+                            ),
+                            onHorizontalDragEnd: (_) => _finishSeeking(),
+                            onHorizontalDragCancel: _finishSeeking,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: List.generate(barCount, (index) {
+                                final normalized = barCount <= 1
+                                    ? 0.0
+                                    : index / (barCount - 1);
+                                final played = normalized <= progress;
+                                return Container(
+                                  width: 2.4,
+                                  height: 7.0 + ((index * 7) % 16),
+                                  decoration: BoxDecoration(
+                                    color: played
+                                        ? foregroundColor
+                                        : foregroundColor.withValues(
+                                            alpha: 0.28,
+                                          ),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    '$seconds″',
+                    style: TextStyle(fontSize: 12, color: foregroundColor),
+                  ),
+                ],
               ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final progress = _progressFraction;
-                    final barCount = (constraints.maxWidth / 5).floor().clamp(
-                      10,
-                      34,
-                    );
-                    return Semantics(
-                      label: '语音播放进度',
-                      value: '${(progress * 100).round()}%',
-                      child: GestureDetector(
-                        key: const ValueKey('voice_progress_track'),
-                        behavior: HitTestBehavior.opaque,
-                        onTapUp: (details) => _tapSeek(
-                          details.localPosition.dx,
-                          constraints.maxWidth,
-                        ),
-                        onHorizontalDragStart: (details) => _startSeeking(
-                          details.localPosition.dx,
-                          constraints.maxWidth,
-                        ),
-                        onHorizontalDragUpdate: (details) => _updateSeeking(
-                          details.localPosition.dx,
-                          constraints.maxWidth,
-                        ),
-                        onHorizontalDragEnd: (_) => _finishSeeking(),
-                        onHorizontalDragCancel: _finishSeeking,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: List.generate(barCount, (index) {
-                            final normalized = barCount <= 1
-                                ? 0.0
-                                : index / (barCount - 1);
-                            final played = normalized <= progress;
-                            return Container(
-                              width: 2.4,
-                              height: 7.0 + ((index * 7) % 16),
-                              decoration: BoxDecoration(
-                                color: played
-                                    ? foregroundColor
-                                    : foregroundColor.withValues(alpha: 0.28),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            );
-                          }),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 7),
-              Text(
-                '$seconds″',
-                style: TextStyle(fontSize: 12, color: foregroundColor),
-              ),
-            ],
+            ),
           ),
         ),
-      ),
+        SizedBox(
+          height: 28,
+          child: TextButton.icon(
+            key: const ValueKey('voice_transcription_button'),
+            onPressed: _transcribing ? null : _toggleTranscription,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: const Color(0xFF3483C5),
+            ),
+            icon: _transcribing
+                ? const SizedBox.square(
+                    dimension: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.5),
+                  )
+                : const Icon(Icons.text_snippet_outlined, size: 14),
+            label: Text(
+              _transcribing ? '转换中' : (_transcriptVisible ? '收起文字' : '转文字'),
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ),
+        if (_transcriptVisible && _transcript != null)
+          Container(
+            width: width,
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.94),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE1E5E9)),
+            ),
+            child: SelectableText(
+              _transcript!,
+              style: const TextStyle(
+                color: Color(0xFF333333),
+                fontSize: 14,
+                height: 1.35,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
