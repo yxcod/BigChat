@@ -33,6 +33,7 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   bool _playing = false;
   CancelToken? _downloadCancelToken;
   String? _loadedSource;
+  Future<void>? _cachedPreload;
 
   @override
   void initState() {
@@ -43,6 +44,7 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
       setState(() => _playing = state.playing && !completed);
       if (completed) unawaited(_player.seek(Duration.zero));
     });
+    _cachedPreload = _preloadCachedSource(widget.source);
   }
 
   Future<void> _toggle() async {
@@ -51,28 +53,52 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
       await _player.pause();
       return;
     }
-    setState(() => _loading = true);
     try {
       if (_activePlayer != null && _activePlayer != _player) {
         await _activePlayer!.pause();
       }
       _activePlayer = _player;
-      if (_loadedSource != widget.source || _player.duration == null) {
-        await _loadSource();
+      if (_loadedSource != widget.source) {
+        setState(() => _loading = true);
+        await _cachedPreload;
+        if (_loadedSource != widget.source) await _loadSource();
       }
-      await _player.play();
+      if (mounted) setState(() => _loading = false);
+      unawaited(_playAndHandleErrors());
     } catch (error) {
-      debugPrint('语音播放加载失败: $error, source=${widget.source}');
-      if (mounted) {
-        final isDamaged =
-            error is StateError && error.toString().contains('已损坏');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(isDamaged ? '该语音文件已损坏，无法播放' : '语音加载失败，请稍后重试')),
-        );
-      }
+      _showPlaybackError(error);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _preloadCachedSource(String source) async {
+    final cachedPath = await cachedVoicePath(source);
+    if (cachedPath == null || !mounted || widget.source != source) return;
+    try {
+      await _player.setFilePath(cachedPath);
+      if (mounted && widget.source == source) _loadedSource = source;
+    } catch (_) {
+      final cachedFile = File(cachedPath);
+      if (await cachedFile.exists()) await cachedFile.delete();
+    }
+  }
+
+  Future<void> _playAndHandleErrors() async {
+    try {
+      await _player.play();
+    } catch (error) {
+      _showPlaybackError(error);
+    }
+  }
+
+  void _showPlaybackError(Object error) {
+    debugPrint('语音播放加载失败: $error, source=${widget.source}');
+    if (!mounted) return;
+    final isDamaged = error is StateError && error.toString().contains('已损坏');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(isDamaged ? '该语音文件已损坏，无法播放' : '语音加载失败，请稍后重试')),
+    );
   }
 
   Future<void> _loadSource() async {
@@ -114,7 +140,9 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   void didUpdateWidget(covariant AppVoiceMessage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.source != widget.source) {
+      _downloadCancelToken?.cancel('语音来源已更新');
       _loadedSource = null;
+      _cachedPreload = Future<void>.value();
       unawaited(_player.stop());
     }
   }
