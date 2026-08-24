@@ -4,8 +4,13 @@ import '../../api/getInfoAPI.dart';
 import '../../utils/Gloabl.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../shared/widgets/app_back_button.dart';
+import '../../model/userInfoModel.dart';
 
 class SearchFriendPage extends StatefulWidget {
+  const SearchFriendPage({super.key, this.userLoader = getUserInfoApi});
+
+  final Future<UserInfoModel> Function(String userName) userLoader;
+
   @override
   _SearchFriendPageState createState() => _SearchFriendPageState();
 }
@@ -152,12 +157,13 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
     }
 
     // 搜索结果不为空时，用户卡片显示在顶部
-    return Padding(padding: EdgeInsets.only(top: 8), child: _buildUserCard());
+    return Align(alignment: Alignment.topCenter, child: _buildUserCard());
   }
 
   // 构建用户卡片 - 紧凑布局，内容对齐上方
   Widget _buildUserCard() {
     return Container(
+      key: const Key('search_friend_result_card'),
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -286,7 +292,8 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
     });
 
     // 调用API获取用户信息
-    getUserInfoApi(phone)
+    widget
+        .userLoader(phone)
         .then((userInfo) {
           setState(() {
             _isLoading = false;
