@@ -4,7 +4,9 @@ const chatChromeBackgroundColor = Color(0xFFF5F5F5);
 const chatChromeDividerColor = Color(0xFFE0E0E0);
 
 class ChatMoreActionsSheet extends StatelessWidget {
-  const ChatMoreActionsSheet({super.key});
+  const ChatMoreActionsSheet({super.key, this.onSelected});
+
+  final ValueChanged<ChatMoreActionType>? onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -49,47 +51,67 @@ class ChatMoreActionsSheet extends StatelessWidget {
 
     return Material(
       color: chatChromeBackgroundColor,
-      child: SafeArea(
-        top: false,
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            mainAxisExtent: 112,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: actions.length,
-          itemBuilder: (context, index) {
-            final action = actions[index];
-            return InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () => Navigator.pop(context, action.type),
-              child: Column(
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(action.icon, size: 30, color: Colors.black54),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    action.label,
-                    maxLines: 1,
-                    style: const TextStyle(color: Colors.black54, fontSize: 13),
-                  ),
-                ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Divider(height: 1, color: chatChromeDividerColor),
+          SafeArea(
+            top: false,
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisExtent: 112,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 8,
               ),
-            );
-          },
-        ),
+              itemCount: actions.length,
+              itemBuilder: (context, index) {
+                final action = actions[index];
+                return InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () {
+                    final callback = onSelected;
+                    if (callback != null) {
+                      callback(action.type);
+                    } else {
+                      Navigator.pop(context, action.type);
+                    }
+                  },
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          action.icon,
+                          size: 30,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        action.label,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: Colors.black54,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

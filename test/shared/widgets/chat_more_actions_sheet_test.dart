@@ -47,4 +47,35 @@ void main() {
       expect(selected, ChatMoreActionType.gallery);
     },
   );
+
+  testWidgets('inline actions stay below the input and report selection', (
+    tester,
+  ) async {
+    ChatMoreActionType? selected;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              const Spacer(),
+              const Text('输入栏'),
+              ChatMoreActionsSheet(onSelected: (action) => selected = action),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final inputTop = tester.getTopLeft(find.text('输入栏')).dy;
+    final menuTop = tester.getTopLeft(find.text('照片/视频')).dy;
+    expect(inputTop, lessThan(menuTop));
+
+    await tester.tap(find.text('拍摄'));
+    await tester.pump();
+
+    expect(selected, ChatMoreActionType.capture);
+    expect(find.text('输入栏'), findsOneWidget);
+    expect(find.text('照片/视频'), findsOneWidget);
+  });
 }

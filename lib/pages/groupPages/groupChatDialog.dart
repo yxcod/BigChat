@@ -72,6 +72,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   final Set<int> _failedVideoMessageIds = {};
   CancelToken? _audioUploadCancelToken;
   bool _isUploadingAudio = false;
+  bool _isMoreActionsVisible = false;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
   final Set<int> _sentReadAckMessageIds = {};
   int _loadedMessageLimit = 100;
@@ -91,6 +92,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   @override
   void initState() {
     super.initState();
+    _textFieldFocusNode.addListener(_handleComposerFocusChanged);
     GroupRouteRegistry.enter(widget.groupId);
     final globalUtil = GlobalUtil();
     globalUtil.isChatting = true;
@@ -133,6 +135,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       RefreshIntervals.groupFallback,
       (timer) => _checkGroupMembership(),
     );
+  }
+
+  void _handleComposerFocusChanged() {
+    if (_textFieldFocusNode.hasFocus && _isMoreActionsVisible && mounted) {
+      setState(() => _isMoreActionsVisible = false);
+    }
   }
 
   Future<void> _initializeGroupChatData() async {
@@ -1161,6 +1169,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     _audioUploadCancelToken?.cancel('群聊页面已关闭');
     // 离开页面前再次提交已读水位，避免会话列表重新出现已读消息红点。
     _sendReadAcksForLoadedMessages();
+    _textFieldFocusNode.removeListener(_handleComposerFocusChanged);
     _textController.dispose();
     _textFieldFocusNode.dispose();
     _scrollController.dispose();
@@ -1186,6 +1195,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   bool _isComposing = false;
 
   Future<void> _showMediaTypePicker(ImageSource source) async {
+    if (_isMoreActionsVisible && mounted) {
+      setState(() => _isMoreActionsVisible = false);
+    }
     FocusScope.of(context).unfocus();
     final mediaType = await showModalBottomSheet<String>(
       context: context,
@@ -1227,17 +1239,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _showMoreActions() async {
+  void _toggleMoreActions() {
     FocusScope.of(context).unfocus();
-    final action = await showModalBottomSheet<ChatMoreActionType>(
-      context: context,
-      backgroundColor: chatChromeBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => const ChatMoreActionsSheet(),
-    );
-    if (!mounted || action == null) return;
+    setState(() => _isMoreActionsVisible = !_isMoreActionsVisible);
+  }
+
+  Future<void> _handleMoreAction(ChatMoreActionType action) async {
+    if (_isMoreActionsVisible && mounted) {
+      setState(() => _isMoreActionsVisible = false);
+    }
     switch (action) {
       case ChatMoreActionType.gallery:
         await _showMediaTypePicker(ImageSource.gallery);
@@ -1336,6 +1346,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         onTap: () {
           // 点击空白区域隐藏键盘
           FocusScope.of(context).unfocus();
+          if (_isMoreActionsVisible) {
+            setState(() => _isMoreActionsVisible = false);
+          }
         },
         child: ChatBackground(
           child: Column(
@@ -1393,6 +1406,18 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                 ),
                 child: _buildTextComposer(),
               ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: _isMoreActionsVisible
+                    ? ChatMoreActionsSheet(
+                        onSelected: (action) {
+                          unawaited(_handleMoreAction(action));
+                        },
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ],
           ),
         ),
@@ -1447,7 +1472,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             IconButton(
               tooltip: '更多',
               icon: const Icon(Icons.add_circle_outline, size: 28),
-              onPressed: () => _showMoreActions(),
+              onPressed: _toggleMoreActions,
             ),
             IconButton(
               icon: Icon(Icons.send),
