@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -43,7 +46,11 @@ class AppLocationService {
     await locate(upload: true);
   }
 
-  Future<CurrentPlace> locate({bool upload = true}) async {
+  Future<CurrentPlace> locate({
+    bool upload = true,
+    bool resolveAddress = true,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
     if (!await isEnabledInSettings()) {
       throw Exception('请先在设置中开启位置信息');
     }
@@ -63,19 +70,21 @@ class AppLocationService {
       );
     }
     final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
+      locationSettings: LocationSettings(
         accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 15),
+        timeLimit: timeout,
       ),
     );
     var address =
         '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
-    try {
-      final placemarks = await Geocoding(
-        locale: const Locale('zh', 'CN'),
-      ).placemarkFromCoordinates(position.latitude, position.longitude);
-      if (placemarks.isNotEmpty) address = _formatPlacemark(placemarks.first);
-    } catch (_) {}
+    if (resolveAddress) {
+      try {
+        final placemarks = await Geocoding(
+          locale: const Locale('zh', 'CN'),
+        ).placemarkFromCoordinates(position.latitude, position.longitude);
+        if (placemarks.isNotEmpty) address = _formatPlacemark(placemarks.first);
+      } catch (_) {}
+    }
     final place = CurrentPlace(
       latitude: position.latitude,
       longitude: position.longitude,
@@ -106,7 +115,11 @@ class AppLocationService {
     return unique.isEmpty ? '当前位置' : unique.join('');
   }
 
-  Future<void> updateServer(CurrentPlace place) async {
+  Future<void> updateServer(
+    CurrentPlace place, {
+    CancelToken? cancelToken,
+    Duration? timeout,
+  }) async {
     final response = await _http.post(
       '/api/location/update',
       data: {
@@ -115,24 +128,61 @@ class AppLocationService {
         'longitude': place.longitude,
         'accuracy': place.accuracy,
       },
+      cancelToken: cancelToken,
+      options: timeout == null
+          ? null
+          : Options(sendTimeout: timeout, receiveTimeout: timeout),
     );
     if (response.data is! Map || response.data['code'] != 100) {
       throw Exception('位置同步失败');
     }
   }
 
-  Future<int?> refreshDistance(String peerUserName) async {
-    await locate(upload: true);
-    final response = await _http.post(
-      '/api/location/distance',
-      data: {'userName': _userName, 'peerUserName': peerUserName},
-    );
-    final data = response.data;
-    if (data is! Map || data['code'] != 100 || data['available'] != true) {
-      return null;
+  Future<int?> refreshDistance(
+    String peerUserName, {
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    final cancelToken = CancelToken();
+    Future<int?> operation() async {
+      // Distance calculation only needs coordinates. Reverse geocoding can be
+      // slow and is intentionally skipped so one attempt stays within 5s.
+      final place = await locate(
+        upload: false,
+        resolveAddress: false,
+        timeout: timeout,
+      );
+      if (cancelToken.isCancelled) throw TimeoutException('距离获取超时');
+      await updateServer(place, cancelToken: cancelToken, timeout: timeout);
+      final response = await _http.post(
+        '/api/location/distance',
+        data: {'userName': _userName, 'peerUserName': peerUserName},
+        cancelToken: cancelToken,
+        options: Options(sendTimeout: timeout, receiveTimeout: timeout),
+      );
+      final data = response.data;
+      if (data is! Map || data['code'] != 100 || data['available'] != true) {
+        return null;
+      }
+      final value = data['distanceMeters'];
+      return value is num
+          ? value.toInt()
+          : int.tryParse(value?.toString() ?? '');
     }
-    final value = data['distanceMeters'];
-    return value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
+
+    try {
+      return await operation().timeout(
+        timeout,
+        onTimeout: () {
+          if (!cancelToken.isCancelled) cancelToken.cancel('距离获取超时');
+          throw TimeoutException('距离获取超时');
+        },
+      );
+    } on DioException catch (error) {
+      if (CancelToken.isCancel(error)) {
+        throw TimeoutException('距离获取超时');
+      }
+      rethrow;
+    }
   }
 
   Future<void> clearServerLocation() async {

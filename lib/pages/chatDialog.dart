@@ -20,6 +20,7 @@ import '../shared/widgets/fullscreen_image_viewer.dart';
 import '../shared/utils/chat_scroll_util.dart';
 import '../shared/widgets/chat_background.dart';
 import '../features/location/data/app_location_service.dart';
+import '../features/location/domain/distance_retry.dart';
 import '../core/media/video_media.dart';
 import '../shared/widgets/app_video_player.dart';
 import '../shared/widgets/app_voice_message.dart';
@@ -56,6 +57,8 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   int? _distanceMeters;
   bool _distanceLoading = false;
   String? _distanceStatus;
+  static const int _distanceMaxAttempts = 2;
+  static const Duration _distanceAttemptTimeout = Duration(seconds: 5);
 
   @override
   void initState() {
@@ -376,7 +379,15 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                 .firstOrNull;
             if (globalFriend != null) globalFriend.isOnline = event.isOnline;
             if (mounted) {
-              setState(() => friendInfo?.isOnline = event.isOnline);
+              setState(() {
+                friendInfo?.isOnline = event.isOnline;
+                if (!event.isOnline) {
+                  _distanceMeters = null;
+                  _distanceStatus = '未知';
+                  _distanceLoading = false;
+                }
+              });
+              if (event.isOnline) unawaited(_refreshDistance());
             }
           }
           break;
@@ -719,15 +730,31 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     _distanceStartedFor = peer;
     _distanceTimer?.cancel();
     unawaited(_refreshDistance());
-    _distanceTimer = Timer.periodic(
+  }
+
+  void _scheduleNextDistanceRefresh() {
+    _distanceTimer?.cancel();
+    _distanceTimer = Timer(
       const Duration(minutes: 5),
-      (_) => unawaited(_refreshDistance()),
+      () => unawaited(_refreshDistance()),
     );
   }
 
   Future<void> _refreshDistance() async {
     final peer = id;
     if (peer == null || peer.isEmpty || _distanceLoading) return;
+    // Never request GPS or the distance API for an offline peer.
+    if (friendInfo?.isOnline != true) {
+      if (mounted) {
+        setState(() {
+          _distanceMeters = null;
+          _distanceStatus = '未知';
+          _distanceLoading = false;
+        });
+      }
+      if (mounted) _scheduleNextDistanceRefresh();
+      return;
+    }
     if (mounted) {
       setState(() {
         _distanceLoading = true;
@@ -735,8 +762,29 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       });
     }
     try {
-      final distance = await AppLocationService().refreshDistance(peer);
+      final distance = await runDistanceAttempts<int?>(
+        maxAttempts: _distanceMaxAttempts,
+        attemptTimeout: _distanceAttemptTimeout,
+        operation: () {
+          if (friendInfo?.isOnline != true) {
+            throw StateError('好友已离线');
+          }
+          return AppLocationService().refreshDistance(
+            peer,
+            timeout: _distanceAttemptTimeout,
+          );
+        },
+        shouldRetry: (error) {
+          final message = error.toString();
+          // Permission/settings failures cannot be fixed by an immediate retry.
+          return !message.contains('设置中开启') &&
+              !message.contains('权限') &&
+              !message.contains('定位服务') &&
+              !message.contains('好友已离线');
+        },
+      );
       if (!mounted) return;
+      if (friendInfo?.isOnline != true) return;
       setState(() {
         _distanceMeters = distance;
         _distanceStatus = distance == null ? '对方暂无位置' : null;
@@ -745,10 +793,12 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       if (!mounted) return;
       setState(() {
         final message = error.toString();
-        _distanceStatus = message.contains('设置中开启') ? '位置已关闭' : '无法定位';
+        _distanceMeters = null;
+        _distanceStatus = message.contains('设置中开启') ? '位置已关闭' : '未知';
       });
     } finally {
       if (mounted) setState(() => _distanceLoading = false);
+      if (mounted) _scheduleNextDistanceRefresh();
     }
   }
 
@@ -823,7 +873,14 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         elevation: 1,
         actions: [
           TextButton.icon(
-            onPressed: _distanceLoading ? null : _refreshDistance,
+            onPressed: _distanceLoading || friendInfo?.isOnline != true
+                ? null
+                : _refreshDistance,
+            style: TextButton.styleFrom(
+              foregroundColor: _distanceMeters != null
+                  ? Colors.blue
+                  : Colors.grey,
+            ),
             icon: _distanceLoading
                 ? const SizedBox.square(
                     dimension: 14,
