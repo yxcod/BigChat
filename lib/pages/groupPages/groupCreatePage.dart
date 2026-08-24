@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../utils/gloabl.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../shared/widgets/app_back_button.dart';
@@ -213,8 +214,20 @@ class _GroupCreatePageState extends State<GroupCreatePage> {
       appBar: AppBar(
         title: Text('创建群聊'),
         backgroundColor: Colors.white,
-        elevation: 1,
+        surfaceTintColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shadowColor: Colors.transparent,
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.white,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+        ),
         leading: const AppBackButton(),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(0.5),
+          child: Divider(height: 0.5, thickness: 0.5, color: Color(0xFFE5E5E5)),
+        ),
       ),
       body: Container(
         padding: EdgeInsets.all(16.0),
