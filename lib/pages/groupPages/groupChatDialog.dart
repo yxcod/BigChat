@@ -77,7 +77,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   late Timer _groupInfoTimer; // 定时器，用于定期获取群信息
   late Timer _groupMembersTimer; // 定时器，用于定期检查群成员列表
   String _currentGroupName = ''; // 当前显示的群名称
+  int? _currentMemberCount; // 当前群成员人数，未加载完成前不显示
   bool _isHandlingHistoryDeletion = false;
+
+  String get _currentGroupTitle {
+    final memberCount = _currentMemberCount;
+    return memberCount == null
+        ? _currentGroupName
+        : '$_currentGroupName($memberCount)';
+  }
 
   @override
   void initState() {
@@ -92,6 +100,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
     // 初始化群名称
     _currentGroupName = widget.groupName;
+    final cachedMembers = globalUtil.getGroupMembers(widget.groupId);
+    if (cachedMembers.isNotEmpty) {
+      _currentMemberCount = cachedMembers.length;
+    }
 
     // 为滚动控制器添加监听器，实现向上滑动加载更多
     _scrollController.addListener(() {
@@ -1104,7 +1116,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
       // 触发UI重建，确保聊天记录显示最新的群成员信息（头像和昵称）
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _currentMemberCount = members.length;
+        });
       }
 
       // 遍历群成员列表，检查当前用户是否在列表中
@@ -1181,7 +1195,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         ),
         title: Center(
           child: Text(
-            _currentGroupName,
+            _currentGroupTitle,
             style: TextStyle(color: Colors.black, fontSize: 16),
           ),
         ),
