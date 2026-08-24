@@ -2,8 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../api/delete_chat_history_api.dart';
 import '../../api/getFriendRequestsAPI.dart';
+import '../../app/theme/app_colors.dart';
+import '../../core/parsing/json_value_parser.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../utils/gloabl.dart';
+import 'editFriendRemarkPage.dart';
+
+typedef FriendRemarkUpdater =
+    Future<Map<String, dynamic>> Function(
+      String currentUserName,
+      String friendUserName,
+      String remark,
+    );
 
 class FriendSettingsResult {
   const FriendSettingsResult({
@@ -16,9 +26,14 @@ class FriendSettingsResult {
 }
 
 class FriendSettingsPage extends StatefulWidget {
-  const FriendSettingsPage({super.key, required this.friendData});
+  const FriendSettingsPage({
+    super.key,
+    required this.friendData,
+    this.remarkUpdater = updateFriendRemarkApi,
+  });
 
   final Map<String, dynamic> friendData;
+  final FriendRemarkUpdater remarkUpdater;
 
   @override
   State<FriendSettingsPage> createState() => _FriendSettingsPageState();
@@ -50,33 +65,11 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
   }
 
   Future<void> _editRemark() async {
-    final controller = TextEditingController(text: _remark);
-    final newRemark = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('修改备注'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 30,
-          decoration: const InputDecoration(
-            hintText: '请输入新备注',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('确认'),
-          ),
-        ],
+    final newRemark = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => EditFriendRemarkPage(initialRemark: _remark),
       ),
     );
-    controller.dispose();
     if (!mounted || newRemark == null) return;
 
     final currentUserName = _globalUtil.userName ?? '';
@@ -87,20 +80,17 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
     setState(() => _isBusy = true);
     try {
       final normalizedRemark = newRemark.trim();
-      final response = await updateFriendRemarkApi(
+      final response = await widget.remarkUpdater(
         currentUserName,
         _friendUserName,
         normalizedRemark,
       );
       if (!mounted) return;
-      if (response['code'] != 100) {
-        throw Exception(response['msg'] ?? '备注修改失败');
+      if (JsonValueParser.intValue(response['code'], fallback: -1) != 100) {
+        throw Exception(response['msg'] ?? response['message'] ?? '备注修改失败');
       }
       _globalUtil.updateCachedFriendRemark(_friendUserName, normalizedRemark);
-      setState(() {
-        _remark = normalizedRemark;
-        widget.friendData['remark'] = normalizedRemark;
-      });
+      setState(() => _remark = normalizedRemark);
       _showMessage('备注修改成功');
     } catch (error) {
       debugPrint('修改备注失败: $error');
@@ -248,31 +238,18 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
                 ],
               ),
               const SizedBox(height: 14),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    label: '删除聊天记录',
-                    onTap: _isBusy ? null : _deleteChatHistory,
-                  ),
-                ],
+              _DestructiveActionButton(
+                key: const Key('delete_chat_history_button'),
+                label: '删除聊天记录',
+                color: const Color(0xFFE58A1F),
+                onTap: _isBusy ? null : _deleteChatHistory,
               ),
               const SizedBox(height: 14),
-              Material(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: _isBusy ? null : _deleteFriend,
-                  child: const SizedBox(
-                    height: 58,
-                    child: Center(
-                      child: Text(
-                        '删除好友',
-                        style: TextStyle(color: Colors.red, fontSize: 17),
-                      ),
-                    ),
-                  ),
-                ),
+              _DestructiveActionButton(
+                key: const Key('delete_friend_button'),
+                label: '删除好友',
+                color: AppColors.danger,
+                onTap: _isBusy ? null : _deleteFriend,
               ),
             ],
           ),
@@ -300,7 +277,10 @@ class _SettingsCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
     );
   }
 }
@@ -315,8 +295,10 @@ class _SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
+      key: const Key('friend_remark_tile'),
       onTap: onTap,
       child: SizedBox(
+        width: double.infinity,
         height: 58,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -326,7 +308,10 @@ class _SettingsTile extends StatelessWidget {
                 child: Text(label, style: const TextStyle(fontSize: 17)),
               ),
               if (value != null)
-                Flexible(
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * 0.5,
+                  ),
                   child: Text(
                     value!,
                     maxLines: 1,
@@ -335,8 +320,50 @@ class _SettingsTile extends StatelessWidget {
                   ),
                 ),
               const SizedBox(width: 8),
-              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+              const SizedBox(
+                width: 18,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    key: Key('friend_remark_arrow'),
+                    size: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DestructiveActionButton extends StatelessWidget {
+  const _DestructiveActionButton({
+    super.key,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 58,
+          child: Center(
+            child: Text(label, style: TextStyle(color: color, fontSize: 17)),
           ),
         ),
       ),
