@@ -31,6 +31,7 @@ import '../../core/media/video_media.dart';
 import '../../shared/widgets/app_video_player.dart';
 import '../../shared/widgets/app_voice_message.dart';
 import '../../shared/widgets/hold_to_record_field.dart';
+import '../../shared/widgets/top_aligned_reversed_list.dart';
 import '../../core/media/voice_message.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
@@ -1249,9 +1250,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             //聊天气泡
             children: [
               Expanded(
-                child: ListView.builder(
+                child: TopAlignedReversedList(
                   padding: EdgeInsets.all(8.0),
-                  reverse: true,
                   controller: _scrollController,
                   // 使用当前聊天群的全局消息列表，如果不存在则使用空列表
                   itemCount: GlobalUtil()
