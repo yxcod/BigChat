@@ -973,16 +973,14 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                   "未知用户",
               style: TextStyle(color: Colors.black, fontSize: 16),
             ),
-            SizedBox(height: 2),
-            Text(
-              friendInfo?.isOnline ?? false ? '在线' : '离线',
-              style: TextStyle(
-                color: friendInfo?.isOnline ?? false
-                    ? Colors.green
-                    : Colors.grey,
-                fontSize: 12,
+            if (friendInfo?.isOnline == true) ...[
+              const SizedBox(height: 2),
+              const Text(
+                '在线',
+                key: Key('private_chat_online_status'),
+                style: TextStyle(color: Colors.green, fontSize: 12),
               ),
-            ),
+            ],
           ],
         ),
         backgroundColor: chatChromeBackgroundColor,
