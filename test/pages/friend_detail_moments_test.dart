@@ -52,6 +52,30 @@ void main() {
     expect(find.text('广东省 深圳市'), findsOneWidget);
   });
 
+  testWidgets('profile keeps location icon and shows unknown without region', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FriendDetailPage(
+          friendData: const {
+            'userName': 'friend',
+            'nickname': '小李',
+            'avatar': '',
+            'region': '',
+            'isFriend': true,
+          },
+          momentsRepository: LocalMomentsRepository(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('profile_region_icon')), findsOneWidget);
+    expect(find.byKey(const Key('profile_region_label')), findsOneWidget);
+    expect(find.text('未知'), findsOneWidget);
+  });
+
   testWidgets('profile previews at most six photos and opens friend space', (
     tester,
   ) async {

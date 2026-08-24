@@ -196,32 +196,37 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
         ),
       );
     }
-    if (_region.isNotEmpty) {
-      items.add(
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.location_on_outlined,
-              size: 18,
-              color: AppColors.textPrimary,
+    final hasRegion = _region.isNotEmpty;
+    items.add(
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.location_on_outlined,
+            key: const Key('profile_region_icon'),
+            size: 18,
+            color: hasRegion ? AppColors.textPrimary : AppColors.textSecondary,
+          ),
+          const SizedBox(width: 5),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width - 110,
             ),
-            const SizedBox(width: 5),
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.sizeOf(context).width - 110,
-              ),
-              child: Text(
-                _region,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            child: Text(
+              hasRegion ? _region : '未知',
+              key: const Key('profile_region_label'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: hasRegion
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
               ),
             ),
-          ],
-        ),
-      );
-    }
-    if (items.isEmpty) return const SizedBox.shrink();
+          ),
+        ],
+      ),
+    );
 
     return Wrap(
       spacing: 18,
@@ -301,10 +306,8 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
               ),
             ],
           ),
-          if (_gender != 0 || _region.isNotEmpty) ...[
-            const SizedBox(height: 26),
-            _buildProfileMetadata(),
-          ],
+          const SizedBox(height: 26),
+          _buildProfileMetadata(),
           if (signature.isNotEmpty) ...[
             const SizedBox(height: 28),
             Container(
