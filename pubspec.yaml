@@ -46,6 +46,8 @@ dependencies:
   geocoding: ^5.0.0
   record: ^6.2.1
   just_audio: ^0.10.6
+  audio_session: ^0.2.4
+  saver_gallery: ^4.1.2
   # image_gallery_saver: ^2.0.3 # 暂时移除，等待修复兼容性问题
   cached_network_image: ^3.4.1
   # Agora Flutter SDK for real-time audio and video communication

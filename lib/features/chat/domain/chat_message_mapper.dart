@@ -22,6 +22,7 @@ class ChatMessageMapper {
       status: record.messageStatus ?? MessageStatus.sent,
       senderId: record.senderName,
       timestamp: record.timestamp ?? 0,
+      quote: MessageQuote.fromExtendInfo(record.extendInfo),
     );
   }
 
@@ -54,6 +55,7 @@ class ChatMessageMapper {
       status: MessageStatus.sent,
       senderId: record.senderId,
       timestamp: record.sendTime,
+      quote: MessageQuote.fromExtendInfo(record.extendInfo),
     );
   }
 
@@ -72,6 +74,7 @@ class ChatMessageMapper {
       status: message.status,
       senderId: message.senderId,
       timestamp: message.timestamp,
+      quote: message.quote,
     );
   }
 }

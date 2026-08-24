@@ -37,6 +37,9 @@ import '../../shared/widgets/hold_to_record_field.dart';
 import '../../shared/widgets/top_aligned_reversed_list.dart';
 import '../../core/media/voice_message.dart';
 import '../../core/media/voice_media.dart';
+import '../../shared/widgets/message_action_menu.dart';
+import '../../shared/widgets/quoted_message_view.dart';
+import '../../core/media/chat_media_saver.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -75,6 +78,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   CancelToken? _audioUploadCancelToken;
   bool _isUploadingAudio = false;
   bool _isMoreActionsVisible = false;
+  MessageQuote? _pendingQuote;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
   final Set<int> _sentReadAckMessageIds = {};
   int _loadedMessageLimit = 100;
@@ -862,6 +866,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           status: MessageStatus.sent,
           senderId: sender,
           timestamp: normalizedTimestamp,
+          quote: MessageQuote.fromExtendInfo(messageData['extendInfo']),
         );
 
         debugPrint(
@@ -1276,6 +1281,40 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     }
   }
 
+  String _quoteSenderLabel(Message message) {
+    if (message.isMe) return '我';
+    final senderId = message.senderId ?? '';
+    for (final member in GlobalUtil().getGroupMembers(widget.groupId)) {
+      if (member.userId == senderId) {
+        return member.groupNickName.isEmpty
+            ? member.userId
+            : member.groupNickName;
+      }
+    }
+    return senderId.isEmpty ? '群成员' : senderId;
+  }
+
+  void _quoteMessage(Message message) {
+    setState(() {
+      _pendingQuote = MessageQuote(
+        messageId: message.msgId,
+        senderId: message.senderId ?? '',
+        senderLabel: _quoteSenderLabel(message),
+        preview: messageQuotePreview(message),
+        messageType: message.messageType,
+      );
+      _isMoreActionsVisible = false;
+    });
+    _textFieldFocusNode.requestFocus();
+  }
+
+  void _deleteLocalMessage(Message message) {
+    GlobalUtil().deleteMessage(_conversationKey, message.msgId);
+    setState(() {
+      if (_pendingQuote?.messageId == message.msgId) _pendingQuote = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1402,6 +1441,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                       videoUploadFailed: _failedVideoMessageIds.contains(
                         message.msgId,
                       ),
+                      onDelete: () => _deleteLocalMessage(message),
+                      onQuote: () => _quoteMessage(message),
                     );
                   },
                 ),
@@ -1428,56 +1469,66 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       data: IconThemeData(color: Theme.of(context).colorScheme.secondary),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: HoldToRecordField(
-                controller: _textController,
-                focusNode: _textFieldFocusNode,
-                enabled: !_isUploadingAudio,
-                onChanged: (text) =>
-                    setState(() => _isComposing = text.trim().isNotEmpty),
-                onSubmitted: _handleSubmitted,
-                onRecorded: _handleVoiceRecorded,
-                onError: _showVoiceError,
+            if (_pendingQuote != null)
+              QuoteComposerPreview(
+                quote: _pendingQuote!,
+                onClose: () => setState(() => _pendingQuote = null),
               ),
-            ),
-            if (_isUploadingAudio)
-              const Padding(
-                padding: EdgeInsets.all(12),
-                child: SizedBox.square(
-                  dimension: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+            Row(
+              children: [
+                Expanded(
+                  child: HoldToRecordField(
+                    controller: _textController,
+                    focusNode: _textFieldFocusNode,
+                    enabled: !_isUploadingAudio,
+                    onChanged: (text) =>
+                        setState(() => _isComposing = text.trim().isNotEmpty),
+                    onSubmitted: _handleSubmitted,
+                    onRecorded: _handleVoiceRecorded,
+                    onError: _showVoiceError,
+                  ),
                 ),
-              ),
-            IconButton(
-              tooltip: '发送图片或视频',
-              icon: _isUploadingVideo || _isUploadingImage
-                  ? SizedBox.square(
-                      dimension: 24,
-                      child: CircularProgressIndicator(
-                        value: _isUploadingVideo && _videoUploadProgress > 0
-                            ? _videoUploadProgress
-                            : null,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.camera_alt_outlined),
-              onPressed: _isUploadingVideo || _isUploadingImage
-                  ? null
-                  : () => _showMediaTypePicker(ImageSource.gallery),
-            ),
-            IconButton(
-              tooltip: '更多',
-              icon: const Icon(Icons.add_circle_outline, size: 28),
-              onPressed: _toggleMoreActions,
-            ),
-            IconButton(
-              icon: Icon(Icons.send),
-              //_isComposing为true时候表示输入框内容不为空才能发送出去
-              onPressed: _isComposing
-                  ? () => _handleSubmitted(_textController.text)
-                  : null,
+                if (_isUploadingAudio)
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox.square(
+                      dimension: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                IconButton(
+                  tooltip: '发送图片或视频',
+                  icon: _isUploadingVideo || _isUploadingImage
+                      ? SizedBox.square(
+                          dimension: 24,
+                          child: CircularProgressIndicator(
+                            value: _isUploadingVideo && _videoUploadProgress > 0
+                                ? _videoUploadProgress
+                                : null,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.camera_alt_outlined),
+                  onPressed: _isUploadingVideo || _isUploadingImage
+                      ? null
+                      : () => _showMediaTypePicker(ImageSource.gallery),
+                ),
+                IconButton(
+                  tooltip: '更多',
+                  icon: const Icon(Icons.add_circle_outline, size: 28),
+                  onPressed: _toggleMoreActions,
+                ),
+                IconButton(
+                  icon: Icon(Icons.send),
+                  //_isComposing为true时候表示输入框内容不为空才能发送出去
+                  onPressed: _isComposing
+                      ? () => _handleSubmitted(_textController.text)
+                      : null,
+                ),
+              ],
             ),
           ],
         ),
@@ -1555,6 +1606,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   void _handleSubmitted(String text) {
+    final quote = _pendingQuote;
     _textController.clear();
 
     // 获取当前时间和消息ID
@@ -1566,6 +1618,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
     setState(() {
       _isComposing = false;
+      _pendingQuote = null;
     });
 
     // 创建消息对象，状态为发送中
@@ -1579,6 +1632,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       messageType: MessageType.text,
       status: MessageStatus.sending,
       senderId: globalUtil.userName,
+      quote: quote,
     );
 
     // 添加消息到全局聊天记录
@@ -1600,6 +1654,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         receiver: widget.groupId,
         conversationId: conversationId,
         messageType: MessageType.text,
+        extendInfo: quote?.encodeExtendInfo(),
       );
 
       if (!queued) newMessage.status = MessageStatus.failed;
@@ -1621,6 +1676,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     required int receiver,
     required String conversationId,
     required MessageType messageType,
+    String? extendInfo,
   }) {
     // 根据消息类型设置msgType
     final msgType = switch (messageType) {
@@ -1642,7 +1698,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       'readTime': 0,
       'sessionId': conversationId,
       "receiveType": 2, // 2表示群聊
-      'extendInfo': "无",
+      'extendInfo': extendInfo ?? '{}',
       'msgStatus': 1, //1 发送成功  3 已读
     };
 
@@ -1831,6 +1887,8 @@ class GroupMessageBubble extends StatelessWidget {
   final String? localVideoPath;
   final double? videoUploadProgress;
   final bool videoUploadFailed;
+  final VoidCallback onDelete;
+  final VoidCallback onQuote;
   final globalUtil = GlobalUtil();
   final dio = Dio();
   // 静态缓存自己的头像 URL，用于避免重复加载
@@ -1851,14 +1909,100 @@ class GroupMessageBubble extends StatelessWidget {
     this.localVideoPath,
     this.videoUploadProgress,
     this.videoUploadFailed = false,
+    required this.onDelete,
+    required this.onQuote,
   });
+
+  Future<void> _showMessageActions(BuildContext context, Offset anchor) async {
+    final actions = <MessageActionItem>[
+      if (message.messageType == MessageType.text)
+        const MessageActionItem(
+          type: MessageActionType.copy,
+          label: '复制',
+          icon: Icons.copy_rounded,
+        ),
+      if (message.messageType == MessageType.image ||
+          message.messageType == MessageType.video)
+        const MessageActionItem(
+          type: MessageActionType.save,
+          label: '保存到本地',
+          icon: Icons.download_rounded,
+        ),
+      const MessageActionItem(
+        type: MessageActionType.delete,
+        label: '删除',
+        icon: Icons.delete_outline_rounded,
+      ),
+      const MessageActionItem(
+        type: MessageActionType.quote,
+        label: '引用',
+        icon: Icons.format_quote_rounded,
+      ),
+    ];
+    final action = await showMessageActionMenu(
+      context: context,
+      anchor: anchor,
+      actions: actions,
+    );
+    if (!context.mounted || action == null) return;
+    switch (action) {
+      case MessageActionType.copy:
+        await Clipboard.setData(ClipboardData(text: message.content));
+      case MessageActionType.save:
+        await _saveMedia(context);
+      case MessageActionType.delete:
+        onDelete();
+      case MessageActionType.quote:
+        onQuote();
+      case MessageActionType.speaker:
+      case MessageActionType.transcription:
+        break;
+    }
+  }
+
+  Future<void> _saveMedia(BuildContext context) async {
+    try {
+      const saver = ChatMediaSaver();
+      if (message.messageType == MessageType.image) {
+        await saver.saveImage(
+          source: _resolveImageUrl(),
+          fileName: message.content,
+        );
+      } else if (message.messageType == MessageType.video) {
+        final source = globalUtil.getVideoURL(
+          videoOwnerFromName(
+            message.content,
+            fallbackOwner: message.senderId ?? globalUtil.userName ?? '',
+          ),
+          message.content,
+        );
+        await saver.saveVideo(
+          source: source,
+          fileName: message.content,
+          localPath: localVideoPath,
+        );
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已保存到系统相册')));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('保存失败，请检查相册权限')));
+      }
+    }
+  }
 
   // 获取未读人数
   int _getUnreadCount() {
     return unreadCount;
   }
 
-  // 显示图片操作弹窗
+  // 旧版图片菜单，保留用于兼容历史页面结构。
+  // ignore: unused_element
   void _showImageActions(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -1951,6 +2095,7 @@ class GroupMessageBubble extends StatelessWidget {
   }
 
   // 显示文本上下文菜单
+  // ignore: unused_element
   void _showTextContextMenu(BuildContext context) async {
     final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final Offset offset = renderBox.localToGlobal(Offset.zero);
@@ -2052,40 +2197,58 @@ class GroupMessageBubble extends StatelessWidget {
                 ),
               ],
               // 消息气泡
-              GestureDetector(
-                onLongPress: message.messageType == MessageType.text
-                    ? () => _showTextContextMenu(context)
-                    : null,
-                child: switch (message.messageType) {
-                  MessageType.text => _buildTextBubble(context),
-                  MessageType.video => AppVideoPreview(
-                    source:
-                        localVideoPath ??
-                        globalUtil.getVideoURL(
-                          videoOwnerFromName(
-                            message.content,
-                            fallbackOwner:
-                                message.senderId ?? globalUtil.userName ?? '',
+              Column(
+                crossAxisAlignment: message.isMe
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (message.quote != null)
+                    QuotedMessageView(quote: message.quote!),
+                  GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onLongPressStart: message.messageType == MessageType.audio
+                        ? null
+                        : (details) => _showMessageActions(
+                            context,
+                            details.globalPosition,
                           ),
-                          message.content,
+                    child: switch (message.messageType) {
+                      MessageType.text => _buildTextBubble(context),
+                      MessageType.video => AppVideoPreview(
+                        source:
+                            localVideoPath ??
+                            globalUtil.getVideoURL(
+                              videoOwnerFromName(
+                                message.content,
+                                fallbackOwner:
+                                    message.senderId ??
+                                    globalUtil.userName ??
+                                    '',
+                              ),
+                              message.content,
+                            ),
+                        isLocal: localVideoPath != null,
+                        uploadProgress: videoUploadProgress,
+                        uploadFailed: videoUploadFailed,
+                      ),
+                      MessageType.audio => AppVoiceMessage(
+                        source: globalUtil.getAudioURL(
+                          VoiceMessagePayload.parse(message.content).ownerId ??
+                              message.senderId ??
+                              globalUtil.userName ??
+                              '',
+                          VoiceMessagePayload.parse(message.content).audioName,
                         ),
-                    isLocal: localVideoPath != null,
-                    uploadProgress: videoUploadProgress,
-                    uploadFailed: videoUploadFailed,
+                        payload: VoiceMessagePayload.parse(message.content),
+                        isMe: message.isMe,
+                        onDelete: onDelete,
+                        onQuote: onQuote,
+                      ),
+                      _ => _buildImageBubble(context),
+                    },
                   ),
-                  MessageType.audio => AppVoiceMessage(
-                    source: globalUtil.getAudioURL(
-                      VoiceMessagePayload.parse(message.content).ownerId ??
-                          message.senderId ??
-                          globalUtil.userName ??
-                          '',
-                      VoiceMessagePayload.parse(message.content).audioName,
-                    ),
-                    payload: VoiceMessagePayload.parse(message.content),
-                    isMe: message.isMe,
-                  ),
-                  _ => _buildImageBubble(context),
-                },
+                ],
               ),
               // 自己的头像
               if (message.isMe) ...[
@@ -2191,7 +2354,6 @@ class GroupMessageBubble extends StatelessWidget {
         context,
         imageProvider: AppImageCache.provider(imageUrl),
       ),
-      onLongPress: () => _showImageActions(context),
       child: Container(
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.6,

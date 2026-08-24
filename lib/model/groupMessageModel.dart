@@ -43,6 +43,7 @@ class MessageDetailModel {
   String senderId; // 发送者ID
   int msgType; // 消息类型
   String msgContent; // 消息内容
+  dynamic extendInfo; // 引用等扩展消息信息
   int fileSize; // 文件大小
   int sendTime; // 发送时间
   int isDeleted; // 是否删除
@@ -57,6 +58,7 @@ class MessageDetailModel {
     this.senderId = '',
     this.msgType = 0,
     this.msgContent = '',
+    this.extendInfo,
     this.fileSize = 0,
     this.sendTime = 0,
     this.isDeleted = 0,
@@ -91,6 +93,7 @@ class MessageDetailModel {
       senderId: JsonValueParser.stringValue(json['senderId']),
       msgType: JsonValueParser.intValue(json['msgType']),
       msgContent: JsonValueParser.stringValue(json['msgContent']),
+      extendInfo: json['extendInfo'],
       fileSize: JsonValueParser.intValue(json['fileSize']),
       sendTime: JsonValueParser.timestampMillis(json['sendTime']),
       isDeleted: JsonValueParser.intValue(json['isDeleted']),
@@ -108,6 +111,7 @@ class MessageDetailModel {
       'senderId': senderId,
       'msgType': msgType,
       'msgContent': msgContent,
+      'extendInfo': extendInfo,
       'fileSize': fileSize,
       'sendTime': sendTime,
       'isDeleted': isDeleted,

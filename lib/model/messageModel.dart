@@ -7,6 +7,78 @@ enum MessageType { text, image, video, audio, file, location, system }
 // 消息状态枚举
 enum MessageStatus { sending, sent, delivered, read, failed }
 
+class MessageQuote {
+  const MessageQuote({
+    required this.messageId,
+    required this.senderId,
+    required this.senderLabel,
+    required this.preview,
+    required this.messageType,
+  });
+
+  final int messageId;
+  final String senderId;
+  final String senderLabel;
+  final String preview;
+  final MessageType messageType;
+
+  Map<String, dynamic> toJson() => {
+    'messageId': messageId,
+    'senderId': senderId,
+    'senderLabel': senderLabel,
+    'preview': preview,
+    'messageType': messageType.name,
+  };
+
+  factory MessageQuote.fromJson(Map<String, dynamic> json) {
+    return MessageQuote(
+      messageId: JsonValueParser.intValue(json['messageId']),
+      senderId: JsonValueParser.stringValue(json['senderId']),
+      senderLabel: JsonValueParser.stringValue(json['senderLabel']),
+      preview: JsonValueParser.stringValue(json['preview']),
+      messageType: JsonValueParser.enumValue(
+        json['messageType'],
+        MessageType.values,
+        fallback: MessageType.text,
+      ),
+    );
+  }
+
+  static MessageQuote? fromExtendInfo(dynamic value) {
+    try {
+      dynamic decoded = value;
+      if (decoded is String) {
+        final normalized = decoded.trim();
+        if (normalized.isEmpty || normalized == '无') return null;
+        decoded = jsonDecode(normalized);
+      }
+      if (decoded is! Map) return null;
+      final root = Map<String, dynamic>.from(decoded);
+      final quote = root['quote'];
+      if (quote is! Map) return null;
+      return MessageQuote.fromJson(Map<String, dynamic>.from(quote));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String encodeExtendInfo() => jsonEncode({'quote': toJson()});
+}
+
+String messageQuotePreview(Message message) {
+  final value = switch (message.messageType) {
+    MessageType.image => '[图片]',
+    MessageType.video => '[视频]',
+    MessageType.audio => '[语音]',
+    MessageType.file => '[文件]',
+    MessageType.location => '[位置]',
+    MessageType.system => '[系统消息]',
+    MessageType.text => message.content.trim(),
+  };
+  if (value.length <= 48) return value;
+  return '${value.substring(0, 48)}…';
+}
+
 class MessageModel {
   String? senderName;
   String? receiverName;
@@ -16,6 +88,7 @@ class MessageModel {
   MessageType? messageType;
   MessageStatus? messageStatus;
   String? conversationId;
+  dynamic extendInfo;
 
   MessageModel({
     required this.senderName,
@@ -26,6 +99,7 @@ class MessageModel {
     required this.messageType,
     required this.messageStatus,
     required this.conversationId,
+    this.extendInfo,
   });
 
   factory MessageModel.fromJSON(Map<String, dynamic> json) {
@@ -49,6 +123,7 @@ class MessageModel {
         fallback: MessageStatus.sent,
       ),
       conversationId: JsonValueParser.stringValue(json["conversationId"]),
+      extendInfo: json['extendInfo'],
     );
   }
 
@@ -61,6 +136,7 @@ class MessageModel {
       "messageType": messageType?.name,
       "messageStatus": messageStatus?.name,
       "conversationId": conversationId,
+      "extendInfo": extendInfo,
     };
   }
 
@@ -81,6 +157,7 @@ class Message {
   final String conversationId;
   final String? senderId;
   final int timestamp;
+  final MessageQuote? quote;
 
   Message({
     required this.msgId,
@@ -93,6 +170,7 @@ class Message {
     this.status = MessageStatus.sent,
     this.senderId,
     int? timestamp,
+    this.quote,
   }) : timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch;
 
   // 序列化方法：将Message对象转换为Map<String, dynamic>
@@ -108,6 +186,7 @@ class Message {
       'conversationId': conversationId,
       'senderId': senderId,
       'timestamp': timestamp,
+      'quote': quote?.toJson(),
     };
   }
 
@@ -134,6 +213,9 @@ class Message {
           ? null
           : JsonValueParser.stringValue(json['senderId']),
       timestamp: JsonValueParser.timestampMillis(json['timestamp']),
+      quote: json['quote'] is Map
+          ? MessageQuote.fromJson(Map<String, dynamic>.from(json['quote']))
+          : null,
     );
   }
 }
