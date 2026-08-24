@@ -219,7 +219,7 @@ class _FriendsPage extends State<Friendspage>
   }
 
   Future<void> _openFriendDetail(Friend friend) async {
-    await Navigator.pushNamed(
+    final friendDeleted = await Navigator.pushNamed(
       context,
       '/friendDetailPage',
       arguments: {
@@ -232,6 +232,16 @@ class _FriendsPage extends State<Friendspage>
       },
     );
     if (!mounted) return;
+
+    if (friendDeleted == true) {
+      setState(() {
+        friends = friends
+            .where((item) => item.userName != friend.userName)
+            .toList();
+      });
+      await _fetchFriendList();
+      return;
+    }
 
     final cachedFriend = _globalUtil.userInfoModel.friendListData
         ?.where((item) => item.userName == friend.userName)

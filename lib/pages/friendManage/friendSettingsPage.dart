@@ -1,0 +1,345 @@
+import 'package:flutter/material.dart';
+
+import '../../api/delete_chat_history_api.dart';
+import '../../api/getFriendRequestsAPI.dart';
+import '../../shared/widgets/app_back_button.dart';
+import '../../utils/gloabl.dart';
+
+class FriendSettingsResult {
+  const FriendSettingsResult({
+    required this.remark,
+    this.friendDeleted = false,
+  });
+
+  final String remark;
+  final bool friendDeleted;
+}
+
+class FriendSettingsPage extends StatefulWidget {
+  const FriendSettingsPage({super.key, required this.friendData});
+
+  final Map<String, dynamic> friendData;
+
+  @override
+  State<FriendSettingsPage> createState() => _FriendSettingsPageState();
+}
+
+class _FriendSettingsPageState extends State<FriendSettingsPage> {
+  final GlobalUtil _globalUtil = GlobalUtil();
+  late String _remark;
+  bool _isBusy = false;
+
+  String get _friendUserName =>
+      widget.friendData['userName']?.toString().trim() ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    _remark = widget.friendData['remark']?.toString().trim() ?? '';
+  }
+
+  void _close() {
+    Navigator.pop(context, FriendSettingsResult(remark: _remark));
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
+  }
+
+  Future<void> _editRemark() async {
+    final controller = TextEditingController(text: _remark);
+    final newRemark = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('修改备注'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 30,
+          decoration: const InputDecoration(
+            hintText: '请输入新备注',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || newRemark == null) return;
+
+    final currentUserName = _globalUtil.userName ?? '';
+    if (currentUserName.isEmpty || _friendUserName.isEmpty) {
+      _showMessage('获取用户信息失败');
+      return;
+    }
+    setState(() => _isBusy = true);
+    try {
+      final normalizedRemark = newRemark.trim();
+      final response = await updateFriendRemarkApi(
+        currentUserName,
+        _friendUserName,
+        normalizedRemark,
+      );
+      if (!mounted) return;
+      if (response['code'] != 100) {
+        throw Exception(response['msg'] ?? '备注修改失败');
+      }
+      _globalUtil.updateCachedFriendRemark(_friendUserName, normalizedRemark);
+      setState(() {
+        _remark = normalizedRemark;
+        widget.friendData['remark'] = normalizedRemark;
+      });
+      _showMessage('备注修改成功');
+    } catch (error) {
+      debugPrint('修改备注失败: $error');
+      _showMessage('备注修改失败，请重试');
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _deleteChatHistory() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除聊天记录'),
+        content: const Text('将永久删除你与该好友在服务器和本机保存的全部聊天记录，双方均无法再查看。确定继续吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    final currentUserName = _globalUtil.userName ?? '';
+    if (currentUserName.isEmpty || _friendUserName.isEmpty) {
+      _showMessage('获取用户信息失败');
+      return;
+    }
+    setState(() => _isBusy = true);
+    try {
+      final sessionId = GlobalUtil.generateSessionId(
+        currentUserName,
+        _friendUserName,
+      );
+      final response = await deletePrivateChatHistoryApi(
+        userName: currentUserName,
+        peerUserName: _friendUserName,
+        conversationId: sessionId,
+      );
+      if (response['code'] != 100) {
+        throw Exception(response['msg'] ?? '服务器删除失败');
+      }
+      await _globalUtil.deleteChatRecords(_friendUserName);
+      _showMessage('聊天记录已删除');
+    } catch (error) {
+      debugPrint('删除聊天记录失败: $error');
+      _showMessage('删除聊天记录失败，请重试');
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _deleteFriend() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除好友'),
+        content: const Text('确定要删除该好友吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    final currentUserName = _globalUtil.userName ?? '';
+    if (currentUserName.isEmpty || _friendUserName.isEmpty) {
+      _showMessage('获取用户信息失败');
+      return;
+    }
+    setState(() => _isBusy = true);
+    try {
+      final sessionId = GlobalUtil.generateSessionId(
+        currentUserName,
+        _friendUserName,
+      );
+      final response = await handledeleteFriendApi(
+        currentUserName,
+        _friendUserName,
+        sessionId,
+      );
+      if (!mounted) return;
+      if (response['code'] != 100) {
+        throw Exception(response['msg'] ?? '好友删除失败');
+      }
+      _globalUtil.removeCachedFriend(_friendUserName);
+      Navigator.pop(
+        context,
+        FriendSettingsResult(remark: _remark, friendDeleted: true),
+      );
+    } catch (error) {
+      debugPrint('删除好友失败: $error');
+      _showMessage('删除好友失败，请重试');
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: AppBar(
+        leading: AppBackButton(onPressed: _close),
+        title: const Text('设置'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: Color(0xFFE5E5E5)),
+        ),
+      ),
+      body: Stack(
+        children: [
+          ListView(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
+            children: [
+              _SettingsCard(
+                children: [
+                  _SettingsTile(
+                    label: '备注',
+                    value: _remark.isEmpty ? '未设置' : _remark,
+                    onTap: _isBusy ? null : _editRemark,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _SettingsCard(
+                children: [
+                  _SettingsTile(
+                    label: '删除聊天记录',
+                    onTap: _isBusy ? null : _deleteChatHistory,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: _isBusy ? null : _deleteFriend,
+                  child: const SizedBox(
+                    height: 58,
+                    child: Center(
+                      child: Text(
+                        '删除好友',
+                        style: TextStyle(color: Colors.red, fontSize: 17),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_isBusy)
+            const Positioned.fill(
+              child: ColoredBox(
+                color: Color(0x22000000),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsCard extends StatelessWidget {
+  const _SettingsCard({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({required this.label, this.value, this.onTap});
+
+  final String label;
+  final String? value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 58,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(label, style: const TextStyle(fontSize: 17)),
+              ),
+              if (value != null)
+                Flexible(
+                  child: Text(
+                    value!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.grey, fontSize: 16),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -31,6 +31,9 @@ void main() {
       expect(global.updateCachedFriendRemark('friend', ''), isTrue);
       expect(global.getFriendInfoByUserName('friend').remarks, isEmpty);
       expect(global.updateCachedFriendRemark('missing', '备注'), isFalse);
+      expect(global.removeCachedFriend('friend'), isTrue);
+      expect(global.userInfoModel.friendListData, isEmpty);
+      expect(global.removeCachedFriend('friend'), isFalse);
     },
   );
 }

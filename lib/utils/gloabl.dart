@@ -541,6 +541,15 @@ class GlobalUtil {
     return false;
   }
 
+  bool removeCachedFriend(String userName) {
+    final normalizedUserName = userName.trim();
+    final friendList = _userInfoModel?.friendListData;
+    if (normalizedUserName.isEmpty || friendList == null) return false;
+    final previousLength = friendList.length;
+    friendList.removeWhere((friend) => friend.userName == normalizedUserName);
+    return friendList.length != previousLength;
+  }
+
   // 打开相册选择图片并上传头像
   Future<Uint8List?> selectAndUploadAvatar(String imageName) async {
     try {

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/cache/app_image_cache.dart';
-import '../../api/getFriendRequestsAPI.dart';
-import '../../api/delete_chat_history_api.dart';
 import '../../features/moments/data/moments_repository.dart';
 import '../../features/moments/data/server_moments_repository.dart';
 import '../../features/moments/domain/moment.dart';
@@ -13,6 +11,7 @@ import '../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../core/media/video_media.dart';
 import '../../shared/widgets/app_video_player.dart';
 import '../../shared/widgets/app_back_button.dart';
+import 'friendSettingsPage.dart';
 
 class FriendDetailPage extends StatefulWidget {
   final Map<String, dynamic> friendData;
@@ -29,7 +28,6 @@ class FriendDetailPage extends StatefulWidget {
 }
 
 class _FriendDetailPageState extends State<FriendDetailPage> {
-  final GlobalKey _popupButtonKey = GlobalKey();
   final GlobalUtil _globalUtil = GlobalUtil();
   late final MomentsRepository _momentsRepository;
   Moment? _latestVisibleMoment;
@@ -102,36 +100,10 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
         toolbarHeight: 50,
         actions: _isFriend
             ? [
-                PopupMenuButton<String>(
-                  key: _popupButtonKey,
+                IconButton(
                   icon: Icon(Icons.more_horiz, color: Colors.black),
-                  offset: Offset(0, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  itemBuilder: (BuildContext context) => [
-                    PopupMenuItem<String>(
-                      value: 'editRemark',
-                      child: Text('修改备注'),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'deleteChatHistory',
-                      child: Text('删除聊天记录'),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'deleteFriend',
-                      child: Text('删除好友'),
-                    ),
-                  ],
-                  onSelected: (String value) {
-                    if (value == 'editRemark') {
-                      _showEditRemarkDialog();
-                    } else if (value == 'deleteChatHistory') {
-                      _showDeleteChatHistoryDialog();
-                    } else if (value == 'deleteFriend') {
-                      _showDeleteFriendDialog();
-                    }
-                  },
+                  tooltip: '好友设置',
+                  onPressed: _openFriendSettings,
                 ),
               ]
             : null,
@@ -435,193 +407,25 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
     );
   }
 
-  // 显示修改备注对话框
-  void _showEditRemarkDialog() {
-    TextEditingController remarkController = TextEditingController(
-      text: widget.friendData['remark'] ?? '',
-    );
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('修改备注'),
-          content: TextField(
-            controller: remarkController,
-            decoration: InputDecoration(
-              hintText: '请输入新备注',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('取消'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                // 获取当前用户和好友的UserName
-                String currentUserName = _globalUtil.userName ?? '';
-                String friendUserName = widget.friendData['userName'] ?? '';
-                String newRemark = remarkController.text.trim();
-
-                if (currentUserName.isEmpty || friendUserName.isEmpty) {
-                  _showMessage('获取用户信息失败');
-                  return;
-                }
-
-                try {
-                  // 调用修改备注API
-                  Map<String, dynamic> response = await updateFriendRemarkApi(
-                    currentUserName,
-                    friendUserName,
-                    newRemark,
-                  );
-                  if (!mounted || !context.mounted) return;
-
-                  // 检查返回结果
-                  if (response['code'] == 100) {
-                    _globalUtil.updateCachedFriendRemark(
-                      friendUserName,
-                      newRemark,
-                    );
-                    setState(() {
-                      widget.friendData['remark'] = newRemark;
-                    });
-                    Navigator.pop(context);
-                    _showMessage('备注修改成功');
-                  } else {
-                    _showMessage('备注修改失败');
-                  }
-                } catch (e) {
-                  debugPrint('修改备注失败: $e');
-                  _showMessage('备注修改失败，请重试');
-                }
-              },
-              child: Text('确认'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // 显示删除聊天记录对话框
-  void _showDeleteChatHistoryDialog() {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('删除聊天记录'),
-        content: Text('将永久删除你与该好友在服务器和本机保存的全部聊天记录，双方均无法再查看。确定继续吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text('取消'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              final currentUserName = _globalUtil.userName ?? '';
-              if (currentUserName.isEmpty || _targetUserName.isEmpty) {
-                _showMessage('获取用户信息失败');
-                return;
-              }
-              try {
-                final sessionId = GlobalUtil.generateSessionId(
-                  currentUserName,
-                  _targetUserName,
-                );
-                final response = await deletePrivateChatHistoryApi(
-                  userName: currentUserName,
-                  peerUserName: _targetUserName,
-                  conversationId: sessionId,
-                );
-                if (response['code'] != 100) {
-                  throw Exception(response['msg'] ?? '服务器删除失败');
-                }
-                await _globalUtil.deleteChatRecords(_targetUserName);
-                if (mounted) _showMessage('聊天记录已删除');
-              } catch (error) {
-                debugPrint('删除聊天记录失败: $error');
-                if (mounted) _showMessage('删除聊天记录失败，请重试');
-              }
-            },
-            child: Text('删除'),
-          ),
-        ],
+  Future<void> _openFriendSettings() async {
+    final result = await Navigator.push<FriendSettingsResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FriendSettingsPage(friendData: widget.friendData),
       ),
     );
-  }
+    if (!mounted) return;
 
-  // 显示删除好友对话框
-  void _showDeleteFriendDialog() {
-    // 保存页面context以便在对话框内部使用
-    final pageContext = context;
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: Text('删除好友'),
-          content: Text('确定要删除该好友吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text('取消'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(dialogContext);
-
-                // 获取当前用户和好友的UserName
-                String currentUserName = _globalUtil.userName ?? '';
-                String friendUserName = widget.friendData['userName'] ?? '';
-
-                if (currentUserName.isEmpty || friendUserName.isEmpty) {
-                  _showMessage('获取用户信息失败');
-                  return;
-                }
-
-                try {
-                  // 生成会话ID
-                  String sessionId = GlobalUtil.generateSessionId(
-                    currentUserName,
-                    friendUserName,
-                  );
-
-                  // 调用删除好友API
-                  Map<String, dynamic> response = await handledeleteFriendApi(
-                    currentUserName,
-                    friendUserName,
-                    sessionId,
-                  );
-
-                  // 检查返回结果
-                  if (response['code'] == 100) {
-                    _showMessage('好友删除成功');
-                    // 返回上一页，使用页面context
-                    Navigator.pop(pageContext);
-                  } else {
-                    _showMessage('好友删除失败');
-                  }
-                } catch (e) {
-                  debugPrint('删除好友失败: $e');
-                  _showMessage('删除好友失败，请重试');
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              child: Text('确认'),
-            ),
-          ],
-        );
-      },
-    );
+    final cachedRemark = _globalUtil
+        .getFriendInfoByUserName(_targetUserName)
+        .remarks
+        ?.trim();
+    setState(() {
+      widget.friendData['remark'] = result?.remark ?? cachedRemark ?? '';
+    });
+    if (result?.friendDeleted == true) {
+      Navigator.pop(context, true);
+    }
   }
 
   // 查看全部朋友圈

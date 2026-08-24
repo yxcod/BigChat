@@ -85,7 +85,7 @@ void main() {
     expect(find.byKey(const Key('moment_publish_fab')), findsNothing);
   });
 
-  testWidgets('delete chat history is placed above delete friend', (
+  testWidgets('more button opens the list-style friend settings page', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -105,6 +105,9 @@ void main() {
     await tester.tap(find.byIcon(Icons.more_horiz));
     await tester.pumpAndSettle();
 
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('备注'), findsOneWidget);
+    expect(find.byType(PopupMenuButton<String>), findsNothing);
     final deleteHistory = find.text('删除聊天记录');
     final deleteFriend = find.text('删除好友');
     expect(deleteHistory, findsOneWidget);
