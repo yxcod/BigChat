@@ -11,16 +11,19 @@ class VoiceMessagePayload {
   const VoiceMessagePayload({
     required this.audioName,
     required this.durationMs,
+    this.ownerId,
   });
 
   final String audioName;
   final int durationMs;
+  final String? ownerId;
 
   int get durationSeconds => (durationMs / 1000).ceil().clamp(1, 60);
 
   String encode() => jsonEncode({
     'audioName': audioName,
     'durationMs': durationMs.clamp(0, 60000),
+    if (ownerId?.isNotEmpty == true) 'ownerId': ownerId,
   });
 
   static VoiceMessagePayload parse(String value) {
@@ -36,6 +39,7 @@ class VoiceMessagePayload {
                 ? duration.toInt().clamp(0, 60000)
                 : int.tryParse(duration?.toString() ?? '')?.clamp(0, 60000) ??
                       1000,
+            ownerId: decoded['ownerId']?.toString(),
           );
         }
       }

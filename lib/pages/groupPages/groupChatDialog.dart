@@ -36,6 +36,7 @@ import '../../shared/widgets/app_voice_message.dart';
 import '../../shared/widgets/hold_to_record_field.dart';
 import '../../shared/widgets/top_aligned_reversed_list.dart';
 import '../../core/media/voice_message.dart';
+import '../../core/media/voice_media.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -1510,7 +1511,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       final payload = VoiceMessagePayload(
         audioName: audioName,
         durationMs: recording.durationMs,
+        ownerId: sender,
       ).encode();
+      await cacheUploadedVoice(
+        recording.path,
+        global.getAudioURL(sender, audioName),
+      );
       final message = Message(
         msgId: msgId,
         content: payload,
@@ -2069,7 +2075,10 @@ class GroupMessageBubble extends StatelessWidget {
                   ),
                   MessageType.audio => AppVoiceMessage(
                     source: globalUtil.getAudioURL(
-                      message.senderId ?? globalUtil.userName ?? '',
+                      VoiceMessagePayload.parse(message.content).ownerId ??
+                          message.senderId ??
+                          globalUtil.userName ??
+                          '',
                       VoiceMessagePayload.parse(message.content).audioName,
                     ),
                     payload: VoiceMessagePayload.parse(message.content),

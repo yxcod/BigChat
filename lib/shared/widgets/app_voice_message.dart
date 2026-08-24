@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../core/media/voice_media.dart';
 import '../../core/media/voice_message.dart';
+import '../../utils/http.dart';
 
 class AppVoiceMessage extends StatefulWidget {
   const AppVoiceMessage({
@@ -27,6 +31,8 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   StreamSubscription<PlayerState>? _stateSubscription;
   bool _loading = false;
   bool _playing = false;
+  CancelToken? _downloadCancelToken;
+  String? _loadedSource;
 
   @override
   void initState() {
@@ -51,9 +57,12 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
         await _activePlayer!.pause();
       }
       _activePlayer = _player;
-      if (_player.duration == null) await _player.setUrl(widget.source);
+      if (_loadedSource != widget.source || _player.duration == null) {
+        await _loadSource();
+      }
       await _player.play();
-    } catch (_) {
+    } catch (error) {
+      debugPrint('语音播放加载失败: $error, source=${widget.source}');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -64,9 +73,53 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
     }
   }
 
+  Future<void> _loadSource() async {
+    final cachedPath = await cachedVoicePath(widget.source);
+    if (cachedPath != null) {
+      await _player.setFilePath(cachedPath);
+      _loadedSource = widget.source;
+      return;
+    }
+
+    final destinationPath = await voiceCachePath(widget.source);
+    final temporaryPath = '$destinationPath.part';
+    final temporary = File(temporaryPath);
+    if (await temporary.exists()) await temporary.delete();
+    final cancelToken = CancelToken();
+    _downloadCancelToken = cancelToken;
+    try {
+      await HttpUtil().downloadFile(
+        widget.source,
+        temporaryPath,
+        cancelToken: cancelToken,
+      );
+      if (!await temporary.exists() || await temporary.length() <= 0) {
+        throw StateError('下载的语音文件为空');
+      }
+      final destination = File(destinationPath);
+      if (await destination.exists()) await destination.delete();
+      await temporary.rename(destinationPath);
+      await _player.setFilePath(destinationPath);
+      _loadedSource = widget.source;
+    } finally {
+      if (_downloadCancelToken == cancelToken) _downloadCancelToken = null;
+      if (await temporary.exists()) await temporary.delete();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AppVoiceMessage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.source != widget.source) {
+      _loadedSource = null;
+      unawaited(_player.stop());
+    }
+  }
+
   @override
   void dispose() {
     if (_activePlayer == _player) _activePlayer = null;
+    _downloadCancelToken?.cancel('语音组件已关闭');
     _stateSubscription?.cancel();
     _player.dispose();
     super.dispose();

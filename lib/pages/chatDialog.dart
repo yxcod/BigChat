@@ -29,6 +29,7 @@ import '../shared/widgets/app_video_player.dart';
 import '../shared/widgets/app_voice_message.dart';
 import '../shared/widgets/hold_to_record_field.dart';
 import '../core/media/voice_message.dart';
+import '../core/media/voice_media.dart';
 import 'videoCallPage.dart';
 
 class ChatDialogPage extends StatefulWidget {
@@ -1216,7 +1217,12 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       final payload = VoiceMessagePayload(
         audioName: audioName,
         durationMs: recording.durationMs,
+        ownerId: sender,
       ).encode();
+      await cacheUploadedVoice(
+        recording.path,
+        GlobalUtil().getAudioURL(sender, audioName),
+      );
       final conversationId = _generateConversationId();
       final message = Message(
         msgId: msgId,
@@ -1850,10 +1856,12 @@ class MessageBubble extends StatelessWidget {
   }
 
   String _resolveAudioUrl() {
-    final owner = message.isMe
-        ? (globalUtil.userName ?? '')
-        : (message.senderId ?? friendInfo?.userName ?? '');
     final payload = VoiceMessagePayload.parse(message.content);
+    final owner =
+        payload.ownerId ??
+        (message.isMe
+            ? (globalUtil.userName ?? '')
+            : (message.senderId ?? friendInfo?.userName ?? ''));
     return globalUtil.getAudioURL(owner, payload.audioName);
   }
 
