@@ -48,8 +48,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('性别: 女'), findsOneWidget);
-    expect(find.text('地区: 广东省 深圳市'), findsOneWidget);
+    expect(find.text('女'), findsOneWidget);
+    expect(find.text('广东省 深圳市'), findsOneWidget);
   });
 
   testWidgets('profile previews at most six photos and opens friend space', (
@@ -186,8 +186,8 @@ void main() {
     expect(find.text('公开动态'), findsOneWidget);
     expect(find.text('仅自己可见动态'), findsNothing);
     expect(find.byKey(const Key('profile_add_friend_button')), findsOneWidget);
-    expect(find.text('发送信息'), findsNothing);
-    expect(find.text('音视频通信'), findsNothing);
+    expect(find.text('发消息'), findsNothing);
+    expect(find.text('视频通话'), findsNothing);
 
     await tester.tap(find.byKey(const Key('friend_moments_section')));
     await tester.pumpAndSettle();

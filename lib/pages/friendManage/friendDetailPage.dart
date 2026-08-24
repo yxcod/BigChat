@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/theme/app_colors.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../features/moments/data/moments_repository.dart';
 import '../../features/moments/data/server_moments_repository.dart';
@@ -121,45 +122,121 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
         leading: const AppBackButton(),
-        toolbarHeight: 50,
+        centerTitle: true,
+        toolbarHeight: 56,
         title: const Text('个人资料'),
         actions: _isFriend
             ? [
                 IconButton(
-                  icon: Icon(Icons.more_horiz, color: Colors.black),
+                  icon: const Icon(Icons.more_horiz, color: Colors.black),
                   tooltip: '好友设置',
                   onPressed: _openFriendSettings,
                 ),
               ]
             : null,
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFriendInfoSection(),
+                  _buildMomentsSection(),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+          _buildBottomActionBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomActionBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.divider)),
+      ),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+        child: _buildActionButtons(),
+      ),
+    );
+  }
+
+  Widget _buildProfileMetadata() {
+    final items = <Widget>[];
+    if (_gender != 0) {
+      items.add(
+        Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // 好友信息区域
-            _buildFriendInfoSection(),
-
-            SizedBox(height: 32),
-
-            _buildMomentsSection(),
-
-            SizedBox(height: 40),
-
-            // 操作按钮区域
-            _buildActionButtons(),
-
-            SizedBox(height: 32),
+            Icon(
+              _gender == 2 ? Icons.female : Icons.male,
+              size: 18,
+              color: _gender == 2
+                  ? const Color(0xFFE875A5)
+                  : const Color(0xFF2196F3),
+            ),
+            const SizedBox(width: 5),
+            Text(userGenderLabel(_gender)),
           ],
         ),
-      ),
+      );
+    }
+    if (_region.isNotEmpty) {
+      items.add(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.location_on_outlined,
+              size: 18,
+              color: AppColors.textPrimary,
+            ),
+            const SizedBox(width: 5),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width - 110,
+              ),
+              child: Text(
+                _region,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: 18,
+      runSpacing: 10,
+      children: items
+          .map(
+            (item) => DefaultTextStyle(
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 15,
+              ),
+              child: item,
+            ),
+          )
+          .toList(growable: false),
     );
   }
 
@@ -171,72 +248,97 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
     final displayName = _isFriend && remark.isNotEmpty
         ? remark
         : (nickname.isEmpty ? '未知用户' : nickname);
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white),
-      child: Row(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 30, 24, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 头像
-          _buildAvatar(),
-
-          SizedBox(width: 16),
-
-          // 好友信息
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  displayName,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              _buildAvatar(),
+              const SizedBox(width: 22),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '账号：${widget.friendData['userName'] ?? 'unknown'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    if (_isFriend &&
+                        remark.isNotEmpty &&
+                        nickname.isNotEmpty &&
+                        remark != nickname) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        '昵称：$nickname',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                SizedBox(height: 4),
-                Text(
-                  '昵称: ${nickname.isEmpty ? '未知' : nickname}',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  '帐号: ${widget.friendData['userName'] ?? 'unknown'}',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  '性别: ${userGenderLabel(_gender)}',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-                if (_region.isNotEmpty) ...[
-                  SizedBox(height: 2),
-                  Text(
-                    '地区: $_region',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  ),
-                ],
-                if (signature.isNotEmpty) ...[
-                  SizedBox(height: 2),
-                  Text(
-                    '签名: $signature',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
-
-          // 地区信息
-          // Container(
-          //   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          //   decoration: BoxDecoration(
-          //     color: Colors.blue[100],
-          //     borderRadius: BorderRadius.circular(4),
-          //   ),
-          //   child: Text(
-          //     widget.friendData['region'] ?? '北京',
-          //     style: TextStyle(fontSize: 12, color: Colors.blue[600]),
-          //   ),
-          // ),
+          if (_gender != 0 || _region.isNotEmpty) ...[
+            const SizedBox(height: 26),
+            _buildProfileMetadata(),
+          ],
+          if (signature.isNotEmpty) ...[
+            const SizedBox(height: 28),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F7F8),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '个性签名',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    signature,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.4,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -246,33 +348,36 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
   Widget _buildMomentsSection() {
     final previewImages =
         _latestVisibleMoment?.mediaPaths.take(6).toList() ?? const <String>[];
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: Color(0xFFF4F4F5), width: 10)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
             key: const Key('friend_moments_section'),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             onTap: _viewAllMoments,
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(vertical: 6),
               child: Row(
                 children: [
-                  Icon(Icons.photo_library_outlined, color: Colors.grey[600]),
-                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _isFriend ? '好友动态' : '动态',
+                      '动态',
                       style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                   Text(
-                    '进入空间',
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    '查看全部',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                   ),
                   const SizedBox(width: 2),
                   Icon(Icons.chevron_right, color: Colors.grey[400]),
@@ -283,7 +388,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
           if (_isLoadingMoments ||
               _momentLoadFailed ||
               _latestVisibleMoment != null)
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
           if (_isLoadingMoments)
             const SizedBox(
               height: 72,
@@ -303,8 +408,8 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
                 ),
                 itemCount: previewImages.length,
                 itemBuilder: (context, index) =>
@@ -323,7 +428,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                         ),
                         child: ClipRRect(
                           key: ValueKey('friend_moment_preview_image_$index'),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                           child: Image(
                             image: AppImageCache.provider(previewImages[index]),
                             fit: BoxFit.cover,
@@ -344,7 +449,11 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                 _latestVisibleMoment!.content,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.grey[700], height: 1.4),
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                  height: 1.4,
+                ),
               ),
             ],
             if (previewImages.isEmpty && _latestVisibleMoment!.content.isEmpty)
@@ -395,40 +504,37 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
     }
     return Row(
       children: [
-        // 音视频通信按钮
         Expanded(
           child: SizedBox(
-            height: 44,
-            child: ElevatedButton.icon(
+            height: 50,
+            child: OutlinedButton.icon(
               onPressed: () => _startVideoCall(),
-              icon: Icon(Icons.video_call, size: 20),
-              label: Text('音视频通信'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
+              icon: const Icon(Icons.videocam_outlined, size: 22),
+              label: const Text('视频通话'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: Color(0xFFB8B8B8)),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
             ),
           ),
         ),
-
-        SizedBox(width: 16),
-
-        // 发送信息按钮
+        const SizedBox(width: 14),
         Expanded(
           child: SizedBox(
-            height: 44,
+            height: 50,
             child: ElevatedButton.icon(
               onPressed: () => _sendMessage(),
-              icon: Icon(Icons.message, size: 20),
-              label: Text('发送信息'),
+              icon: const Icon(Icons.chat_bubble_outline, size: 20),
+              label: const Text('发消息'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
+                elevation: 0,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
             ),
@@ -549,11 +655,11 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
       final initial = nickname.trim().isEmpty
           ? '?'
           : nickname.trim().characters.first;
-      return CircleAvatar(radius: 30, child: Text(initial));
+      return CircleAvatar(radius: 48, child: Text(initial));
     }
 
     return CircleAvatar(
-      radius: 30,
+      radius: 48,
       backgroundImage: AppImageCache.provider(avatarUrl),
     );
   }
