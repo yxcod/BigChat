@@ -29,11 +29,23 @@ String videoExtension(String path) {
   return 'mp4';
 }
 
+String videoOwnerFromName(String value, {required String fallbackOwner}) {
+  final uri = Uri.tryParse(value);
+  final fileName =
+      uri?.queryParameters['videoName'] ??
+      (uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : value);
+  final separator = fileName.indexOf('_');
+  if (separator <= 0) return fallbackOwner;
+  final owner = fileName.substring(0, separator).trim();
+  return owner.isEmpty ? fallbackOwner : owner;
+}
+
 Future<String> videoDownloadPath(String url) async {
   final directory = await getApplicationDocumentsDirectory();
   final videoDirectory = Directory('${directory.path}/downloaded_videos');
-  if (!await videoDirectory.exists())
+  if (!await videoDirectory.exists()) {
     await videoDirectory.create(recursive: true);
+  }
   final uri = Uri.parse(url);
   final requestedName = uri.queryParameters['videoName'];
   final fallback = uri.pathSegments.isEmpty
@@ -44,4 +56,57 @@ Future<String> videoDownloadPath(String url) async {
     '_',
   );
   return '${videoDirectory.path}/$safeName';
+}
+
+Future<String> videoCachePath(String url, {Directory? rootDirectory}) async {
+  final directory = rootDirectory ?? await getApplicationSupportDirectory();
+  final videoDirectory = Directory('${directory.path}/chat_video_cache');
+  if (!await videoDirectory.exists()) {
+    await videoDirectory.create(recursive: true);
+  }
+  final uri = Uri.parse(url);
+  final owner = uri.queryParameters['userName'] ?? 'unknown';
+  final requestedName = uri.queryParameters['videoName'];
+  final fallback = uri.pathSegments.isEmpty
+      ? 'video.mp4'
+      : uri.pathSegments.last;
+  final safeName = '${owner}_${requestedName ?? fallback}'.replaceAll(
+    RegExp(r'[^A-Za-z0-9._-]'),
+    '_',
+  );
+  return '${videoDirectory.path}/$safeName';
+}
+
+Future<String?> cachedVideoPath(String url, {Directory? rootDirectory}) async {
+  final path = await videoCachePath(url, rootDirectory: rootDirectory);
+  final file = File(path);
+  if (!await file.exists() || await file.length() <= 0) return null;
+  return path;
+}
+
+Future<String?> cacheUploadedVideo(
+  String localPath,
+  String remoteUrl, {
+  Directory? rootDirectory,
+}) async {
+  try {
+    final source = File(localPath);
+    if (!await source.exists() || await source.length() <= 0) return null;
+    final destinationPath = await videoCachePath(
+      remoteUrl,
+      rootDirectory: rootDirectory,
+    );
+    if (source.absolute.path == File(destinationPath).absolute.path) {
+      return destinationPath;
+    }
+    final temporary = File('$destinationPath.part');
+    if (await temporary.exists()) await temporary.delete();
+    await source.copy(temporary.path);
+    final destination = File(destinationPath);
+    if (await destination.exists()) await destination.delete();
+    await temporary.rename(destinationPath);
+    return destinationPath;
+  } catch (_) {
+    return null;
+  }
 }

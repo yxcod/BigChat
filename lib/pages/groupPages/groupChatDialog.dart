@@ -18,6 +18,7 @@ import '../../utils/http.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../shared/widgets/chat_more_actions_sheet.dart';
+import '../../shared/widgets/chat_composer_panel.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../api/groupChatRecordAPI.dart';
 import '../../utils/user_profile_navigator.dart';
@@ -632,6 +633,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             });
           }
         },
+      );
+      unawaited(
+        cacheUploadedVideo(
+          video.path,
+          global.getVideoURL(global.userName ?? '', videoName),
+        ),
       );
       if (mounted) setState(() => _videoMessageProgress[msgId] = 1);
       final queued = _sendWebSocketMessage(
@@ -1399,24 +1406,14 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                 ),
               ),
               const Divider(height: 1, color: chatChromeDividerColor),
-              //下方的编辑输入框
-              Container(
-                decoration: const BoxDecoration(
-                  color: chatChromeBackgroundColor,
+              ChatComposerPanel(
+                composer: _buildTextComposer(),
+                moreActionsVisible: _isMoreActionsVisible,
+                moreActions: ChatMoreActionsSheet(
+                  onSelected: (action) {
+                    unawaited(_handleMoreAction(action));
+                  },
                 ),
-                child: _buildTextComposer(),
-              ),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: _isMoreActionsVisible
-                    ? ChatMoreActionsSheet(
-                        onSelected: (action) {
-                          unawaited(_handleMoreAction(action));
-                        },
-                      )
-                    : const SizedBox.shrink(),
               ),
             ],
           ),
@@ -1429,10 +1426,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     return IconTheme(
       data: IconThemeData(color: Theme.of(context).colorScheme.secondary),
       child: Container(
-        margin: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         child: Row(
           children: [
-            Flexible(
+            Expanded(
               child: HoldToRecordField(
                 controller: _textController,
                 focusNode: _textFieldFocusNode,
@@ -2059,7 +2056,11 @@ class GroupMessageBubble extends StatelessWidget {
                     source:
                         localVideoPath ??
                         globalUtil.getVideoURL(
-                          message.senderId ?? globalUtil.userName ?? '',
+                          videoOwnerFromName(
+                            message.content,
+                            fallbackOwner:
+                                message.senderId ?? globalUtil.userName ?? '',
+                          ),
                           message.content,
                         ),
                     isLocal: localVideoPath != null,

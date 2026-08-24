@@ -16,6 +16,8 @@ class HoldToRecordField extends StatefulWidget {
     required this.onRecorded,
     required this.onError,
     this.enabled = true,
+    this.recorder,
+    this.holdDuration = const Duration(milliseconds: 420),
   });
 
   final TextEditingController controller;
@@ -25,14 +27,17 @@ class HoldToRecordField extends StatefulWidget {
   final Future<void> Function(VoiceRecordingResult recording) onRecorded;
   final ValueChanged<String> onError;
   final bool enabled;
+  final VoiceRecorderController? recorder;
+  final Duration holdDuration;
 
   @override
   State<HoldToRecordField> createState() => _HoldToRecordFieldState();
 }
 
 class _HoldToRecordFieldState extends State<HoldToRecordField> {
-  final VoiceRecorder _recorder = VoiceRecorder();
+  late final VoiceRecorderController _recorder;
   Timer? _timer;
+  Timer? _holdTimer;
   DateTime? _startedAt;
   double? _startY;
   int _elapsedSeconds = 0;
@@ -41,13 +46,49 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
   bool _starting = false;
   bool _pointerHeld = false;
 
-  Future<void> _start(LongPressStartDetails details) async {
+  @override
+  void initState() {
+    super.initState();
+    _recorder = widget.recorder ?? VoiceRecorder();
+  }
+
+  void _pointerDown(PointerDownEvent event) {
+    if (!widget.enabled || _recording || _starting) return;
+    _holdTimer?.cancel();
+    _pointerHeld = true;
+    _startY = event.position.dy;
+    _holdTimer = Timer(widget.holdDuration, () {
+      if (_pointerHeld) unawaited(_start(event.position.dy));
+    });
+  }
+
+  void _pointerMove(PointerMoveEvent event) {
+    if (!_recording || _startY == null) return;
+    final shouldCancel = _startY! - event.position.dy > 70;
+    if (shouldCancel != _cancelRequested) {
+      HapticFeedback.selectionClick();
+      setState(() => _cancelRequested = shouldCancel);
+    }
+  }
+
+  void _pointerUp() {
+    _holdTimer?.cancel();
+    _pointerHeld = false;
+    if (_recording) unawaited(_finish(send: !_cancelRequested));
+  }
+
+  void _pointerCancel() {
+    _holdTimer?.cancel();
+    _pointerHeld = false;
+    if (_recording) unawaited(_finish(send: false));
+  }
+
+  Future<void> _start(double globalY) async {
     if (!widget.enabled || _recording || _starting) return;
     widget.focusNode.unfocus();
     setState(() {
       _starting = true;
-      _pointerHeld = true;
-      _startY = details.globalPosition.dy;
+      _startY = globalY;
     });
     try {
       await _recorder.start();
@@ -84,15 +125,6 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
     }
   }
 
-  void _move(LongPressMoveUpdateDetails details) {
-    if (!_recording || _startY == null) return;
-    final shouldCancel = _startY! - details.globalPosition.dy > 70;
-    if (shouldCancel != _cancelRequested) {
-      HapticFeedback.selectionClick();
-      setState(() => _cancelRequested = shouldCancel);
-    }
-  }
-
   Future<void> _finish({required bool send}) async {
     _pointerHeld = false;
     if (!_recording) return;
@@ -120,6 +152,7 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
 
   @override
   void dispose() {
+    _holdTimer?.cancel();
     _timer?.cancel();
     unawaited(_disposeRecorder());
     super.dispose();
@@ -132,17 +165,15 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Listener(
       behavior: HitTestBehavior.opaque,
-      onLongPressStart: _start,
-      onLongPressMoveUpdate: _move,
-      onLongPressEnd: (_) {
-        _pointerHeld = false;
-        unawaited(_finish(send: !_cancelRequested));
-      },
+      onPointerDown: _pointerDown,
+      onPointerMove: _pointerMove,
+      onPointerUp: (_) => _pointerUp(),
+      onPointerCancel: (_) => _pointerCancel(),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        height: 42,
+        height: 46,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: _cancelRequested
@@ -175,7 +206,7 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
             : TextField(
                 controller: widget.controller,
                 focusNode: widget.focusNode,
-                enabled: widget.enabled && !_starting,
+                enabled: widget.enabled && !_starting && !_recording,
                 onChanged: widget.onChanged,
                 onSubmitted: widget.onSubmitted,
                 onTap: widget.focusNode.requestFocus,

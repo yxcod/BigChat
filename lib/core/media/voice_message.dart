@@ -61,11 +61,19 @@ class VoiceRecordingResult {
   final int durationMs;
 }
 
-class VoiceRecorder {
+abstract interface class VoiceRecorderController {
+  Future<void> start();
+  Future<VoiceRecordingResult?> stop();
+  Future<void> cancel();
+  Future<void> dispose();
+}
+
+class VoiceRecorder implements VoiceRecorderController {
   final AudioRecorder _recorder = AudioRecorder();
   DateTime? _startedAt;
   String? _path;
 
+  @override
   Future<void> start() async {
     if (!await _recorder.hasPermission()) {
       throw Exception('未获得麦克风权限');
@@ -89,6 +97,7 @@ class VoiceRecorder {
     _startedAt = DateTime.now();
   }
 
+  @override
   Future<VoiceRecordingResult?> stop() async {
     final startedAt = _startedAt;
     final recordedPath = await _recorder.stop();
@@ -101,6 +110,7 @@ class VoiceRecorder {
     );
   }
 
+  @override
   Future<void> cancel() async {
     final path = _path;
     await _recorder.cancel();
@@ -112,5 +122,6 @@ class VoiceRecorder {
     }
   }
 
+  @override
   Future<void> dispose() => _recorder.dispose();
 }

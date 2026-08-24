@@ -18,6 +18,7 @@ import '../utils/presence_event.dart';
 import '../core/cache/app_image_cache.dart';
 import '../shared/widgets/app_back_button.dart';
 import '../shared/widgets/chat_more_actions_sheet.dart';
+import '../shared/widgets/chat_composer_panel.dart';
 import '../shared/widgets/fullscreen_image_viewer.dart';
 import '../shared/utils/chat_scroll_util.dart';
 import '../shared/widgets/chat_background.dart';
@@ -327,6 +328,12 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
             });
           }
         },
+      );
+      unawaited(
+        cacheUploadedVideo(
+          video.path,
+          global.getVideoURL(global.userName ?? '', videoName),
+        ),
       );
       if (mounted) setState(() => _videoMessageProgress[msgId] = 1);
       final queued = _sendWebSocketMessage(
@@ -1105,24 +1112,14 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                 ),
               ),
               const Divider(height: 1, color: chatChromeDividerColor),
-              //下方的编辑输入框
-              Container(
-                decoration: const BoxDecoration(
-                  color: chatChromeBackgroundColor,
+              ChatComposerPanel(
+                composer: _buildTextComposer(),
+                moreActionsVisible: _isMoreActionsVisible,
+                moreActions: ChatMoreActionsSheet(
+                  onSelected: (action) {
+                    unawaited(_handleMoreAction(action));
+                  },
                 ),
-                child: _buildTextComposer(),
-              ),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: _isMoreActionsVisible
-                    ? ChatMoreActionsSheet(
-                        onSelected: (action) {
-                          unawaited(_handleMoreAction(action));
-                        },
-                      )
-                    : const SizedBox.shrink(),
               ),
             ],
           ),
@@ -1135,10 +1132,10 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     return IconTheme(
       data: IconThemeData(color: Theme.of(context).colorScheme.secondary),
       child: Container(
-        margin: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         child: Row(
           children: [
-            Flexible(
+            Expanded(
               child: HoldToRecordField(
                 controller: _textController,
                 focusNode: _textFieldFocusNode,
@@ -1842,9 +1839,13 @@ class MessageBubble extends StatelessWidget {
   }
 
   String _resolveVideoUrl() {
-    final owner = message.isMe
+    final fallbackOwner = message.isMe
         ? (globalUtil.userName ?? '')
         : (message.senderId ?? friendInfo?.userName ?? '');
+    final owner = videoOwnerFromName(
+      message.content,
+      fallbackOwner: fallbackOwner,
+    );
     return globalUtil.getVideoURL(owner, message.content);
   }
 

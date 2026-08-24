@@ -33,6 +33,8 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
   VideoPlayerController? _controller;
   Object? _previewError;
   int _loadGeneration = 0;
+  String? _playbackSource;
+  bool _playbackIsLocal = false;
 
   bool get _isUploading =>
       widget.uploadProgress != null && widget.uploadProgress! < 1;
@@ -57,6 +59,8 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
     final previous = _controller;
     _controller = null;
     _previewError = null;
+    _playbackSource = null;
+    _playbackIsLocal = false;
     if (mounted) setState(() {});
     await previous?.dispose();
     if (!mounted || generation != _loadGeneration) return;
@@ -69,9 +73,22 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
       return;
     }
 
-    final controller = widget.isLocal
-        ? VideoPlayerController.file(File(widget.source))
-        : VideoPlayerController.networkUrl(Uri.parse(widget.source));
+    var resolvedSource = widget.source;
+    var resolvedIsLocal = widget.isLocal;
+    if (!resolvedIsLocal) {
+      final cachedPath = await cachedVideoPath(widget.source);
+      if (!mounted || generation != _loadGeneration) return;
+      if (cachedPath != null) {
+        resolvedSource = cachedPath;
+        resolvedIsLocal = true;
+      }
+    }
+
+    _playbackSource = resolvedSource;
+    _playbackIsLocal = resolvedIsLocal;
+    final controller = resolvedIsLocal
+        ? VideoPlayerController.file(File(resolvedSource))
+        : VideoPlayerController.networkUrl(Uri.parse(resolvedSource));
     _controller = controller;
     try {
       await controller.initialize();
@@ -98,10 +115,11 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
 
   void _openPlayer() {
     if (_isUploading || widget.uploadFailed) return;
+    final source = _playbackSource ?? widget.source;
+    final isLocal = _playbackSource == null ? widget.isLocal : _playbackIsLocal;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            AppVideoPlayerPage(source: widget.source, isLocal: widget.isLocal),
+        builder: (_) => AppVideoPlayerPage(source: source, isLocal: isLocal),
       ),
     );
   }
@@ -244,7 +262,8 @@ class AppVideoPlayerPage extends StatefulWidget {
 }
 
 class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
-  late final VideoPlayerController _controller;
+  VideoPlayerController? _controller;
+  final CancelToken _cacheDownloadCancelToken = CancelToken();
   bool _controlsVisible = true;
   bool _downloading = false;
   double? _downloadProgress;
@@ -253,24 +272,96 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
   @override
   void initState() {
     super.initState();
-    _controller = widget.isLocal
-        ? VideoPlayerController.file(File(widget.source))
-        : VideoPlayerController.networkUrl(Uri.parse(widget.source));
-    _controller
-        .initialize()
-        .then((_) {
-          if (!mounted) return;
-          _controller.play();
-          setState(() {});
-        })
-        .catchError((Object error) {
-          if (mounted) setState(() => _error = error);
-        });
+    _initializePlayer();
+  }
+
+  Future<void> _initializePlayer() async {
+    try {
+      if (widget.isLocal) {
+        await _useController(VideoPlayerController.file(File(widget.source)));
+        return;
+      }
+
+      final cachedPath = await cachedVideoPath(widget.source);
+      if (!mounted) return;
+      if (cachedPath != null) {
+        await _useController(VideoPlayerController.file(File(cachedPath)));
+        return;
+      }
+
+      try {
+        await _useController(
+          VideoPlayerController.networkUrl(Uri.parse(widget.source)),
+        );
+      } catch (networkError) {
+        if (!mounted) return;
+        await _downloadToCacheAndPlay();
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = error);
+    }
+  }
+
+  Future<void> _useController(VideoPlayerController controller) async {
+    final previous = _controller;
+    _controller = controller;
+    await previous?.dispose();
+    try {
+      await controller.initialize();
+      if (!mounted || _controller != controller) {
+        await controller.dispose();
+        return;
+      }
+      await controller.play();
+      setState(() {
+        _error = null;
+        _downloading = false;
+        _downloadProgress = null;
+      });
+    } catch (_) {
+      if (_controller == controller) _controller = null;
+      await controller.dispose();
+      rethrow;
+    }
+  }
+
+  Future<void> _downloadToCacheAndPlay() async {
+    setState(() {
+      _downloading = true;
+      _downloadProgress = null;
+    });
+    final cachePath = await videoCachePath(widget.source);
+    final temporary = File('$cachePath.part');
+    if (await temporary.exists()) await temporary.delete();
+    try {
+      await HttpUtil().downloadFile(
+        widget.source,
+        temporary.path,
+        cancelToken: _cacheDownloadCancelToken,
+        onReceiveProgress: (received, total) {
+          if (mounted && total > 0) {
+            setState(() => _downloadProgress = received / total);
+          }
+        },
+      );
+      if (!await temporary.exists() || await temporary.length() <= 0) {
+        throw StateError('下载的视频文件为空');
+      }
+      final cached = File(cachePath);
+      if (await cached.exists()) await cached.delete();
+      await temporary.rename(cachePath);
+      if (!mounted) return;
+      await _useController(VideoPlayerController.file(File(cachePath)));
+    } finally {
+      if (await temporary.exists()) await temporary.delete();
+      if (mounted) setState(() => _downloading = false);
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _cacheDownloadCancelToken.cancel('视频页面已关闭');
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -315,7 +406,8 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final initialized = _controller.value.isInitialized;
+    final controller = _controller;
+    final initialized = controller?.value.isInitialized ?? false;
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -328,8 +420,8 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
               if (initialized)
                 Center(
                   child: AspectRatio(
-                    aspectRatio: _controller.value.aspectRatio,
-                    child: VideoPlayer(_controller),
+                    aspectRatio: controller!.value.aspectRatio,
+                    child: VideoPlayer(controller),
                   ),
                 )
               else if (_error != null)
@@ -371,12 +463,12 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
                     child: IconButton.filledTonal(
                       iconSize: 42,
                       onPressed: () => setState(
-                        () => _controller.value.isPlaying
-                            ? _controller.pause()
-                            : _controller.play(),
+                        () => controller.value.isPlaying
+                            ? controller.pause()
+                            : controller.play(),
                       ),
                       icon: Icon(
-                        _controller.value.isPlaying
+                        controller!.value.isPlaying
                             ? Icons.pause_rounded
                             : Icons.play_arrow_rounded,
                       ),
@@ -388,7 +480,7 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
                     right: 16,
                     bottom: 16,
                     child: ValueListenableBuilder<VideoPlayerValue>(
-                      valueListenable: _controller,
+                      valueListenable: controller!,
                       builder: (context, value, child) => Row(
                         children: [
                           Text(
@@ -400,7 +492,7 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
                           ),
                           Expanded(
                             child: VideoProgressIndicator(
-                              _controller,
+                              controller,
                               allowScrubbing: true,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
@@ -420,7 +512,7 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
                           ),
                           IconButton(
                             onPressed: () => setState(
-                              () => _controller.setVolume(
+                              () => controller.setVolume(
                                 value.volume == 0 ? 1 : 0,
                               ),
                             ),
