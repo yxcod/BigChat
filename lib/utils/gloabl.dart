@@ -528,6 +528,19 @@ class GlobalUtil {
     );
   }
 
+  bool updateCachedFriendRemark(String userName, String remark) {
+    final normalizedUserName = userName.trim();
+    final friendList = _userInfoModel?.friendListData;
+    if (normalizedUserName.isEmpty || friendList == null) return false;
+    for (final friend in friendList) {
+      if (friend.userName == normalizedUserName) {
+        friend.remarks = remark.trim();
+        return true;
+      }
+    }
+    return false;
+  }
+
   // 打开相册选择图片并上传头像
   Future<Uint8List?> selectAndUploadAvatar(String imageName) async {
     try {

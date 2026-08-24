@@ -148,6 +148,7 @@ class _FriendsPage extends State<Friendspage>
           final newFriends = userInfo.friendListData!.map((f) {
             final avatarName = f.avatar ?? '';
             final userName = f.userName ?? '';
+            final remark = f.remarks?.trim() ?? '';
             // 使用 globalUtil.getImageURL 生成头像 URL
             String avatarURL = _globalUtil.getImageURL(userName, avatarName);
             final previousAvatar = previousAvatars[userName] ?? '';
@@ -160,9 +161,8 @@ class _FriendsPage extends State<Friendspage>
             f.isOnline = isOnline;
             return Friend(
               userName: userName,
-              name: f.remarks?.isNotEmpty == true
-                  ? f.remarks!
-                  : f.nickName ?? '',
+              remark: remark,
+              name: remark.isNotEmpty ? remark : f.nickName ?? '',
               avatar: avatarName.isNotEmpty ? avatarURL : '👤',
               nickName: f.nickName ?? '',
               previousAvatar: previousAvatars[userName] ?? '',
@@ -218,19 +218,37 @@ class _FriendsPage extends State<Friendspage>
     return result;
   }
 
-  void _openFriendDetail(Friend friend) {
-    Navigator.pushNamed(
+  Future<void> _openFriendDetail(Friend friend) async {
+    await Navigator.pushNamed(
       context,
       '/friendDetailPage',
       arguments: {
         'avatar': friend.avatar,
-        'remark': friend.name,
+        'remark': friend.remark,
         'nickname': friend.nickName,
         'userName': friend.userName,
         'signature': friend.signature,
         'isFriend': true,
       },
     );
+    if (!mounted) return;
+
+    final cachedFriend = _globalUtil.userInfoModel.friendListData
+        ?.where((item) => item.userName == friend.userName)
+        .firstOrNull;
+    if (cachedFriend != null) {
+      final latestRemark = cachedFriend.remarks?.trim() ?? '';
+      setState(() {
+        friends = friends.map((item) {
+          if (item.userName != friend.userName) return item;
+          return item.copyWith(
+            remark: latestRemark,
+            name: latestRemark.isNotEmpty ? latestRemark : item.nickName,
+          );
+        }).toList();
+      });
+    }
+    await _fetchFriendList();
   }
 
   Widget _buildHighlightedText(String text, {required TextStyle normalStyle}) {
@@ -518,6 +536,7 @@ class _FriendsPage extends State<Friendspage>
 // 好友数据模型
 class Friend {
   final String userName;
+  final String remark;
   final String name;
   final String nickName;
   final String avatar;
@@ -528,6 +547,7 @@ class Friend {
 
   Friend({
     required this.userName,
+    required this.remark,
     required this.name,
     required this.nickName,
     required this.avatar,
@@ -537,10 +557,11 @@ class Friend {
     required this.isOnline,
   });
 
-  Friend copyWith({bool? isOnline}) {
+  Friend copyWith({bool? isOnline, String? remark, String? name}) {
     return Friend(
       userName: userName,
-      name: name,
+      remark: remark ?? this.remark,
+      name: name ?? this.name,
       nickName: nickName,
       avatar: avatar,
       previousAvatar: previousAvatar,

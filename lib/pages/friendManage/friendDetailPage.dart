@@ -463,7 +463,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                 // 获取当前用户和好友的UserName
                 String currentUserName = _globalUtil.userName ?? '';
                 String friendUserName = widget.friendData['userName'] ?? '';
-                String newRemark = remarkController.text;
+                String newRemark = remarkController.text.trim();
 
                 if (currentUserName.isEmpty || friendUserName.isEmpty) {
                   _showMessage('获取用户信息失败');
@@ -477,9 +477,14 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                     friendUserName,
                     newRemark,
                   );
+                  if (!mounted || !context.mounted) return;
 
                   // 检查返回结果
                   if (response['code'] == 100) {
+                    _globalUtil.updateCachedFriendRemark(
+                      friendUserName,
+                      newRemark,
+                    );
                     setState(() {
                       widget.friendData['remark'] = newRemark;
                     });

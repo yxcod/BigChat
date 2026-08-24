@@ -1094,6 +1094,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                       message: message,
                       friendInfo: friendInfo,
                       currentUserAvatar: globalUtil.userInfoModel.avatar,
+                      onProfileUpdated: () {
+                        if (mounted) _fetchFriendInfo();
+                      },
                       localVideoPath: _localVideoPaths[message.msgId],
                       videoUploadProgress: _videoMessageProgress[message.msgId],
                       videoUploadFailed: _failedVideoMessageIds.contains(
@@ -1398,6 +1401,7 @@ class MessageBubble extends StatelessWidget {
   final Message message;
   final FriendInfoModel? friendInfo;
   final String? currentUserAvatar;
+  final VoidCallback? onProfileUpdated;
   final String? localVideoPath;
   final double? videoUploadProgress;
   final bool videoUploadFailed;
@@ -1409,6 +1413,7 @@ class MessageBubble extends StatelessWidget {
     required this.message,
     required this.friendInfo,
     required this.currentUserAvatar,
+    this.onProfileUpdated,
     this.localVideoPath,
     this.videoUploadProgress,
     this.videoUploadFailed = false,
@@ -1786,6 +1791,7 @@ class MessageBubble extends StatelessWidget {
               userName: userName,
               fallbackNickname: friendInfo?.nickName,
               fallbackAvatarName: avatarName,
+              onProfileUpdated: onProfileUpdated,
             ),
       child: Padding(
         padding: const EdgeInsets.all(2),

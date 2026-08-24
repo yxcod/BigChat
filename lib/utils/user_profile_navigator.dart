@@ -9,6 +9,7 @@ Future<void> openUserProfile(
   required String userName,
   String? fallbackNickname,
   String? fallbackAvatarName,
+  VoidCallback? onProfileUpdated,
 }) async {
   final normalizedUserName = userName.trim();
   if (normalizedUserName.isEmpty) {
@@ -60,7 +61,7 @@ Future<void> openUserProfile(
     return;
   }
 
-  Navigator.pushNamed(
+  await Navigator.pushNamed(
     context,
     '/friendDetailPage',
     arguments: {
@@ -72,4 +73,5 @@ Future<void> openUserProfile(
       'isFriend': friendInfo != null,
     },
   );
+  if (context.mounted) onProfileUpdated?.call();
 }
