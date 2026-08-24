@@ -2203,8 +2203,6 @@ class GroupMessageBubble extends StatelessWidget {
                     : CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (message.quote != null)
-                    QuotedMessageView(quote: message.quote!),
                   GestureDetector(
                     behavior: HitTestBehavior.translucent,
                     onLongPressStart: message.messageType == MessageType.audio
@@ -2317,19 +2315,31 @@ class GroupMessageBubble extends StatelessWidget {
 
   // 构建文本气泡
   Widget _buildTextBubble(BuildContext context) {
+    final bubbleColor = message.isMe ? Colors.blue[100]! : Colors.white;
+    final borderRadius = BorderRadius.only(
+      topLeft: Radius.circular(16),
+      topRight: Radius.circular(16),
+      bottomLeft: message.isMe ? Radius.circular(16) : Radius.circular(4),
+      bottomRight: message.isMe ? Radius.circular(4) : Radius.circular(16),
+    );
+    if (message.quote != null) {
+      return QuotedTextMessageBubble(
+        quote: message.quote!,
+        text: message.content,
+        bubbleColor: bubbleColor,
+        textColor: Colors.black,
+        borderRadius: borderRadius,
+        maxWidth: MediaQuery.of(context).size.width * 0.6,
+      );
+    }
     return Container(
       constraints: BoxConstraints(
         maxWidth: MediaQuery.of(context).size.width * 0.6,
       ),
       padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
       decoration: BoxDecoration(
-        color: message.isMe ? Colors.blue[100] : Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(16),
-          topRight: Radius.circular(16),
-          bottomLeft: message.isMe ? Radius.circular(16) : Radius.circular(4),
-          bottomRight: message.isMe ? Radius.circular(4) : Radius.circular(16),
-        ),
+        color: bubbleColor,
+        borderRadius: borderRadius,
         boxShadow: [
           BoxShadow(
             color: Colors.grey.withOpacity(0.2),

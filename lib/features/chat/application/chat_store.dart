@@ -70,7 +70,10 @@ class ChatStore {
         message.msgId: message,
     };
     for (final message in messages) {
-      merged[message.msgId] = message;
+      final local = merged[message.msgId];
+      merged[message.msgId] = message.quote == null && local?.quote != null
+          ? message.withQuote(local!.quote!)
+          : message;
     }
     final result = merged.values.toList()
       ..sort((left, right) {

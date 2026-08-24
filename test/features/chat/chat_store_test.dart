@@ -82,6 +82,22 @@ void main() {
       ]);
     });
 
+    test('server refresh cannot strip a local quoted reply', () {
+      final store = ChatStore();
+      const quote = MessageQuote(
+        messageId: 8,
+        senderId: 'alice',
+        senderLabel: 'Alice',
+        preview: 'original',
+        messageType: MessageType.text,
+      );
+      store.addMessage('alice', _message(id: 9, isMe: true).withQuote(quote));
+
+      store.mergeMessages('alice', [_message(id: 9, isMe: true)]);
+
+      expect(store.messages('alice').single.quote?.preview, 'original');
+    });
+
     test('reconciles temporary group id and delivery status', () {
       final store = ChatStore();
       final outgoing = _message(id: 10, isMe: true);

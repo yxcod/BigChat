@@ -2106,9 +2106,6 @@ class MessageBubble extends StatelessWidget {
                     ],
                   ),
 
-                if (message.quote != null)
-                  QuotedMessageView(quote: message.quote!),
-
                 // 消息气泡
                 GestureDetector(
                   behavior: HitTestBehavior.translucent,
@@ -2155,8 +2152,15 @@ class MessageBubble extends StatelessWidget {
                             child: _buildImageMessage(),
                           ),
                         )
-                      : // 文本消息：使用SelectableText实现长按全选和自定义菜单
-                        Container(
+                      : message.quote != null
+                      ? QuotedTextMessageBubble(
+                          quote: message.quote!,
+                          text: message.content,
+                          bubbleColor: bubbleColor!,
+                          textColor: textColor,
+                          borderRadius: borderRadius,
+                        )
+                      : Container(
                           margin: EdgeInsets.symmetric(vertical: 2.0),
                           padding: EdgeInsets.all(12.0),
                           decoration: BoxDecoration(

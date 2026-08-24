@@ -222,10 +222,19 @@ class GlobalUtil {
     String conversationId,
     List<Message> messages,
   ) async {
-    _chatStore.replaceMessages(
-      conversationId,
-      _filterHiddenMessages(conversationId, messages),
-    );
+    final localQuotes = <int, MessageQuote>{
+      for (final message in _chatStore.messages(conversationId))
+        if (message.quote != null) message.msgId: message.quote!,
+    };
+    final visibleMessages = _filterHiddenMessages(conversationId, messages).map(
+      (message) {
+        final localQuote = localQuotes[message.msgId];
+        return message.quote == null && localQuote != null
+            ? message.withQuote(localQuote)
+            : message;
+      },
+    ).toList();
+    _chatStore.replaceMessages(conversationId, visibleMessages);
     await persistChatRecords(conversationId);
   }
 

@@ -90,3 +90,93 @@ class QuoteComposerPreview extends StatelessWidget {
     );
   }
 }
+
+class QuotedTextMessageBubble extends StatelessWidget {
+  const QuotedTextMessageBubble({
+    super.key,
+    required this.quote,
+    required this.text,
+    required this.bubbleColor,
+    required this.textColor,
+    required this.borderRadius,
+    this.maxWidth,
+  });
+
+  final MessageQuote quote;
+  final String text;
+  final Color bubbleColor;
+  final Color textColor;
+  final BorderRadius borderRadius;
+  final double? maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('quoted_text_message_bubble'),
+      constraints: BoxConstraints(maxWidth: maxWidth ?? 280),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: bubbleColor,
+        borderRadius: borderRadius,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(7),
+              border: Border(
+                left: BorderSide(
+                  color: textColor.withValues(alpha: 0.58),
+                  width: 3,
+                ),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  quote.senderLabel.isEmpty
+                      ? quote.senderId
+                      : quote.senderLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: textColor.withValues(alpha: 0.82),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  quote.preview,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: textColor.withValues(alpha: 0.74),
+                    fontSize: 13,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(text, style: TextStyle(color: textColor, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+}

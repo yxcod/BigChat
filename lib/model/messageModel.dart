@@ -173,6 +173,22 @@ class Message {
     this.quote,
   }) : timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch;
 
+  Message withQuote(MessageQuote value) {
+    return Message(
+      msgId: msgId,
+      content: content,
+      isMe: isMe,
+      time: time,
+      isRead: isRead,
+      conversationId: conversationId,
+      messageType: messageType,
+      status: status,
+      senderId: senderId,
+      timestamp: timestamp,
+      quote: value,
+    );
+  }
+
   // 序列化方法：将Message对象转换为Map<String, dynamic>
   Map<String, dynamic> toJSON() {
     return {
