@@ -64,6 +64,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   double _videoUploadProgress = 0;
   CancelToken? _imageUploadCancelToken;
   CancelToken? _videoUploadCancelToken;
+  final Map<int, String> _localVideoPaths = {};
+  final Map<int, double> _videoMessageProgress = {};
+  final Set<int> _failedVideoMessageIds = {};
   CancelToken? _audioUploadCancelToken;
   bool _isUploadingAudio = false;
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
@@ -555,32 +558,18 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   Future<void> _pickVideo() async {
     if (_isUploadingVideo || _isUploadingImage) return;
+    Message? pendingMessage;
+    int? pendingMessageId;
     try {
       final video = await ImagePicker().pickVideo(source: ImageSource.gallery);
       if (video == null) return;
       await validateVideoFile(video.path);
-      if (!_wsManager.isConnected) throw Exception('当前网络未连接，请稍后重试');
-      if (mounted)
-        setState(() {
-          _isUploadingVideo = true;
-          _videoUploadProgress = 0;
-        });
-      final cancelToken = CancelToken();
-      _videoUploadCancelToken = cancelToken;
       final global = GlobalUtil();
       final msgId = DateTime.now().millisecondsSinceEpoch;
+      pendingMessageId = msgId;
       final videoName =
           '${global.userName}_${widget.groupId}_$msgId.${videoExtension(video.path)}';
-      await HttpUtil().uploadVideoFile(
-        videoName,
-        video.path,
-        cancelToken: cancelToken,
-        onSendProgress: (sent, total) {
-          if (mounted && total > 0)
-            setState(() => _videoUploadProgress = sent / total);
-        },
-      );
-      final message = Message(
+      pendingMessage = Message(
         msgId: msgId,
         content: videoName,
         isMe: true,
@@ -591,23 +580,61 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         status: MessageStatus.sending,
         senderId: global.userName,
       );
-      global.addMessage(_conversationKey, message);
+      global.addMessage(_conversationKey, pendingMessage);
       _initializeOutgoingReadStatus(msgId);
+      if (mounted) {
+        setState(() {
+          _isUploadingVideo = true;
+          _videoUploadProgress = 0;
+          _localVideoPaths[msgId] = video.path;
+          _videoMessageProgress[msgId] = 0;
+          _failedVideoMessageIds.remove(msgId);
+        });
+        _scrollToBottom();
+      }
+
+      if (!_wsManager.isConnected) throw Exception('当前网络未连接，请稍后重试');
+      final cancelToken = CancelToken();
+      _videoUploadCancelToken = cancelToken;
+      await HttpUtil().uploadVideoFile(
+        videoName,
+        video.path,
+        cancelToken: cancelToken,
+        onSendProgress: (sent, total) {
+          if (mounted && total > 0) {
+            final progress = (sent / total).clamp(0.0, 1.0);
+            setState(() {
+              _videoUploadProgress = progress;
+              _videoMessageProgress[msgId] = progress;
+            });
+          }
+        },
+      );
+      if (mounted) setState(() => _videoMessageProgress[msgId] = 1);
       final queued = _sendWebSocketMessage(
         msgId: msgId,
         content: videoName,
         receiver: widget.groupId,
-        conversationId: message.conversationId,
+        conversationId: pendingMessage.conversationId,
         messageType: MessageType.video,
       );
-      if (!queued) message.status = MessageStatus.failed;
-      if (mounted) setState(() {});
+      if (!queued) {
+        throw Exception('消息发送失败，请检查网络连接');
+      }
       _scrollToBottom();
     } catch (error) {
-      if (mounted)
+      if (pendingMessage != null) pendingMessage.status = MessageStatus.failed;
+      if (mounted) {
+        if (pendingMessageId != null) {
+          setState(() {
+            _videoMessageProgress.remove(pendingMessageId);
+            _failedVideoMessageIds.add(pendingMessageId!);
+          });
+        }
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('视频发送失败：$error')));
+      }
     } finally {
       _videoUploadCancelToken = null;
       if (mounted)
@@ -869,6 +896,13 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     final clientMsgId = _parseInt(messageData['clientMsgId']);
     if (clientMsgId > 0) {
       globalUtil.reconcileOutgoingMessageId(clientMsgId, msgId);
+      final localVideoPath = _localVideoPaths.remove(clientMsgId);
+      if (localVideoPath != null) _localVideoPaths[msgId] = localVideoPath;
+      final progress = _videoMessageProgress.remove(clientMsgId);
+      if (progress != null) _videoMessageProgress[msgId] = progress;
+      if (_failedVideoMessageIds.remove(clientMsgId)) {
+        _failedVideoMessageIds.add(msgId);
+      }
       final statusIndex = _messageReadStatus.indexWhere(
         (status) => _parseInt(status['msgId']) == clientMsgId,
       );
@@ -879,6 +913,14 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             ? MessageStatus.sent
             : MessageStatus.failed,
       );
+      if (_parseInt(messageData['code']) == 100) {
+        _videoMessageProgress.remove(msgId);
+      } else {
+        _videoMessageProgress.remove(msgId);
+        if (_localVideoPaths.containsKey(msgId)) {
+          _failedVideoMessageIds.add(msgId);
+        }
+      }
     }
     String status = messageData['status']?.toString() ?? '';
     String sender = messageData['sender']?.toString() ?? '';
@@ -892,8 +934,13 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       if (message.msgId == msgId) {
         if (status == 'success' && message.isMe) {
           message.status = MessageStatus.sent;
+          _videoMessageProgress.remove(msgId);
         } else if (status == 'failed' && message.isMe) {
           message.status = MessageStatus.failed;
+          _videoMessageProgress.remove(msgId);
+          if (message.messageType == MessageType.video) {
+            _failedVideoMessageIds.add(msgId);
+          }
         } else if (status == 'read' && message.isMe) {
           // 更新消息已读状态
           message.isRead = true;
@@ -1237,6 +1284,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                       },
                       unreadCount: unreadCount,
                       groupMembers: globalUtil.getGroupMembers(widget.groupId),
+                      localVideoPath: _localVideoPaths[message.msgId],
+                      videoUploadProgress: _videoMessageProgress[message.msgId],
+                      videoUploadFailed: _failedVideoMessageIds.contains(
+                        message.msgId,
+                      ),
                     );
                   },
                 ),
@@ -1658,6 +1710,9 @@ class GroupMessageBubble extends StatelessWidget {
   final VoidCallback onReadStatusTap;
   final int unreadCount;
   final List<GroupMemberModel> groupMembers;
+  final String? localVideoPath;
+  final double? videoUploadProgress;
+  final bool videoUploadFailed;
   final globalUtil = GlobalUtil();
   final dio = Dio();
   // 静态缓存自己的头像 URL，用于避免重复加载
@@ -1675,6 +1730,9 @@ class GroupMessageBubble extends StatelessWidget {
     required this.onReadStatusTap,
     required this.unreadCount,
     required this.groupMembers,
+    this.localVideoPath,
+    this.videoUploadProgress,
+    this.videoUploadFailed = false,
   });
 
   // 获取未读人数
@@ -1883,10 +1941,15 @@ class GroupMessageBubble extends StatelessWidget {
                 child: switch (message.messageType) {
                   MessageType.text => _buildTextBubble(context),
                   MessageType.video => AppVideoPreview(
-                    source: globalUtil.getVideoURL(
-                      message.senderId ?? globalUtil.userName ?? '',
-                      message.content,
-                    ),
+                    source:
+                        localVideoPath ??
+                        globalUtil.getVideoURL(
+                          message.senderId ?? globalUtil.userName ?? '',
+                          message.content,
+                        ),
+                    isLocal: localVideoPath != null,
+                    uploadProgress: videoUploadProgress,
+                    uploadFailed: videoUploadFailed,
                   ),
                   MessageType.audio => AppVoiceMessage(
                     source: globalUtil.getAudioURL(

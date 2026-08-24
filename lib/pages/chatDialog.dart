@@ -50,6 +50,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   double _videoUploadProgress = 0;
   CancelToken? _imageUploadCancelToken;
   CancelToken? _videoUploadCancelToken;
+  final Map<int, String> _localVideoPaths = {};
+  final Map<int, double> _videoMessageProgress = {};
+  final Set<int> _failedVideoMessageIds = {};
   CancelToken? _audioUploadCancelToken;
   bool _isUploadingAudio = false;
   Timer? _distanceTimer;
@@ -262,34 +265,20 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
   Future<void> _pickVideo() async {
     if (_isUploadingVideo || _isUploadingImage) return;
+    Message? pendingMessage;
+    int? pendingMessageId;
     try {
       final video = await ImagePicker().pickVideo(source: ImageSource.gallery);
       if (video == null) return;
       await validateVideoFile(video.path);
-      if (mounted)
-        setState(() {
-          _isUploadingVideo = true;
-          _videoUploadProgress = 0;
-        });
-      final cancelToken = CancelToken();
-      _videoUploadCancelToken = cancelToken;
       final receiver = friendInfo?.userName ?? '';
       if (receiver.isEmpty) throw Exception('无法获取接收者信息');
-      if (!_wsManager.isConnected) throw Exception('当前网络未连接，请稍后重试');
       final global = GlobalUtil();
       final msgId = DateTime.now().millisecondsSinceEpoch;
+      pendingMessageId = msgId;
       final videoName =
           '${global.userName}_${receiver}_${msgId}.${videoExtension(video.path)}';
-      await HttpUtil().uploadVideoFile(
-        videoName,
-        video.path,
-        cancelToken: cancelToken,
-        onSendProgress: (sent, total) {
-          if (mounted && total > 0)
-            setState(() => _videoUploadProgress = sent / total);
-        },
-      );
-      final message = Message(
+      pendingMessage = Message(
         msgId: msgId,
         content: videoName,
         isMe: true,
@@ -300,22 +289,60 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         status: MessageStatus.sending,
         senderId: global.userName,
       );
-      global.addMessage(receiver, message);
+      global.addMessage(receiver, pendingMessage);
+      if (mounted) {
+        setState(() {
+          _isUploadingVideo = true;
+          _videoUploadProgress = 0;
+          _localVideoPaths[msgId] = video.path;
+          _videoMessageProgress[msgId] = 0;
+          _failedVideoMessageIds.remove(msgId);
+        });
+        _scrollToBottom();
+      }
+
+      if (!_wsManager.isConnected) throw Exception('当前网络未连接，请稍后重试');
+      final cancelToken = CancelToken();
+      _videoUploadCancelToken = cancelToken;
+      await HttpUtil().uploadVideoFile(
+        videoName,
+        video.path,
+        cancelToken: cancelToken,
+        onSendProgress: (sent, total) {
+          if (mounted && total > 0) {
+            final progress = (sent / total).clamp(0.0, 1.0);
+            setState(() {
+              _videoUploadProgress = progress;
+              _videoMessageProgress[msgId] = progress;
+            });
+          }
+        },
+      );
+      if (mounted) setState(() => _videoMessageProgress[msgId] = 1);
       final queued = _sendWebSocketMessage(
         msgId: msgId,
         content: videoName,
         receiver: receiver,
-        conversationId: message.conversationId,
+        conversationId: pendingMessage.conversationId,
         messageType: MessageType.video,
       );
-      if (!queued) message.status = MessageStatus.failed;
-      if (mounted) setState(() {});
+      if (!queued) {
+        throw Exception('消息发送失败，请检查网络连接');
+      }
       _scrollToBottom();
     } catch (error) {
-      if (mounted)
+      if (pendingMessage != null) pendingMessage.status = MessageStatus.failed;
+      if (mounted) {
+        if (pendingMessageId != null) {
+          setState(() {
+            _videoMessageProgress.remove(pendingMessageId);
+            _failedVideoMessageIds.add(pendingMessageId!);
+          });
+        }
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('视频发送失败：$error')));
+      }
     } finally {
       _videoUploadCancelToken = null;
       if (mounted)
@@ -532,9 +559,12 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       for (var message in friendMessages) {
         if (message.msgId == msgId && message.isMe) {
           message.isRead = true;
-          message.status = messageData['status'] == 'failed'
-              ? MessageStatus.failed
-              : MessageStatus.sent;
+          final failed = messageData['status'] == 'failed';
+          message.status = failed ? MessageStatus.failed : MessageStatus.sent;
+          _videoMessageProgress.remove(msgId);
+          if (failed && message.messageType == MessageType.video) {
+            _failedVideoMessageIds.add(msgId);
+          }
           break;
         }
       }
@@ -560,9 +590,12 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       List<Message> friendMessages = globalUtil.getChatRecords(id!);
       for (var message in friendMessages) {
         if (message.msgId == msgId && message.isMe) {
-          message.status = messageData['status'] == 'failed'
-              ? MessageStatus.failed
-              : MessageStatus.sent;
+          final failed = messageData['status'] == 'failed';
+          message.status = failed ? MessageStatus.failed : MessageStatus.sent;
+          _videoMessageProgress.remove(msgId);
+          if (failed && message.messageType == MessageType.video) {
+            _failedVideoMessageIds.add(msgId);
+          }
           break;
         }
       }
@@ -971,6 +1004,11 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                       message: message,
                       friendInfo: friendInfo,
                       currentUserAvatar: globalUtil.userInfoModel.avatar,
+                      localVideoPath: _localVideoPaths[message.msgId],
+                      videoUploadProgress: _videoMessageProgress[message.msgId],
+                      videoUploadFailed: _failedVideoMessageIds.contains(
+                        message.msgId,
+                      ),
                     );
                   },
                 ),
@@ -1259,6 +1297,9 @@ class MessageBubble extends StatelessWidget {
   final Message message;
   final FriendInfoModel? friendInfo;
   final String? currentUserAvatar;
+  final String? localVideoPath;
+  final double? videoUploadProgress;
+  final bool videoUploadFailed;
   final globalUtil = GlobalUtil();
   final dio = Dio();
   // 头像 URL 缓存，用于避免重复加载
@@ -1267,6 +1308,9 @@ class MessageBubble extends StatelessWidget {
     required this.message,
     required this.friendInfo,
     required this.currentUserAvatar,
+    this.localVideoPath,
+    this.videoUploadProgress,
+    this.videoUploadFailed = false,
   });
 
   // 显示图片操作弹窗
@@ -1815,7 +1859,12 @@ class MessageBubble extends StatelessWidget {
                 message.messageType == MessageType.video
                     ? Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: AppVideoPreview(source: _resolveVideoUrl()),
+                        child: AppVideoPreview(
+                          source: localVideoPath ?? _resolveVideoUrl(),
+                          isLocal: localVideoPath != null,
+                          uploadProgress: videoUploadProgress,
+                          uploadFailed: videoUploadFailed,
+                        ),
                       )
                     : message.messageType == MessageType.audio
                     ? AppVoiceMessage(
