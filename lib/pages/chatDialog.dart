@@ -17,6 +17,7 @@ import '../utils/user_profile_navigator.dart';
 import '../utils/presence_event.dart';
 import '../core/cache/app_image_cache.dart';
 import '../shared/widgets/app_back_button.dart';
+import '../shared/widgets/chat_more_actions_sheet.dart';
 import '../shared/widgets/fullscreen_image_viewer.dart';
 import '../shared/utils/chat_scroll_util.dart';
 import '../shared/widgets/chat_background.dart';
@@ -234,12 +235,12 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   // 选择图片
-  Future<void> _pickImage() async {
+  Future<void> _pickImage({ImageSource source = ImageSource.gallery}) async {
     if (_isUploadingImage) return;
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
+        source: source,
         imageQuality: 82,
         maxWidth: 2048,
         maxHeight: 2048,
@@ -264,12 +265,12 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     }
   }
 
-  Future<void> _pickVideo() async {
+  Future<void> _pickVideo({ImageSource source = ImageSource.gallery}) async {
     if (_isUploadingVideo || _isUploadingImage) return;
     Message? pendingMessage;
     int? pendingMessageId;
     try {
-      final video = await ImagePicker().pickVideo(source: ImageSource.gallery);
+      final video = await ImagePicker().pickVideo(source: source);
       if (video == null) return;
       await validateVideoFile(video.path);
       final receiver = friendInfo?.userName ?? '';
@@ -871,6 +872,79 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   final TextEditingController _textController = TextEditingController();
   bool _isComposing = false;
 
+  Future<void> _showMediaTypePicker(ImageSource source) async {
+    FocusScope.of(context).unfocus();
+    final mediaType = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_outlined),
+              title: Text(source == ImageSource.gallery ? '选择图片' : '拍摄照片'),
+              onTap: () => Navigator.pop(sheetContext, 'image'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: Text(source == ImageSource.gallery ? '选择视频' : '拍摄视频'),
+              onTap: () => Navigator.pop(sheetContext, 'video'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || mediaType == null) return;
+    if (mediaType == 'image') {
+      await _pickImage(source: source);
+    } else {
+      await _pickVideo(source: source);
+    }
+  }
+
+  void _showUnavailableAction(String label) {
+    if (!mounted) return;
+    final message = label == '语音输入'
+        ? '请在输入框中长按发送语音'
+        : '$label消息需要后端消息协议支持，暂未开放';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _showMoreActions() async {
+    FocusScope.of(context).unfocus();
+    final action = await showModalBottomSheet<ChatMoreActionType>(
+      context: context,
+      backgroundColor: chatChromeBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => const ChatMoreActionsSheet(),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case ChatMoreActionType.gallery:
+        await _showMediaTypePicker(ImageSource.gallery);
+      case ChatMoreActionType.capture:
+        await _showMediaTypePicker(ImageSource.camera);
+      case ChatMoreActionType.voiceInput:
+        _showUnavailableAction('语音输入');
+      case ChatMoreActionType.location:
+        _showUnavailableAction('位置');
+      case ChatMoreActionType.favorite:
+        _showUnavailableAction('收藏');
+      case ChatMoreActionType.contactCard:
+        _showUnavailableAction('个人名片');
+      case ChatMoreActionType.file:
+        _showUnavailableAction('文件');
+      case ChatMoreActionType.music:
+        _showUnavailableAction('音乐');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -902,8 +976,12 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
             ),
           ],
         ),
-        backgroundColor: Colors.white,
-        elevation: 1,
+        backgroundColor: chatChromeBackgroundColor,
+        elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: chatChromeDividerColor),
+        ),
         actions: [
           TextButton.icon(
             onPressed: _distanceLoading || friendInfo?.isOnline != true
@@ -1013,10 +1091,12 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                   },
                 ),
               ),
-              Divider(height: 1.0),
+              const Divider(height: 1, color: chatChromeDividerColor),
               //下方的编辑输入框
               Container(
-                decoration: BoxDecoration(color: Theme.of(context).cardColor),
+                decoration: const BoxDecoration(
+                  color: chatChromeBackgroundColor,
+                ),
                 child: _buildTextComposer(),
               ),
             ],
@@ -1054,31 +1134,27 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                 ),
               ),
             IconButton(
-              icon: _isUploadingVideo
+              tooltip: '发送图片或视频',
+              icon: _isUploadingVideo || _isUploadingImage
                   ? SizedBox.square(
                       dimension: 24,
                       child: CircularProgressIndicator(
-                        value: _videoUploadProgress > 0
+                        value: _isUploadingVideo && _videoUploadProgress > 0
                             ? _videoUploadProgress
                             : null,
                         strokeWidth: 2,
                       ),
                     )
-                  : const Icon(Icons.video_library_outlined),
-              onPressed: _isUploadingVideo ? null : _pickVideo,
+                  : const Icon(Icons.camera_alt_outlined),
+              onPressed: _isUploadingVideo || _isUploadingImage
+                  ? null
+                  : () => _showMediaTypePicker(ImageSource.gallery),
             ),
-            _isUploadingImage
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox.square(
-                      dimension: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.camera_alt),
-                    onPressed: _pickImage,
-                  ),
+            IconButton(
+              tooltip: '更多',
+              icon: const Icon(Icons.add_circle_outline, size: 28),
+              onPressed: () => _showMoreActions(),
+            ),
             IconButton(
               icon: Icon(Icons.send),
               //_isComposing为true时候表示输入框内容不为空才能发送出去
