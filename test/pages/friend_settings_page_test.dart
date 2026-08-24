@@ -87,5 +87,10 @@ void main() {
 
     expect(historyText.style?.color, const Color(0xFFE58A1F));
     expect(friendText.style?.color, isNot(historyText.style?.color));
+
+    await tester.tap(find.byKey(const Key('delete_chat_history_button')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('不会影响对方保存的聊天记录'), findsOneWidget);
+    expect(find.textContaining('双方都删除后'), findsOneWidget);
   });
 }

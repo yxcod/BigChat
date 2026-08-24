@@ -105,7 +105,9 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('删除聊天记录'),
-        content: const Text('将永久删除你与该好友在服务器和本机保存的全部聊天记录，双方均无法再查看。确定继续吗？'),
+        content: const Text(
+          '删除后你将无法再查看当前历史记录，但不会影响对方保存的聊天记录。双方都删除后，服务器才会永久清理对应记录。确定继续吗？',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),

@@ -6,12 +6,17 @@ import 'package:dio/dio.dart';
 //获取最近指定的聊天记录数
 Future<List<MessageModel>> getChatMessagesApi({
   required String conversationId,
+  required String userName,
   int? count,
 }) async {
   try {
     Response response = await HttpUtil().post(
       '/api/chat/chatMessages',
-      data: {'conversationId': conversationId, 'limit': count},
+      data: {
+        'conversationId': conversationId,
+        'userName': userName,
+        'limit': count,
+      },
     );
     final mapData = response.data as Map<String, dynamic>;
     final messageList = mapData['messageList'] as List<dynamic>;

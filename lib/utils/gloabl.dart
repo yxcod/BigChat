@@ -262,6 +262,7 @@ class GlobalUtil {
       // 调用API获取聊天记录
       final messageModels = await getChatMessagesApi(
         conversationId: sessionId,
+        userName: currentUserName,
         count: count,
       );
 
