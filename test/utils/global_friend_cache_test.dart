@@ -27,6 +27,8 @@ void main() {
 
       expect(global.updateCachedFriendRemark('friend', ' 新备注 '), isTrue);
       expect(global.getFriendInfoByUserName('friend').remarks, '新备注');
+      expect(global.hasFriend(' friend '), isTrue);
+      expect(global.hasFriend('missing'), isFalse);
 
       expect(global.updateCachedFriendRemark('friend', ''), isTrue);
       expect(global.getFriendInfoByUserName('friend').remarks, isEmpty);

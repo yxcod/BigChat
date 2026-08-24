@@ -24,6 +24,7 @@ class MyMomentsPage extends StatefulWidget {
     this.avatarUrl,
     this.allowPublishing = true,
     this.pageTitle,
+    this.visibilityFilter,
   });
 
   final MomentsRepository? repository;
@@ -32,6 +33,7 @@ class MyMomentsPage extends StatefulWidget {
   final String? avatarUrl;
   final bool allowPublishing;
   final String? pageTitle;
+  final MomentVisibility? visibilityFilter;
 
   @override
   State<MyMomentsPage> createState() => _MyMomentsPageState();
@@ -71,9 +73,14 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
 
   Future<void> _loadMoments() async {
     try {
-      final moments = widget.allowPublishing
+      final loadedMoments = widget.allowPublishing
           ? await _repository.fetchOwnMoments(_userId)
           : await _repository.fetchUserMoments(_userId);
+      final moments = widget.visibilityFilter == null
+          ? loadedMoments
+          : loadedMoments
+                .where((moment) => moment.visibility == widget.visibilityFilter)
+                .toList(growable: false);
       if (!mounted) return;
       setState(() {
         _moments = moments;

@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
 import 'addFriendRequestPage.dart';
 import '../../api/getInfoAPI.dart';
-import '../../utils/Gloabl.dart';
+import '../../utils/gloabl.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../model/userInfoModel.dart';
+import 'friendDetailPage.dart';
 
 class SearchFriendPage extends StatefulWidget {
-  const SearchFriendPage({super.key, this.userLoader = getUserInfoApi});
+  const SearchFriendPage({
+    super.key,
+    this.userLoader = getUserInfoApi,
+    this.currentUserLoader = getUserInfoApi,
+    this.profileBuilder,
+  });
 
   final Future<UserInfoModel> Function(String userName) userLoader;
+  final Future<UserInfoModel> Function(String userName) currentUserLoader;
+  final Widget Function(Map<String, dynamic> userData)? profileBuilder;
 
   @override
   _SearchFriendPageState createState() => _SearchFriendPageState();
@@ -162,101 +170,110 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
 
   // 构建用户卡片 - 紧凑布局，内容对齐上方
   Widget _buildUserCard() {
-    return Container(
-      key: const Key('search_friend_result_card'),
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start, // 内容对齐上方
-        children: [
-          // 用户头像 - 缩小尺寸
-          CircleAvatar(
-            radius: 20,
-            backgroundImage:
-                _searchResult!['avatar'] != null &&
-                    _searchResult!['avatar'].isNotEmpty
-                ? AppImageCache.provider(_searchResult!['avatar'])
-                : null,
-            backgroundColor: Colors.grey[200],
-            child:
-                _searchResult!['avatar'] == null ||
-                    _searchResult!['avatar'].isEmpty
-                ? Text(
-                    _searchResult!['nickname'] != null &&
-                            _searchResult!['nickname'].isNotEmpty
-                        ? _searchResult!['nickname'][0]
-                        : '?',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                  )
-                : null,
-          ),
-
-          SizedBox(width: 10),
-
-          // 用户信息 - 只显示关键信息
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _searchResult!['nickname'] ?? '',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-                ),
-                SizedBox(height: 1),
-                Text(
-                  _searchResult!['phone'] ?? '',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                ),
-              ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _openUserProfile,
+      child: Container(
+        key: const Key('search_friend_result_card'),
+        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start, // 内容对齐上方
+          children: [
+            // 用户头像 - 缩小尺寸
+            CircleAvatar(
+              radius: 20,
+              backgroundImage:
+                  _searchResult!['avatar'] != null &&
+                      _searchResult!['avatar'].isNotEmpty
+                  ? AppImageCache.provider(_searchResult!['avatar'])
+                  : null,
+              backgroundColor: Colors.grey[200],
+              child:
+                  _searchResult!['avatar'] == null ||
+                      _searchResult!['avatar'].isEmpty
+                  ? Text(
+                      _searchResult!['nickname'] != null &&
+                              _searchResult!['nickname'].isNotEmpty
+                          ? _searchResult!['nickname'][0]
+                          : '?',
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    )
+                  : null,
             ),
-          ),
 
-          SizedBox(width: 8),
+            SizedBox(width: 10),
 
-          // 添加按钮或已添加文本 - 根据好友状态显示
-          Padding(
-            padding: EdgeInsets.only(top: 2), // 稍微调整位置使其更对齐
-            child: _isAddedFriend
-                ? SizedBox(
-                    width: 55,
-                    height: 28,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '已添加',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                      ),
-                    ),
-                  )
-                : SizedBox(
-                    width: 55,
-                    height: 28,
-                    child: ElevatedButton(
-                      onPressed: () => _navigateToAddFriend(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
+            // 用户信息 - 只显示关键信息
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _searchResult!['nickname'] ?? '',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                  ),
+                  SizedBox(height: 1),
+                  Text(
+                    _searchResult!['phone'] ?? '',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(width: 8),
+
+            // 添加按钮或已添加文本 - 根据好友状态显示
+            Padding(
+              padding: EdgeInsets.only(top: 2), // 稍微调整位置使其更对齐
+              child: _isAddedFriend
+                  ? SizedBox(
+                      key: const Key('search_friend_added_status'),
+                      width: 55,
+                      height: 28,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        padding: EdgeInsets.zero,
-                        elevation: 1,
+                        alignment: Alignment.center,
+                        child: Text(
+                          '已添加',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                          ),
+                        ),
                       ),
-                      child: Text('添加', style: TextStyle(fontSize: 11)),
+                    )
+                  : SizedBox(
+                      key: const Key('search_friend_add_button'),
+                      width: 55,
+                      height: 28,
+                      child: ElevatedButton(
+                        onPressed: () => _navigateToAddFriend(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          padding: EdgeInsets.zero,
+                          elevation: 1,
+                        ),
+                        child: Text('添加', style: TextStyle(fontSize: 11)),
+                      ),
                     ),
-                  ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -265,7 +282,7 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
   bool _isAddedFriend = false;
 
   // 执行搜索
-  void _performSearch() {
+  Future<void> _performSearch() async {
     String phone = _phoneController.text.trim();
 
     if (phone.isEmpty) {
@@ -291,71 +308,63 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
       _isAddedFriend = false;
     });
 
-    // 调用API获取用户信息
-    widget
-        .userLoader(phone)
-        .then((userInfo) {
-          setState(() {
-            _isLoading = false;
+    try {
+      final userInfo = await widget.userLoader(phone);
+      final targetUserName = userInfo.userName?.trim() ?? phone;
+      final isAddedFriend = await _resolveFriendship(targetUserName);
+      if (!mounted) return;
 
-            // 构建搜索结果，只包含必要的字段
-            final avatarName = userInfo.avatar ?? '';
-            String avatarUrl = '';
+      final avatarName = userInfo.avatar ?? '';
+      String avatarUrl = '';
+      final globalUtil = GlobalUtil();
+      if (globalUtil.token != null && avatarName.isNotEmpty) {
+        try {
+          avatarUrl = globalUtil.getImageURL(targetUserName, avatarName);
+        } catch (error) {
+          debugPrint('获取头像URL失败: $error');
+        }
+      }
 
-            // 确保token存在且avatarName不为空时才调用getImageURL
-            final globalUtil = GlobalUtil();
-            if (globalUtil.token != null && avatarName.isNotEmpty) {
-              try {
-                avatarUrl = globalUtil.getImageURL(
-                  userInfo.userName ?? '',
-                  avatarName,
-                );
-              } catch (e) {
-                // 如果获取头像URL失败，使用空字符串
-                debugPrint('获取头像URL失败: $e');
-                avatarUrl = '';
-              }
-            }
-
-            _searchResult = {
-              'avatar': avatarUrl,
-              'nickname': userInfo.nickName ?? '',
-              'phone': userInfo.userName ?? '',
-              'signature': userInfo.signature ?? '',
-            };
-
-            // 检查是否为已添加好友
-            _isAddedFriend = _checkIfAddedFriend(userInfo.userName ?? '');
-          });
-
-          _showSnackBar('找到用户', Colors.green);
-        })
-        .catchError((error) {
-          setState(() {
-            _isLoading = false;
-            // 当用户不存在时，将搜索结果设置为null，不显示用户卡片
-            _searchResult = null;
-            _isAddedFriend = false;
-          });
-
-          _showSnackBar('用户不存在', Colors.red);
-          debugPrint('搜索用户失败: $error');
-        });
+      setState(() {
+        _isLoading = false;
+        _searchResult = {
+          'avatar': avatarUrl,
+          'nickname': userInfo.nickName ?? '',
+          'phone': targetUserName,
+          'userName': targetUserName,
+          'signature': userInfo.signature ?? '',
+          'isFriend': isAddedFriend,
+        };
+        _isAddedFriend = isAddedFriend;
+      });
+      _showSnackBar('找到用户', Colors.green);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _searchResult = null;
+        _isAddedFriend = false;
+      });
+      _showSnackBar('用户不存在', Colors.red);
+      debugPrint('搜索用户失败: $error');
+    }
   }
 
-  // 检查是否为已添加好友
-  bool _checkIfAddedFriend(String targetUserName) {
+  Future<bool> _resolveFriendship(String targetUserName) async {
     final globalUtil = GlobalUtil();
-    final friendList = globalUtil.userInfoModel.friendListData ?? [];
+    if (globalUtil.hasFriend(targetUserName)) return true;
 
-    // 遍历好友列表，检查是否存在该用户
-    for (var friend in friendList) {
-      if (friend.userName == targetUserName) {
-        return true;
+    final currentUserName = globalUtil.userName?.trim() ?? '';
+    if (currentUserName.isEmpty) return false;
+    try {
+      final refreshedUser = await widget.currentUserLoader(currentUserName);
+      if (refreshedUser.friendListData != null) {
+        globalUtil.userInfoModel = refreshedUser;
       }
+    } catch (error) {
+      debugPrint('刷新当前好友列表失败，使用本地好友状态: $error');
     }
-
-    return false;
+    return globalUtil.hasFriend(targetUserName);
   }
 
   // 跳转到添加好友页面
@@ -366,6 +375,28 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
         builder: (context) => AddFriendRequestPage(targetUser: _searchResult!),
       ),
     );
+  }
+
+  Future<void> _openUserProfile() async {
+    final result = _searchResult;
+    if (result == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            widget.profileBuilder?.call(Map.of(result)) ??
+            FriendDetailPage(friendData: Map.of(result)),
+      ),
+    );
+    if (!mounted) return;
+    final targetUserName = result['userName']?.toString() ?? '';
+    final latestFriendship = GlobalUtil().hasFriend(targetUserName);
+    if (latestFriendship != _isAddedFriend) {
+      setState(() {
+        _isAddedFriend = latestFriendship;
+        _searchResult!['isFriend'] = latestFriendship;
+      });
+    }
   }
 
   // 显示提示信息

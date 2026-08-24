@@ -528,6 +528,14 @@ class GlobalUtil {
     );
   }
 
+  bool hasFriend(String userName) {
+    final normalizedUserName = userName.trim();
+    if (normalizedUserName.isEmpty) return false;
+    return (_userInfoModel?.friendListData ?? const <FriendInfoModel>[]).any(
+      (friend) => friend.userName?.trim() == normalizedUserName,
+    );
+  }
+
   bool updateCachedFriendRemark(String userName, String remark) {
     final normalizedUserName = userName.trim();
     final friendList = _userInfoModel?.friendListData;

@@ -60,11 +60,18 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
     try {
       final moments = await _momentsRepository.fetchUserMoments(
         _targetUserName,
-        maxItems: 1,
+        maxItems: _isFriend ? 1 : 20,
       );
+      final visibleMoments = _isFriend
+          ? moments
+          : moments
+                .where((moment) => moment.visibility == MomentVisibility.public)
+                .toList(growable: false);
       if (!mounted) return;
       setState(() {
-        _latestVisibleMoment = moments.isEmpty ? null : moments.first;
+        _latestVisibleMoment = visibleMoments.isEmpty
+            ? null
+            : visibleMoments.first;
         _isLoadingMoments = false;
         _momentLoadFailed = false;
       });
@@ -98,6 +105,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
         automaticallyImplyLeading: false,
         leading: const AppBackButton(),
         toolbarHeight: 50,
+        title: const Text('个人资料'),
         actions: _isFriend
             ? [
                 IconButton(
@@ -218,10 +226,10 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                 children: [
                   Icon(Icons.photo_library_outlined, color: Colors.grey[600]),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      '好友动态',
-                      style: TextStyle(
+                      _isFriend ? '好友动态' : '动态',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -336,6 +344,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
         width: double.infinity,
         height: 48,
         child: ElevatedButton.icon(
+          key: const Key('profile_add_friend_button'),
           onPressed: _addFriend,
           icon: Icon(Icons.person_add_alt_1),
           label: Text('添加好友'),
@@ -443,6 +452,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
           avatarUrl: _resolvedAvatarUrl(),
           allowPublishing: false,
           pageTitle: '$_displayName的空间',
+          visibilityFilter: _isFriend ? null : MomentVisibility.public,
         ),
       ),
     );

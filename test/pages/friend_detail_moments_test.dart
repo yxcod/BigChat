@@ -117,4 +117,57 @@ void main() {
       lessThan(tester.getTopLeft(deleteFriend).dy),
     );
   });
+
+  testWidgets('stranger profile only shows public moments and one add button', (
+    tester,
+  ) async {
+    final repository = LocalMomentsRepository();
+    await repository.publish(
+      const MomentDraft(
+        authorId: 'stranger',
+        authorName: '陌生用户',
+        authorAvatarUrl: '',
+        content: '公开动态',
+        mediaPaths: [],
+        visibility: MomentVisibility.public,
+      ),
+    );
+    await repository.publish(
+      const MomentDraft(
+        authorId: 'stranger',
+        authorName: '陌生用户',
+        authorAvatarUrl: '',
+        content: '仅自己可见动态',
+        mediaPaths: [],
+        visibility: MomentVisibility.private,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FriendDetailPage(
+          friendData: const {
+            'userName': 'stranger',
+            'nickname': '陌生用户',
+            'avatar': '',
+            'isFriend': false,
+          },
+          momentsRepository: repository,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('个人资料'), findsOneWidget);
+    expect(find.text('公开动态'), findsOneWidget);
+    expect(find.text('仅自己可见动态'), findsNothing);
+    expect(find.byKey(const Key('profile_add_friend_button')), findsOneWidget);
+    expect(find.text('发送信息'), findsNothing);
+    expect(find.text('音视频通信'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('friend_moments_section')));
+    await tester.pumpAndSettle();
+    expect(find.text('公开动态'), findsOneWidget);
+    expect(find.text('仅自己可见动态'), findsNothing);
+  });
 }
