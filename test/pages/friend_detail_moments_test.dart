@@ -28,6 +28,30 @@ void main() {
     },
   );
 
+  testWidgets('personal profile displays gender and city region', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FriendDetailPage(
+          friendData: const {
+            'userName': 'friend',
+            'nickname': '小李',
+            'avatar': '',
+            'gender': 2,
+            'region': '广东省 深圳市',
+            'isFriend': true,
+          },
+          momentsRepository: LocalMomentsRepository(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('性别: 女'), findsOneWidget);
+    expect(find.text('地区: 广东省 深圳市'), findsOneWidget);
+  });
+
   testWidgets('profile previews at most six photos and opens friend space', (
     tester,
   ) async {

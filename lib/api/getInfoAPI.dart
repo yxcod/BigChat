@@ -49,6 +49,8 @@ Future<int> updateUserInfoApi(UserInfoModel userInfo) async {
       'nickName': userInfo.nickName,
       'signature': userInfo.signature,
       'avater': userInfo.avatar,
+      'gender': userInfo.gender,
+      'region': userInfo.region,
     };
 
     Response response = await HttpUtil().post(

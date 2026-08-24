@@ -23,6 +23,7 @@ import '../features/settings/presentation/sound_selection_page.dart';
 import '../features/settings/data/app_settings_repository.dart';
 import '../features/settings/domain/app_settings.dart';
 import '../utils/gloabl.dart';
+import '../api/getInfoAPI.dart';
 
 int _parseIntRouteArgument(dynamic value) {
   if (value is int) {
@@ -45,7 +46,10 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/friendDetailPage':
       final friendData = settings.arguments as Map<String, dynamic>;
       return MaterialPageRoute(
-        builder: (context) => FriendDetailPage(friendData: friendData),
+        builder: (context) => FriendDetailPage(
+          friendData: friendData,
+          profileLoader: getUserInfoApi,
+        ),
       );
     case '/addFriendRequestPage':
       final addUserData = settings.arguments as Map<String, dynamic>;

@@ -12,15 +12,18 @@ import '../../core/media/video_media.dart';
 import '../../shared/widgets/app_video_player.dart';
 import '../../shared/widgets/app_back_button.dart';
 import 'friendSettingsPage.dart';
+import '../../model/userInfoModel.dart';
 
 class FriendDetailPage extends StatefulWidget {
   final Map<String, dynamic> friendData;
   final MomentsRepository? momentsRepository;
+  final Future<UserInfoModel> Function(String userName)? profileLoader;
 
   const FriendDetailPage({
     Key? key,
     required this.friendData,
     this.momentsRepository,
+    this.profileLoader,
   }) : super(key: key);
 
   @override
@@ -33,6 +36,8 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
   Moment? _latestVisibleMoment;
   bool _isLoadingMoments = true;
   bool _momentLoadFailed = false;
+  late int _gender;
+  late String _region;
 
   String get _targetUserName =>
       widget.friendData['userName']?.toString().trim() ?? '';
@@ -49,7 +54,25 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
     super.initState();
     _momentsRepository =
         widget.momentsRepository ?? ServerMomentsRepository.instance;
+    _gender = int.tryParse(widget.friendData['gender']?.toString() ?? '') ?? 0;
+    _region = widget.friendData['region']?.toString().trim() ?? '';
+    _loadBasicProfile();
     _loadMomentPreview();
+  }
+
+  Future<void> _loadBasicProfile() async {
+    final loader = widget.profileLoader;
+    if (_targetUserName.isEmpty || loader == null) return;
+    try {
+      final userInfo = await loader(_targetUserName);
+      if (!mounted) return;
+      setState(() {
+        _gender = userInfo.gender;
+        _region = userInfo.region.trim();
+      });
+    } catch (error) {
+      debugPrint('加载用户性别和地区失败，使用已有资料: $error');
+    }
   }
 
   Future<void> _loadMomentPreview() async {
@@ -177,6 +200,18 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                   '帐号: ${widget.friendData['userName'] ?? 'unknown'}',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
+                SizedBox(height: 2),
+                Text(
+                  '性别: ${userGenderLabel(_gender)}',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                ),
+                if (_region.isNotEmpty) ...[
+                  SizedBox(height: 2),
+                  Text(
+                    '地区: $_region',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ],
                 if (signature.isNotEmpty) ...[
                   SizedBox(height: 2),
                   Text(

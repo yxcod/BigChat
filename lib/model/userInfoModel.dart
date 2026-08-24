@@ -5,12 +5,16 @@ class UserInfoModel {
   String? userName;
   String? nickName;
   String? avatar;
+  int gender;
+  String region;
   String? signature;
   List<FriendInfoModel>? friendListData;
   UserInfoModel({
     required this.userName,
     required this.nickName,
     required this.avatar,
+    this.gender = 0,
+    this.region = '',
     required this.signature,
     required this.friendListData,
   });
@@ -31,9 +35,22 @@ class UserInfoModel {
       userName: JsonValueParser.stringValue(json["userName"]),
       nickName: JsonValueParser.stringValue(json["nickName"]),
       avatar: JsonValueParser.stringValue(json["avatar"]),
+      gender: JsonValueParser.intValue(json["gender"], fallback: 0),
+      region: JsonValueParser.stringValue(json["region"]),
       signature: JsonValueParser.stringValue(json["signature"]),
       friendListData: friendList,
     ); //..friendListData = friendList;
+  }
+}
+
+String userGenderLabel(int gender) {
+  switch (gender) {
+    case 1:
+      return '男';
+    case 2:
+      return '女';
+    default:
+      return '保密';
   }
 }
 

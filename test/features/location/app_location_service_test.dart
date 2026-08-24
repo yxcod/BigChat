@@ -1,5 +1,6 @@
 import 'package:flutter_base/features/location/data/app_location_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geocoding/geocoding.dart';
 
 void main() {
   test('distance is displayed in exact meters below one kilometer', () {
@@ -11,5 +12,25 @@ void main() {
   test('longer distances use readable kilometer units', () {
     expect(formatDistance(1250), '1.3公里');
     expect(formatDistance(12500), '13公里');
+  });
+
+  test('profile location only keeps province and city', () {
+    expect(
+      formatCityRegion(
+        const Placemark(
+          administrativeArea: '山东省',
+          locality: '济南市',
+          subLocality: '历下区',
+          street: '某街道',
+        ),
+      ),
+      '山东省 济南市',
+    );
+    expect(
+      formatCityRegion(
+        const Placemark(administrativeArea: '北京市', locality: '北京市'),
+      ),
+      '北京市',
+    );
   });
 }

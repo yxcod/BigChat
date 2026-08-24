@@ -333,6 +333,8 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
           'phone': targetUserName,
           'userName': targetUserName,
           'signature': userInfo.signature ?? '',
+          'gender': userInfo.gender,
+          'region': userInfo.region,
           'isFriend': isAddedFriend,
         };
         _isAddedFriend = isAddedFriend;

@@ -602,6 +602,8 @@ class GlobalUtil {
           userName: currentUserInfo.userName,
           nickName: currentUserInfo.nickName,
           avatar: imageName, // 头像图片名
+          gender: currentUserInfo.gender,
+          region: currentUserInfo.region,
           signature: currentUserInfo.signature,
           friendListData: currentUserInfo.friendListData,
         );

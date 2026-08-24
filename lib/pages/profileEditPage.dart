@@ -1,252 +1,369 @@
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
-import '../utils/gloabl.dart';
-import '../api/getInfoAPI.dart';
-import '../model/userInfoModel.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+
+import '../api/getInfoAPI.dart';
+import '../app/theme/app_colors.dart';
 import '../core/cache/app_image_cache.dart';
+import '../model/userInfoModel.dart';
+import '../shared/widgets/app_back_button.dart';
+import '../utils/gloabl.dart';
 import 'change_password_page.dart';
+import 'profile_field_editor_page.dart';
+import 'region_editor_page.dart';
 
 class ProfileEditPage extends StatefulWidget {
-  final Map<String, dynamic>? profileInfo;
   const ProfileEditPage({super.key, required this.profileInfo});
+
+  final Map<String, dynamic>? profileInfo;
+
   @override
-  _ProfileEditPageState createState() => _ProfileEditPageState();
+  State<ProfileEditPage> createState() => _ProfileEditPageState();
 }
 
 class _ProfileEditPageState extends State<ProfileEditPage> {
-  final _nicknameController = TextEditingController();
-  final _signatureController = TextEditingController();
-
   bool _isLoading = false;
-  String _nickName = "";
-  String _signature = "";
+  late String _nickName;
+  late String _signature;
+  late int _gender;
+  late String _region;
+
   @override
   void initState() {
     super.initState();
-    if (widget.profileInfo != null) {
-      _nickName = widget.profileInfo!['nickName']?.toString() ?? '';
-      _signature = widget.profileInfo!['signature']?.toString() ?? '';
-      _nicknameController.text = _nickName;
-      _signatureController.text = _signature;
-    }
+    final current = GlobalUtil().userInfoModel;
+    final info = widget.profileInfo ?? const <String, dynamic>{};
+    _nickName = info['nickName']?.toString() ?? current.nickName ?? '';
+    _signature = info['signature']?.toString() ?? current.signature ?? '';
+    _gender = _parseGender(info['gender'], fallback: current.gender);
+    _region = info['region']?.toString() ?? current.region;
   }
 
-  @override
-  void dispose() {
-    _nicknameController.dispose();
-    _signatureController.dispose();
-    super.dispose();
+  int _parseGender(dynamic value, {required int fallback}) {
+    if (value is int && value >= 0 && value <= 2) return value;
+    final parsed = int.tryParse(value?.toString() ?? '');
+    return parsed != null && parsed >= 0 && parsed <= 2 ? parsed : fallback;
   }
 
-  // 头像文件名是缓存版本；文件名变化时会自动下载新头像。
   String _buildAvatarUrl() {
-    String avatarName = GlobalUtil().userInfoModel.avatar ?? "head.jpg";
-    return GlobalUtil().getImageURL(GlobalUtil().userName ?? "", avatarName);
+    final avatarName = GlobalUtil().userInfoModel.avatar ?? 'head.jpg';
+    return GlobalUtil().getImageURL(GlobalUtil().userName ?? '', avatarName);
   }
 
-  // 修改头像
   Future<void> _changeAvatar() async {
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
-      // 生成带时间戳的头像文件名
-      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      String avatarFileName = "head_$timestamp.jpg";
-
-      // 调用GlobalUtil的selectAndUploadAvatar方法
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final avatarFileName = 'head_$timestamp.jpg';
       final Uint8List? imageData = await GlobalUtil().selectAndUploadAvatar(
         avatarFileName,
       );
-
-      if (imageData != null) {
-        // 头像上传成功，更新用户信息中的头像名
-        final UserInfoModel currentUserInfo = GlobalUtil().userInfoModel;
-        final UserInfoModel updatedUserInfo = UserInfoModel(
-          userName: currentUserInfo.userName,
-          nickName: currentUserInfo.nickName,
-          avatar: avatarFileName,
-          signature: currentUserInfo.signature,
-          friendListData: currentUserInfo.friendListData,
-        );
-
-        // 调用保存个人信息API更新头像名
-        final int code = await updateUserInfoApi(updatedUserInfo);
-
-        if (code == 100) {
-          // 保存更新后的用户信息到全局变量
-          GlobalUtil().userInfoModel = updatedUserInfo;
-          setState(() {});
-          _showMessage('头像修改成功');
-        } else {
-          _showMessage('头像修改失败，请稍后重试');
-        }
-      } else {
-        // 用户取消了选择或上传失败
+      if (!mounted) return;
+      if (imageData == null) {
         _showMessage('头像修改取消或失败');
+        return;
       }
-    } catch (e) {
-      debugPrint('修改头像失败：$e');
-      _showMessage('头像修改失败，请稍后重试');
+
+      final current = GlobalUtil().userInfoModel;
+      final updated = UserInfoModel(
+        userName: current.userName,
+        nickName: current.nickName,
+        avatar: avatarFileName,
+        gender: current.gender,
+        region: current.region,
+        signature: current.signature,
+        friendListData: current.friendListData,
+      );
+      final code = await updateUserInfoApi(updated);
+      if (!mounted) return;
+      if (code == 100) {
+        GlobalUtil().userInfoModel = updated;
+        setState(() {});
+        _showMessage('头像修改成功');
+      } else {
+        _showMessage('头像修改失败，请稍后重试');
+      }
+    } catch (error) {
+      debugPrint('修改头像失败：$error');
+      if (mounted) _showMessage('头像修改失败，请稍后重试');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _openChangePasswordPage() {
-    Navigator.push(
+  Future<void> _editText({
+    required String title,
+    required String initialValue,
+    required String hintText,
+    required int maxLength,
+    required ValueChanged<String> onChanged,
+    int maxLines = 1,
+  }) async {
+    final value = await Navigator.push<String>(
       context,
-      MaterialPageRoute<void>(builder: (_) => const ChangePasswordPage()),
+      MaterialPageRoute(
+        builder: (_) => ProfileFieldEditorPage(
+          title: title,
+          initialValue: initialValue,
+          hintText: hintText,
+          maxLength: maxLength,
+          maxLines: maxLines,
+        ),
+      ),
+    );
+    if (value != null && mounted) setState(() => onChanged(value));
+  }
+
+  Future<void> _editGender() async {
+    final selected = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '选择性别',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                ),
+              ),
+              for (final option in const [(0, '保密'), (1, '男'), (2, '女')])
+                ListTile(
+                  key: Key('gender_option_${option.$1}'),
+                  title: Text(option.$2),
+                  trailing: _gender == option.$1
+                      ? const Icon(Icons.check, color: AppColors.primary)
+                      : null,
+                  onTap: () => Navigator.pop(context, option.$1),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null && mounted) setState(() => _gender = selected);
+  }
+
+  Future<void> _editRegion() async {
+    final region = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RegionEditorPage(initialRegion: _region),
+      ),
+    );
+    if (region != null && mounted) setState(() => _region = region);
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
     );
   }
 
-  // 显示提示信息
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: Duration(seconds: 2)),
+  Widget _avatarRow() {
+    final avatarUrl = _buildAvatarUrl();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      child: Row(
+        children: [
+          ClipOval(
+            child: CachedNetworkImage(
+              cacheManager: AppImageCache.manager,
+              imageUrl: avatarUrl,
+              cacheKey: AppImageCache.cacheKey(avatarUrl),
+              fit: BoxFit.cover,
+              width: 64,
+              height: 64,
+              progressIndicatorBuilder: (_, _, progress) => Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  value: progress.progress,
+                ),
+              ),
+              errorWidget: (_, _, _) => Container(
+                width: 64,
+                height: 64,
+                color: Colors.grey[200],
+                child: Icon(Icons.person, color: Colors.grey[400], size: 34),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Text(
+              '头像',
+              style: TextStyle(fontSize: 17, color: AppColors.textPrimary),
+            ),
+          ),
+          TextButton(
+            key: const Key('change_avatar_button'),
+            onPressed: _changeAvatar,
+            child: const Text('更换头像'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileRow({
+    required Key key,
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      key: key,
+      onTap: onTap,
+      child: SizedBox(
+        height: 56,
+        child: Row(
+          children: [
+            const SizedBox(width: 16),
+            SizedBox(
+              width: 86,
+              child: Text(label, style: const TextStyle(fontSize: 16)),
+            ),
+            Expanded(
+              child: Text(
+                value.isEmpty ? '未设置' : value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, size: 22, color: Color(0xFFB8B8B8)),
+            const SizedBox(width: 12),
+          ],
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
+        leading: const AppBackButton(),
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         elevation: 0,
-        automaticallyImplyLeading: true,
-        toolbarHeight: 50,
+        centerTitle: true,
+        title: const Text('编辑资料'),
         actions: [
           IconButton(
             key: const Key('open_change_password_page'),
-            onPressed: _openChangePasswordPage,
-            icon: Icon(Icons.lock, color: Colors.green),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => const ChangePasswordPage(),
+              ),
+            ),
+            icon: const Icon(Icons.lock, color: AppColors.primary),
             tooltip: '修改密码',
           ),
         ],
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(0.5),
+          child: Divider(height: 0.5, thickness: 0.5),
+        ),
       ),
       body: Stack(
         children: [
           SingleChildScrollView(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 头像部分
-                Center(
+                Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  clipBehavior: Clip.antiAlias,
                   child: Column(
                     children: [
-                      GestureDetector(
-                        onTap: _changeAvatar,
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(40),
-                            border: Border.all(
-                              color: Colors.grey[300]!,
-                              width: 1,
-                            ),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: CachedNetworkImage(
-                            cacheManager: AppImageCache.manager,
-                            imageUrl: _buildAvatarUrl(),
-                            cacheKey: AppImageCache.cacheKey(_buildAvatarUrl()),
-                            fit: BoxFit.cover,
-                            width: 80,
-                            height: 80,
-                            progressIndicatorBuilder:
-                                (context, url, progress) => Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    value: progress.progress,
-                                  ),
-                                ),
-                            errorWidget: (context, url, error) {
-                              debugPrint('头像加载失败：$error');
-                              return Icon(
-                                Icons.person,
-                                color: Colors.grey[400],
-                                size: 40,
-                              );
-                            },
-                          ),
+                      _avatarRow(),
+                      const Divider(height: 0.5, indent: 16),
+                      _profileRow(
+                        key: const Key('edit_nickname_row'),
+                        label: '昵称',
+                        value: _nickName,
+                        onTap: () => _editText(
+                          title: '设置昵称',
+                          initialValue: _nickName,
+                          hintText: '请输入昵称',
+                          maxLength: 50,
+                          onChanged: (value) => _nickName = value,
                         ),
                       ),
-                      SizedBox(height: 8),
-                      TextButton(
-                        onPressed: _changeAvatar,
-                        child: Text(
-                          '点击更换头像',
-                          style: TextStyle(color: Colors.blue, fontSize: 14),
+                      const Divider(height: 0.5, indent: 16),
+                      _profileRow(
+                        key: const Key('edit_gender_row'),
+                        label: '性别',
+                        value: userGenderLabel(_gender),
+                        onTap: _editGender,
+                      ),
+                      const Divider(height: 0.5, indent: 16),
+                      _profileRow(
+                        key: const Key('edit_region_row'),
+                        label: '地区',
+                        value: _region,
+                        onTap: _editRegion,
+                      ),
+                      const Divider(height: 0.5, indent: 16),
+                      _profileRow(
+                        key: const Key('edit_signature_row'),
+                        label: '个性签名',
+                        value: _signature,
+                        onTap: () => _editText(
+                          title: '设置个性签名',
+                          initialValue: _signature,
+                          hintText: '请输入个性签名',
+                          maxLength: 200,
+                          maxLines: 4,
+                          onChanged: (value) => _signature = value,
                         ),
                       ),
                     ],
                   ),
                 ),
-                SizedBox(height: 24),
-                // 昵称部分
-                Text('昵称'),
-                SizedBox(height: 8),
-                TextField(
-                  controller: _nicknameController,
-                  decoration: InputDecoration(
-                    hintText: '请输入昵称',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    setState(() {
-                      _nickName = value;
-                    });
-                  },
-                ),
-                SizedBox(height: 16),
-                // 个性签名部分
-                Text('个性签名'),
-                SizedBox(height: 8),
-                TextField(
-                  controller: _signatureController,
-                  decoration: InputDecoration(
-                    hintText: '请输入个性签名',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  maxLines: 3,
-                  onChanged: (value) {
-                    setState(() {
-                      _signature = value;
-                    });
-                  },
-                ),
-                SizedBox(height: 24),
-                // 保存按钮
-                ElevatedButton(
-                  onPressed: _saveProfile,
-                  child: Text('保存'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: Size(double.infinity, 48),
-                    backgroundColor: Colors.green,
+                const SizedBox(height: 18),
+                FilledButton(
+                  key: const Key('save_profile_button'),
+                  onPressed: _isLoading ? null : _saveProfile,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 50),
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                  ),
+                  child: const Text('保存', style: TextStyle(fontSize: 17)),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  '完善资料，让好友更了解你',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
                   ),
                 ),
               ],
             ),
           ),
-          // 加载遮罩
           if (_isLoading)
-            Container(
-              color: Color.fromRGBO(0, 0, 0, 0.5),
+            const ColoredBox(
+              color: Color.fromRGBO(0, 0, 0, 0.25),
               child: Center(child: CircularProgressIndicator()),
             ),
         ],
@@ -254,62 +371,37 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     );
   }
 
-  // 保存个人信息
-  void _saveProfile() async {
-    // 获取输入的信息
-    final String nickName = _nicknameController.text;
-    final String signature = _signatureController.text;
-
-    // 验证输入
-    if (nickName.isEmpty) {
+  Future<void> _saveProfile() async {
+    if (_nickName.trim().isEmpty) {
       _showMessage('请输入昵称');
       return;
     }
-
-    // 显示加载状态
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
-      // 获取当前用户信息
-      final UserInfoModel currentUserInfo = GlobalUtil().userInfoModel;
-
-      // 更新用户信息
-      final String userName = currentUserInfo.userName ?? "";
-      debugPrint('yx---userName = $userName');
-      final UserInfoModel updatedUserInfo = UserInfoModel(
-        userName: currentUserInfo.userName,
-        nickName: nickName,
-        avatar: currentUserInfo.avatar,
-        signature: signature,
-        friendListData: currentUserInfo.friendListData,
+      final current = GlobalUtil().userInfoModel;
+      final updated = UserInfoModel(
+        userName: current.userName,
+        nickName: _nickName.trim(),
+        avatar: current.avatar,
+        gender: _gender,
+        region: _region.trim(),
+        signature: _signature.trim(),
+        friendListData: current.friendListData,
       );
-
-      // 调用保存个人信息API
-      final int code = await updateUserInfoApi(updatedUserInfo);
-
-      // 检查API返回结果
+      final code = await updateUserInfoApi(updated);
+      if (!mounted) return;
       if (code == 100) {
-        // 保存更新后的用户信息到全局变量
-        GlobalUtil().userInfoModel = updatedUserInfo;
-        // 保存成功
+        GlobalUtil().userInfoModel = updated;
         _showMessage('个人信息保存成功');
-        // 返回到上一个页面
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       } else {
-        // 保存失败
         _showMessage('个人信息保存失败，请稍后重试');
       }
-    } catch (e) {
-      // 处理异常
-      debugPrint('保存个人信息失败：$e');
-      _showMessage('个人信息保存失败，请稍后重试');
+    } catch (error) {
+      debugPrint('保存个人信息失败：$error');
+      if (mounted) _showMessage('个人信息保存失败，请稍后重试');
     } finally {
-      // 隐藏加载状态
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 }

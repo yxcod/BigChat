@@ -3,6 +3,7 @@ import '../../utils/gloabl.dart';
 import '../../api/getInfoAPI.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../model/userInfoModel.dart';
 
 class ProfilePage extends StatefulWidget {
   ProfilePage({Key? key}) : super(key: key);
@@ -16,6 +17,8 @@ class _ProfilePageState extends State<ProfilePage>
     with AutomaticKeepAliveClientMixin {
   String signature = "有个性,不签名";
   String nickName = "默认昵称";
+  int gender = 0;
+  String region = '';
   Map<String, dynamic> _profileEditInfo = {};
   String _currentAvatarUrl = '';
 
@@ -28,8 +31,13 @@ class _ProfilePageState extends State<ProfilePage>
       if (mounted) {
         nickName = userInfo.nickName ?? "默认昵称";
         signature = userInfo.signature ?? "有个性,不签名";
+        gender = userInfo.gender;
+        region = userInfo.region;
         _profileEditInfo["nickName"] = nickName;
         _profileEditInfo["signature"] = signature;
+        _profileEditInfo["gender"] = gender;
+        _profileEditInfo["region"] = region;
+        GlobalUtil().userInfoModel = userInfo;
         // 更新头像 URL，使用缓存机制
         String avatarName = userInfo.avatar ?? "head.jpg";
         String newAvatarUrl = GlobalUtil().getImageURL(
@@ -142,6 +150,19 @@ class _ProfilePageState extends State<ProfilePage>
                           GlobalUtil().userName ?? "123",
                           style: TextStyle(color: Colors.grey, fontSize: 12),
                         ),
+                        if (gender != 0 || region.isNotEmpty) ...[
+                          SizedBox(height: 5),
+                          Text(
+                            [
+                              if (gender != 0) userGenderLabel(gender),
+                              if (region.isNotEmpty) region,
+                            ].join(' · '),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     Spacer(),

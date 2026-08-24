@@ -29,6 +29,8 @@ Future<void> openUserProfile(
   var nickname = friendInfo?.nickName ?? fallbackNickname ?? normalizedUserName;
   var avatarName = friendInfo?.avatar ?? fallbackAvatarName ?? '';
   var signature = friendInfo?.signature ?? '';
+  var gender = friendInfo?.gender ?? 0;
+  var region = friendInfo?.region ?? '';
 
   try {
     final userInfo = await getUserInfoApi(normalizedUserName);
@@ -41,6 +43,8 @@ Future<void> openUserProfile(
     if ((userInfo.signature ?? '').trim().isNotEmpty) {
       signature = userInfo.signature!.trim();
     }
+    gender = userInfo.gender;
+    region = userInfo.region.trim();
   } catch (error) {
     debugPrint('加载用户基础资料失败，使用聊天中的缓存信息: $error');
   }
@@ -70,6 +74,8 @@ Future<void> openUserProfile(
       'nickname': nickname,
       'userName': normalizedUserName,
       'signature': signature,
+      'gender': gender,
+      'region': region,
       'isFriend': friendInfo != null,
     },
   );

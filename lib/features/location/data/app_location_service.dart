@@ -15,11 +15,13 @@ class CurrentPlace {
     required this.longitude,
     required this.accuracy,
     required this.address,
+    this.cityRegion = '',
   });
   final double latitude;
   final double longitude;
   final double accuracy;
   final String address;
+  final String cityRegion;
 }
 
 class AppLocationService {
@@ -77,12 +79,16 @@ class AppLocationService {
     );
     var address =
         '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+    var cityRegion = '';
     if (resolveAddress) {
       try {
         final placemarks = await Geocoding(
           locale: const Locale('zh', 'CN'),
         ).placemarkFromCoordinates(position.latitude, position.longitude);
-        if (placemarks.isNotEmpty) address = _formatPlacemark(placemarks.first);
+        if (placemarks.isNotEmpty) {
+          address = _formatPlacemark(placemarks.first);
+          cityRegion = formatCityRegion(placemarks.first);
+        }
       } catch (_) {}
     }
     final place = CurrentPlace(
@@ -90,6 +96,7 @@ class AppLocationService {
       longitude: position.longitude,
       accuracy: position.accuracy,
       address: address,
+      cityRegion: cityRegion,
     );
     if (upload && _userName.isNotEmpty) await updateServer(place);
     return place;
@@ -189,6 +196,16 @@ class AppLocationService {
     if (_userName.isEmpty) return;
     await _http.post('/api/location/clear', data: {'userName': _userName});
   }
+}
+
+String formatCityRegion(Placemark value) {
+  final province = value.administrativeArea?.trim() ?? '';
+  final city = value.locality?.trim() ?? '';
+  if (province.isEmpty) return city;
+  if (city.isEmpty || province == city || province.endsWith(city)) {
+    return province;
+  }
+  return '$province $city';
 }
 
 String formatDistance(int meters) {
