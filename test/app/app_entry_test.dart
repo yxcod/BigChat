@@ -22,7 +22,9 @@ void main() {
       backendProbe: () async => false,
       probeInterval: const Duration(hours: 1),
     );
-    await tester.pumpWidget(MyApp(connectionMonitor: monitor));
+    await tester.pumpWidget(
+      MyApp(connectionMonitor: monitor, connectionNoticeDelay: Duration.zero),
+    );
     await tester.pump();
 
     monitor.reportHttpUnavailable();
@@ -36,6 +38,41 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('连接已恢复'), findsOneWidget);
     expect(find.text('连接已断开'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    monitor.dispose();
+  });
+
+  testWidgets('后台挂起后恢复连接不会显示断开或恢复弹窗', (tester) async {
+    final monitor = AppConnectionMonitor(
+      backendProbe: () async => true,
+      probeInterval: const Duration(hours: 1),
+      resumeGracePeriod: const Duration(milliseconds: 30),
+    );
+    await tester.pumpWidget(
+      MyApp(
+        connectionMonitor: monitor,
+        connectionNoticeDelay: const Duration(milliseconds: 10),
+      ),
+    );
+    monitor.expectRealtimeConnection(true);
+    monitor.reportRealtimeConnected();
+    await tester.pump();
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    monitor.reportRealtimeUnavailable();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(find.text('连接已断开'), findsNothing);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    monitor.reportRealtimeConnected();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('连接已断开'), findsNothing);
+    expect(find.text('连接已恢复'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
     monitor.dispose();

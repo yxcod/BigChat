@@ -27,10 +27,16 @@ String appInitialRoute(bool hasAuthenticatedSession) =>
     hasAuthenticatedSession ? '/mainWidget' : '/login';
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.connectionMonitor, this.initialRoute});
+  const MyApp({
+    super.key,
+    this.connectionMonitor,
+    this.initialRoute,
+    this.connectionNoticeDelay = const Duration(seconds: 2),
+  });
 
   final AppConnectionMonitor? connectionMonitor;
   final String? initialRoute;
+  final Duration connectionNoticeDelay;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -42,6 +48,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   AppConnectionStatus? _connectionNoticeStatus;
   late final WebSocketMessageSubscription _groupEventSubscription;
   Timer? _locationSyncTimer;
+  Timer? _connectionNoticeTimer;
+  bool _isAppForeground = true;
+  bool _disconnectionNoticePresented = false;
   final Set<int> _handlingRemovedGroups = {};
 
   @override
@@ -85,6 +94,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _connectionMonitor.removeListener(_handleConnectionStatusChanged);
     _groupEventSubscription.cancel();
     _locationSyncTimer?.cancel();
+    _connectionNoticeTimer?.cancel();
     super.dispose();
   }
 
@@ -141,24 +151,39 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       case AppLifecycleState.paused:
         // 应用进入后台
         debugPrint('应用进入后台');
+        _enterBackground();
         unawaited(GlobalUtil().flushChatRecordsToLocal());
         break;
       case AppLifecycleState.inactive:
         // 应用变为非活动状态
         debugPrint('应用变为非活动状态');
+        _enterBackground();
+        break;
+      case AppLifecycleState.hidden:
+        _enterBackground();
         break;
       case AppLifecycleState.detached:
         // 应用即将被销毁
         debugPrint('应用即将被销毁');
-
+        _enterBackground();
         break;
       case AppLifecycleState.resumed:
-        unawaited(_connectionMonitor.checkNow());
+        _isAppForeground = true;
+        _connectionMonitor.setAppActive(true);
         WebSocketManager().reconnectNow();
         _syncLocationIfPermitted();
         break;
-      default:
-        break;
+    }
+  }
+
+  void _enterBackground() {
+    _isAppForeground = false;
+    _connectionMonitor.setAppActive(false);
+    _connectionNoticeTimer?.cancel();
+    _connectionNoticeTimer = null;
+    _disconnectionNoticePresented = false;
+    if (_connectionNoticeStatus != null && mounted) {
+      setState(() => _connectionNoticeStatus = null);
     }
   }
 
@@ -176,14 +201,24 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _lastConnectionStatus = currentStatus;
 
     if (currentStatus == AppConnectionStatus.disconnected) {
-      if (mounted) {
+      if (!_isAppForeground) return;
+      _connectionNoticeTimer?.cancel();
+      _connectionNoticeTimer = Timer(widget.connectionNoticeDelay, () {
+        if (!mounted ||
+            !_isAppForeground ||
+            _connectionMonitor.status != AppConnectionStatus.disconnected) {
+          return;
+        }
         setState(() {
+          _disconnectionNoticePresented = true;
           _connectionNoticeStatus = AppConnectionStatus.disconnected;
         });
-      }
+      });
     } else if (currentStatus == AppConnectionStatus.connected &&
         previousStatus == AppConnectionStatus.disconnected) {
-      if (mounted) {
+      _connectionNoticeTimer?.cancel();
+      _connectionNoticeTimer = null;
+      if (mounted && _isAppForeground && _disconnectionNoticePresented) {
         setState(() {
           _connectionNoticeStatus = AppConnectionStatus.connected;
         });
@@ -193,7 +228,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   void _dismissConnectionNotice() {
     if (mounted) {
-      setState(() => _connectionNoticeStatus = null);
+      setState(() {
+        if (_connectionNoticeStatus == AppConnectionStatus.connected) {
+          _disconnectionNoticePresented = false;
+        }
+        _connectionNoticeStatus = null;
+      });
     }
   }
 
