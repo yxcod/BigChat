@@ -16,6 +16,7 @@ import '../../model/groupMessageModel.dart';
 import '../videoCallPage.dart';
 import '../../utils/http.dart';
 import '../../api/getGroupInfoAPI.dart';
+import '../../shared/widgets/app_back_button.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../api/groupChatRecordAPI.dart';
 import '../../utils/user_profile_navigator.dart';
@@ -1173,8 +1174,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
+        leading: AppBackButton(
           onPressed: () {
             Navigator.pop(context);
           },

@@ -965,7 +965,7 @@ class _ChatpageState extends State<Chatpage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 1,
+        elevation: 0,
         toolbarHeight: 70,
         titleSpacing: 12,
         title: AppSearchField(

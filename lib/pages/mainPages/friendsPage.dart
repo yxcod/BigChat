@@ -339,7 +339,7 @@ class _FriendsPage extends State<Friendspage>
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 1,
+        elevation: 0,
         toolbarHeight: 64,
         titleSpacing: 12,
         title: AppSearchField(

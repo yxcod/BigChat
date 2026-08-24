@@ -11,6 +11,7 @@ import '../../features/groups/presentation/group_route_registry.dart';
 import '../../features/groups/domain/group_role_policy.dart';
 import '../../features/chat/domain/chat_realtime_event.dart';
 import '../../utils/WebSocketManager.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 class GroupMembersPage extends StatefulWidget {
   final String groupId;
@@ -182,12 +183,7 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
           title: Text('群聊成员'),
           backgroundColor: Colors.white,
           elevation: 1,
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back),
-            onPressed: () {
-              Navigator.pop(context);
-            },
-          ),
+          leading: const AppBackButton(),
           actions: [
             IconButton(
               icon: Icon(Icons.sort),
@@ -297,12 +293,7 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
           title: Text('群聊成员'),
           backgroundColor: Colors.white,
           elevation: 1,
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back),
-            onPressed: () {
-              Navigator.pop(context);
-            },
-          ),
+          leading: const AppBackButton(),
         ),
         body: Center(child: Text('页面加载失败，请重试')),
       );

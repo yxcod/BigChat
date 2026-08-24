@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/app_back_button.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -192,6 +194,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6F8),
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: Text(_isAlbum ? '群相册' : '群文件'),
         actions: [
           IconButton(

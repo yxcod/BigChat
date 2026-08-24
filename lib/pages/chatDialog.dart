@@ -16,6 +16,7 @@ import '../utils/http.dart';
 import '../utils/user_profile_navigator.dart';
 import '../utils/presence_event.dart';
 import '../core/cache/app_image_cache.dart';
+import '../shared/widgets/app_back_button.dart';
 import '../shared/widgets/fullscreen_image_viewer.dart';
 import '../shared/utils/chat_scroll_util.dart';
 import '../shared/widgets/chat_background.dart';
@@ -874,8 +875,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
+        leading: AppBackButton(
           onPressed: () {
             Navigator.pop(context);
           },

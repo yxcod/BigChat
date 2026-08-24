@@ -3,6 +3,7 @@ import '../../model/friendRequestModel.dart';
 import '../../utils/Gloabl.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 class FriendAddManagerPage extends StatefulWidget {
   final List<FriendRequestModel>? initialRequests;
@@ -142,10 +143,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
         title: Text('好友验证', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 1,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: const AppBackButton(),
         actions: [
           IconButton(
             icon: Icon(Icons.more_vert, color: Colors.black),

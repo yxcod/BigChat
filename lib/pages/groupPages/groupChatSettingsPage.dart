@@ -16,6 +16,7 @@ import '../../utils/http.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
 import '../../features/groups/domain/group_role_policy.dart';
+import '../../shared/widgets/app_back_button.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
 import '../../features/chat/domain/chat_realtime_event.dart';
 import '../../utils/WebSocketManager.dart';
@@ -870,10 +871,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         title: Text('群聊设置'),
         backgroundColor: Colors.white,
         elevation: 1,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: const AppBackButton(),
       ),
       body: ListView(
         children: [

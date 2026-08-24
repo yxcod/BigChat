@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 class AddFriendRequestPage extends StatefulWidget {
   final Map<String, dynamic> targetUser;
@@ -40,6 +41,7 @@ class _AddFriendRequestPageState extends State<AddFriendRequestPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: Text('添加好友'),
         backgroundColor: Colors.white,
         elevation: 0,

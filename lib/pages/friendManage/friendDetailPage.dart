@@ -12,6 +12,7 @@ import '../videoCallPage.dart';
 import '../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../core/media/video_media.dart';
 import '../../shared/widgets/app_video_player.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 class FriendDetailPage extends StatefulWidget {
   final Map<String, dynamic> friendData;
@@ -96,7 +97,8 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        automaticallyImplyLeading: true,
+        automaticallyImplyLeading: false,
+        leading: const AppBackButton(),
         toolbarHeight: 50,
         actions: _isFriend
             ? [

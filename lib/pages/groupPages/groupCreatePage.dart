@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../utils/gloabl.dart';
 import '../../api/getGroupInfoAPI.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 class GroupCreatePage extends StatefulWidget {
   const GroupCreatePage({Key? key}) : super(key: key);
@@ -213,10 +214,7 @@ class _GroupCreatePageState extends State<GroupCreatePage> {
         title: Text('创建群聊'),
         backgroundColor: Colors.white,
         elevation: 1,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: const AppBackButton(),
       ),
       body: Container(
         padding: EdgeInsets.all(16.0),

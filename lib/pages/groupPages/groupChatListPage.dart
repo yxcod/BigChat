@@ -6,6 +6,7 @@ import '../../core/config/refresh_intervals.dart';
 import '../../utils/gloabl.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../model/groupInfoModel.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 class GroupChat {
   final int groupId;
@@ -140,6 +141,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: Text('群聊'),
         backgroundColor: Colors.white,
         elevation: 1,

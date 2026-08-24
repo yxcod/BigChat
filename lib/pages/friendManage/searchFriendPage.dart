@@ -3,6 +3,7 @@ import 'addFriendRequestPage.dart';
 import '../../api/getInfoAPI.dart';
 import '../../utils/Gloabl.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 class SearchFriendPage extends StatefulWidget {
   @override
@@ -36,6 +37,7 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(),
         title: Text('搜索好友'),
         backgroundColor: Colors.white,
         elevation: 0,
@@ -44,9 +46,6 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
         children: [
           // 搜索区域
           _buildSearchSection(),
-
-          // 分割线
-          Divider(height: 1, color: Colors.grey[200]),
 
           // 搜索结果区域
           Expanded(child: _buildSearchResultSection()),
