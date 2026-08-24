@@ -6,6 +6,7 @@ import 'package:record/record.dart';
 
 const int maxVoiceDurationSeconds = 60;
 const int minVoiceDurationMilliseconds = 700;
+const int minVoiceFileBytes = 256;
 
 class VoiceMessagePayload {
   const VoiceMessagePayload({
@@ -93,8 +94,14 @@ class VoiceRecorder implements VoiceRecorderController {
       const RecordConfig(
         encoder: AudioEncoder.aacLc,
         bitRate: 64000,
-        sampleRate: 16000,
+        sampleRate: 44100,
         numChannels: 1,
+        iosConfig: IosRecordConfig(
+          categoryOptions: [
+            IosAudioCategoryOption.defaultToSpeaker,
+            IosAudioCategoryOption.allowBluetooth,
+          ],
+        ),
       ),
       path: _path!,
     );
@@ -108,6 +115,12 @@ class VoiceRecorder implements VoiceRecorderController {
     _startedAt = null;
     _path = null;
     if (startedAt == null || recordedPath == null) return null;
+    final file = File(recordedPath);
+    final byteLength = await file.exists() ? await file.length() : 0;
+    if (byteLength < minVoiceFileBytes) {
+      if (await file.exists()) await file.delete();
+      throw Exception('未录到有效声音，请检查麦克风权限或音频设备后重试');
+    }
     return VoiceRecordingResult(
       path: recordedPath,
       durationMs: DateTime.now().difference(startedAt).inMilliseconds,

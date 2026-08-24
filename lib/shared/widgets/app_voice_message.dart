@@ -64,9 +64,11 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
     } catch (error) {
       debugPrint('语音播放加载失败: $error, source=${widget.source}');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('语音加载失败，请稍后重试')));
+        final isDamaged =
+            error is StateError && error.toString().contains('已损坏');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(isDamaged ? '该语音文件已损坏，无法播放' : '语音加载失败，请稍后重试')),
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -93,8 +95,9 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
         temporaryPath,
         cancelToken: cancelToken,
       );
-      if (!await temporary.exists() || await temporary.length() <= 0) {
-        throw StateError('下载的语音文件为空');
+      if (!await temporary.exists() ||
+          await temporary.length() < minVoiceFileBytes) {
+        throw StateError('语音文件已损坏或没有声音数据');
       }
       final destination = File(destinationPath);
       if (await destination.exists()) await destination.delete();

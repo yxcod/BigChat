@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import 'voice_message.dart';
+
 Future<String> voiceCachePath(String url, {Directory? rootDirectory}) async {
   final directory = rootDirectory ?? await getApplicationSupportDirectory();
   final voiceDirectory = Directory('${directory.path}/chat_voice_cache');
@@ -24,7 +26,10 @@ Future<String> voiceCachePath(String url, {Directory? rootDirectory}) async {
 Future<String?> cachedVoicePath(String url, {Directory? rootDirectory}) async {
   final path = await voiceCachePath(url, rootDirectory: rootDirectory);
   final file = File(path);
-  if (!await file.exists() || await file.length() <= 0) return null;
+  if (!await file.exists() || await file.length() < minVoiceFileBytes) {
+    if (await file.exists()) await file.delete();
+    return null;
+  }
   return path;
 }
 
@@ -35,7 +40,9 @@ Future<String?> cacheUploadedVoice(
 }) async {
   try {
     final source = File(localPath);
-    if (!await source.exists() || await source.length() <= 0) return null;
+    if (!await source.exists() || await source.length() < minVoiceFileBytes) {
+      return null;
+    }
     final destinationPath = await voiceCachePath(
       remoteUrl,
       rootDirectory: rootDirectory,

@@ -139,7 +139,13 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
       await _recorder.cancel();
       return;
     }
-    final result = await _recorder.stop();
+    VoiceRecordingResult? result;
+    try {
+      result = await _recorder.stop();
+    } catch (error) {
+      widget.onError(error.toString().replaceFirst('Exception: ', ''));
+      return;
+    }
     if (result == null) return;
     if (result.durationMs < minVoiceDurationMilliseconds) {
       final file = File(result.path);
