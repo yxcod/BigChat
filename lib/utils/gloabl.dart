@@ -15,6 +15,7 @@ import '../features/chat/application/chat_store.dart';
 import '../features/chat/domain/chat_message_mapper.dart';
 import '../features/chat/domain/chat_time_formatter.dart';
 import '../features/chat/data/chat_local_cache.dart';
+import '../features/chat/data/hidden_messages_store.dart';
 import '../features/groups/application/group_member_cache.dart';
 
 class GlobalUtil {
@@ -28,6 +29,7 @@ class GlobalUtil {
 
   final ChatStore _chatStore = ChatStore();
   final ChatLocalCache _chatLocalCache = ChatLocalCache();
+  final HiddenMessagesStore _hiddenMessagesStore = HiddenMessagesStore();
   final GroupMemberCache _groupMemberCache = GroupMemberCache();
   final Map<String, Timer> _chatCacheWriteTimers = {};
 
@@ -142,6 +144,7 @@ class GlobalUtil {
 
   // 添加消息到聊天记录
   void addMessage(String userName, Message message) {
+    if (_isMessageHidden(userName, message.msgId)) return;
     if (_chatStore.addMessage(userName, message)) {
       _scheduleChatCacheWrite(userName);
     }
@@ -166,10 +169,16 @@ class GlobalUtil {
     final ownerId = userName ?? '';
     if (ownerId.isEmpty) return false;
 
-    var messages = await _chatLocalCache.load(ownerId, conversationId);
+    var messages = _filterHiddenMessages(
+      conversationId,
+      await _chatLocalCache.load(ownerId, conversationId),
+    );
     if (messages.isEmpty && conversationId.startsWith('group:')) {
       final legacyId = conversationId.substring('group:'.length);
-      messages = await _chatLocalCache.load(ownerId, legacyId);
+      messages = _filterHiddenMessages(
+        conversationId,
+        await _chatLocalCache.load(ownerId, legacyId),
+      );
       if (messages.isNotEmpty) {
         _chatStore.replaceMessages(conversationId, messages);
         await persistChatRecords(conversationId);
@@ -213,7 +222,10 @@ class GlobalUtil {
     String conversationId,
     List<Message> messages,
   ) async {
-    _chatStore.replaceMessages(conversationId, messages);
+    _chatStore.replaceMessages(
+      conversationId,
+      _filterHiddenMessages(conversationId, messages),
+    );
     await persistChatRecords(conversationId);
   }
 
@@ -221,7 +233,10 @@ class GlobalUtil {
     String conversationId,
     List<Message> messages,
   ) async {
-    _chatStore.mergeMessages(conversationId, messages);
+    _chatStore.mergeMessages(
+      conversationId,
+      _filterHiddenMessages(conversationId, messages),
+    );
     await persistChatRecords(conversationId);
   }
 
@@ -291,8 +306,7 @@ class GlobalUtil {
           .toList();
 
       // 保存到_chatRecords
-      _chatStore.mergeMessages(userName, messages);
-      await persistChatRecords(userName);
+      await mergeChatRecords(userName, messages);
 
       debugPrint('成功加载$count条聊天记录');
     } catch (e) {
@@ -361,8 +375,31 @@ class GlobalUtil {
 
   // 删除指定消息
   void deleteMessage(String userName, int msgId) {
+    final ownerId = this.userName ?? '';
+    if (ownerId.isNotEmpty) {
+      unawaited(_hiddenMessagesStore.hide(ownerId, userName, msgId));
+    }
     _chatStore.deleteMessage(userName, msgId);
     _scheduleChatCacheWrite(userName);
+  }
+
+  bool _isMessageHidden(String conversationId, int messageId) {
+    final ownerId = userName ?? '';
+    if (ownerId.isEmpty) return false;
+    return _hiddenMessagesStore.isHidden(ownerId, conversationId, messageId);
+  }
+
+  List<Message> _filterHiddenMessages(
+    String conversationId,
+    Iterable<Message> messages,
+  ) {
+    final ownerId = userName ?? '';
+    if (ownerId.isEmpty) return List<Message>.from(messages);
+    final hidden = _hiddenMessagesStore.load(ownerId, conversationId);
+    if (hidden.isEmpty) return List<Message>.from(messages);
+    return messages
+        .where((message) => !hidden.contains(message.msgId))
+        .toList();
   }
 
   // 群成员列表管理方法
@@ -443,7 +480,11 @@ class GlobalUtil {
     List<Message> messages,
   ) async {
     try {
-      await _chatLocalCache.save(myUserName, otherUserName, messages);
+      await _chatLocalCache.save(
+        myUserName,
+        otherUserName,
+        _filterHiddenMessages(otherUserName, messages),
+      );
     } catch (e) {
       // 处理保存失败的情况
       if (kDebugMode) {
@@ -459,7 +500,10 @@ class GlobalUtil {
     String otherUserName,
   ) async {
     try {
-      return await _chatLocalCache.load(myUserName, otherUserName);
+      return _filterHiddenMessages(
+        otherUserName,
+        await _chatLocalCache.load(myUserName, otherUserName),
+      );
     } catch (e) {
       // 处理读取失败的情况
       if (kDebugMode) {
