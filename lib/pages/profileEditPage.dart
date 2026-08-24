@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import '../utils/gloabl.dart';
 import '../api/getInfoAPI.dart';
 import '../model/userInfoModel.dart';
-import '../utils/WebSocketManager.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../core/cache/app_image_cache.dart';
-import '../utils/storageUtil.dart';
+import 'change_password_page.dart';
 
 class ProfileEditPage extends StatefulWidget {
   final Map<String, dynamic>? profileInfo;
@@ -18,9 +17,6 @@ class ProfileEditPage extends StatefulWidget {
 class _ProfileEditPageState extends State<ProfileEditPage> {
   final _nicknameController = TextEditingController();
   final _signatureController = TextEditingController();
-  final _currentPasswordController = TextEditingController();
-  final _newPasswordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
 
   bool _isLoading = false;
   String _nickName = "";
@@ -40,9 +36,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   void dispose() {
     _nicknameController.dispose();
     _signatureController.dispose();
-    _currentPasswordController.dispose();
-    _newPasswordController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -104,152 +97,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     }
   }
 
-  // 显示修改密码弹窗
-  void _showChangePasswordDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('修改密码'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: _currentPasswordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: '当前密码',
-                    hintText: '请输入当前密码',
-                    prefixIcon: Icon(Icons.lock_outline),
-                  ),
-                ),
-                SizedBox(height: 16),
-                TextField(
-                  controller: _newPasswordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: '新密码',
-                    hintText: '请输入新密码',
-                    prefixIcon: Icon(Icons.lock),
-                  ),
-                ),
-                SizedBox(height: 16),
-                TextField(
-                  controller: _confirmPasswordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: '确认密码',
-                    hintText: '请再次输入新密码',
-                    prefixIcon: Icon(Icons.lock),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('取消'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _changePassword();
-              },
-              child: Text('确定'),
-            ),
-          ],
-        );
-      },
+  void _openChangePasswordPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => const ChangePasswordPage()),
     );
-  }
-
-  // 修改密码
-  void _changePassword() async {
-    // 获取输入的密码
-    final String currentPassword = _currentPasswordController.text;
-    final String newPassword = _newPasswordController.text;
-    final String confirmPassword = _confirmPasswordController.text;
-
-    // 验证输入
-    if (currentPassword.isEmpty) {
-      _showMessage('请输入当前密码');
-      return;
-    }
-
-    if (newPassword.isEmpty) {
-      _showMessage('请输入新密码');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      _showMessage('新密码长度不能少于6位');
-      return;
-    }
-
-    if (newPassword != confirmPassword) {
-      _showMessage('两次输入的密码不一致');
-      return;
-    }
-
-    // 显示加载状态
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // 获取当前用户名
-      final String userName = GlobalUtil().userName ?? '';
-      if (userName.isEmpty) {
-        _showMessage('无法获取当前用户信息');
-        return;
-      }
-
-      // 调用修改密码API
-      final int code = await changePasswordApi(
-        userName,
-        currentPassword,
-        newPassword,
-      );
-
-      // 检查API返回结果
-      if (code == 100) {
-        // 密码修改成功，清空输入框
-        _currentPasswordController.clear();
-        _newPasswordController.clear();
-        _confirmPasswordController.clear();
-        _showMessage('密码修改成功，即将退出登录');
-        // 延迟1秒后退出登录
-        Future.delayed(Duration(seconds: 1), () {
-          _performLogout();
-        });
-      } else {
-        // 密码修改失败
-        _showMessage('密码修改失败，请检查当前密码是否正确');
-      }
-    } catch (e) {
-      // 处理异常
-      debugPrint('修改密码失败：$e');
-      _showMessage('密码修改失败，请稍后重试');
-    } finally {
-      // 隐藏加载状态
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  // 执行退出登录
-  Future<void> _performLogout() async {
-    // 断开WebSocket连接
-    WebSocketManager().disconnect();
-    final globalUtil = GlobalUtil();
-    await globalUtil.flushChatRecordsToLocal();
-    globalUtil.resetSessionState();
-    await StorageUtil.logout();
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(context, '/login');
   }
 
   // 显示提示信息
@@ -270,7 +122,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         toolbarHeight: 50,
         actions: [
           IconButton(
-            onPressed: _showChangePasswordDialog,
+            key: const Key('open_change_password_page'),
+            onPressed: _openChangePasswordPage,
             icon: Icon(Icons.lock, color: Colors.green),
             tooltip: '修改密码',
           ),
