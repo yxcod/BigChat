@@ -12,6 +12,11 @@ void main() {
     expect(find.text('登录'), findsWidgets);
   });
 
+  test('已恢复的登录会话选择主界面作为启动路由', () {
+    expect(appInitialRoute(true), '/mainWidget');
+    expect(appInitialRoute(false), '/login');
+  });
+
   testWidgets('断线和恢复时分别显示一次全局提示弹窗', (tester) async {
     final monitor = AppConnectionMonitor(
       backendProbe: () async => false,

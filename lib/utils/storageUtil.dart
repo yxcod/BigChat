@@ -149,10 +149,59 @@ class StorageUtil {
     return _prefs?.getBool('is_login') ?? false;
   }
 
+  /// Persists an authenticated session without storing the user's password.
+  static Future<void> saveAuthenticatedSession({
+    required String userName,
+    required String token,
+  }) async {
+    await _ensureInitialized();
+    final normalizedUserName = userName.trim();
+    final normalizedToken = token.trim();
+    if (normalizedUserName.isEmpty || normalizedToken.isEmpty) {
+      throw ArgumentError('用户名和登录令牌不能为空');
+    }
+    await Future.wait([
+      _prefs!.setString('global_userName', normalizedUserName),
+      _prefs!.setString('global_token', normalizedToken),
+      _prefs!.setString('user_id', normalizedUserName),
+      _prefs!.setString('access_token', normalizedToken),
+      _prefs!.setBool('is_login', true),
+    ]);
+  }
+
+  /// Restores current and legacy session keys. Logout removes all these keys,
+  /// so a session is restored only when the user did not explicitly sign out.
+  static Future<bool> restoreAuthenticatedSession() async {
+    await _ensureInitialized();
+    final userName =
+        (_prefs!.getString('global_userName') ??
+                _prefs!.getString('user_id') ??
+                _prefs!.getString('user_phone'))
+            ?.trim();
+    final token =
+        (_prefs!.getString('global_token') ?? _prefs!.getString('access_token'))
+            ?.trim();
+    if (userName == null ||
+        userName.isEmpty ||
+        token == null ||
+        token.isEmpty) {
+      return false;
+    }
+    // Also migrates sessions created by older app versions that did not write
+    // the is_login flag but did persist global_userName/global_token.
+    await saveAuthenticatedSession(userName: userName, token: token);
+    return true;
+  }
+
   static Future<bool> logout() async {
     await _ensureInitialized();
     await AppImageCache.clear();
     await clearAllImages();
+    return clearAuthenticatedSession();
+  }
+
+  static Future<bool> clearAuthenticatedSession() async {
+    await _ensureInitialized();
     await _prefs!.remove('user_id');
     await _prefs!.remove('user_phone');
     await _prefs!.remove('user_nickname');
@@ -160,6 +209,7 @@ class StorageUtil {
     await _prefs!.remove('access_token');
     await _prefs!.remove('global_token');
     await _prefs!.remove('global_userName');
+    await _prefs!.remove('global_isLoading');
     return _prefs!.setBool('is_login', false);
   }
 

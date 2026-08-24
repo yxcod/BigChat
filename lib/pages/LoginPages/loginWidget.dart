@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../utils/http.dart';
 import '../../utils/gloabl.dart';
 import '../../utils/WebSocketManager.dart';
+import '../../utils/storageUtil.dart';
 
 void main() {
   runApp(MaterialApp(home: BigchatLoginPage()));
@@ -95,6 +96,9 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
 
           //登录成功
           if (code == 100) {
+            if (token == null || token.trim().isEmpty) {
+              throw Exception('服务器未返回有效登录令牌');
+            }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('登录成功'), duration: Duration(seconds: 2)),
             );
@@ -102,6 +106,11 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
             GlobalUtil().userName = phone;
             GlobalUtil().isLoading = true;
             GlobalUtil().token = token;
+            await StorageUtil.saveAuthenticatedSession(
+              userName: phone,
+              token: token,
+            );
+            if (!mounted) return;
 
             // 初始化WebSocket连接，传入当前用户名
             _initializeWebSocket();

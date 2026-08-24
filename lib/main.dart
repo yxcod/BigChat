@@ -17,14 +17,20 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.validate();
   await StorageUtil.init();
+  final hasAuthenticatedSession =
+      await StorageUtil.restoreAuthenticatedSession();
 
-  runApp(const MyApp());
+  runApp(MyApp(initialRoute: appInitialRoute(hasAuthenticatedSession)));
 }
 
+String appInitialRoute(bool hasAuthenticatedSession) =>
+    hasAuthenticatedSession ? '/mainWidget' : '/login';
+
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.connectionMonitor});
+  const MyApp({super.key, this.connectionMonitor, this.initialRoute});
 
   final AppConnectionMonitor? connectionMonitor;
+  final String? initialRoute;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -50,11 +56,26 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _groupEventSubscription = WebSocketManager().addMessageListener(
       _handleGlobalGroupEvent,
     );
+    _connectRestoredSession();
     _locationSyncTimer = Timer.periodic(
       const Duration(minutes: 5),
       (_) => _syncLocationIfPermitted(),
     );
     _syncLocationIfPermitted();
+  }
+
+  void _connectRestoredSession() {
+    final global = GlobalUtil();
+    final userName = global.userName?.trim() ?? '';
+    final token = global.token?.trim() ?? '';
+    if (userName.isEmpty || token.isEmpty) return;
+    unawaited(
+      WebSocketManager()
+          .connect(global.getChatWebSocketURL(userName))
+          .catchError((Object error) {
+            debugPrint('恢复登录后的 WebSocket 连接失败：$error');
+          }),
+    );
   }
 
   @override
@@ -212,7 +233,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       title: "全信",
       theme: AppTheme.light,
       navigatorKey: GlobalNavigatorKey.navigatorKey,
-      initialRoute: '/login',
+      initialRoute:
+          widget.initialRoute ??
+          appInitialRoute(
+            (GlobalUtil().userName ?? '').isNotEmpty &&
+                (GlobalUtil().token ?? '').isNotEmpty,
+          ),
       routes: getRoutes(),
       onGenerateRoute: generateRoute,
       builder: (context, child) => Stack(
