@@ -29,8 +29,13 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   static AudioPlayer? _activePlayer;
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<PlayerState>? _stateSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
   bool _loading = false;
   bool _playing = false;
+  bool _dragging = false;
+  bool _resumeAfterSeek = false;
+  double? _dragFraction;
+  Duration _position = Duration.zero;
   CancelToken? _downloadCancelToken;
   String? _loadedSource;
   Future<void>? _cachedPreload;
@@ -42,7 +47,14 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
       if (!mounted) return;
       final completed = state.processingState == ProcessingState.completed;
       setState(() => _playing = state.playing && !completed);
-      if (completed) unawaited(_player.seek(Duration.zero));
+      if (completed) {
+        _position = Duration.zero;
+        unawaited(_player.seek(Duration.zero));
+      }
+    });
+    _positionSubscription = _player.positionStream.listen((position) {
+      if (!mounted || _dragging) return;
+      setState(() => _position = position);
     });
     _cachedPreload = _preloadCachedSource(widget.source);
   }
@@ -90,6 +102,72 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
     } catch (error) {
       _showPlaybackError(error);
     }
+  }
+
+  Duration get _effectiveDuration =>
+      _player.duration ?? Duration(milliseconds: widget.payload.durationMs);
+
+  double get _progressFraction =>
+      _dragFraction ?? voiceProgressFraction(_position, _effectiveDuration);
+
+  void _startSeeking(double localX, double width) {
+    if (width <= 0 || _loading) return;
+    _resumeAfterSeek = _playing;
+    _dragging = true;
+    _updateSeeking(localX, width);
+    if (_playing) unawaited(_player.pause());
+  }
+
+  void _updateSeeking(double localX, double width) {
+    if (!_dragging || width <= 0) return;
+    setState(() => _dragFraction = (localX / width).clamp(0.0, 1.0));
+  }
+
+  void _finishSeeking() {
+    if (!_dragging) return;
+    final fraction = _dragFraction ?? 0;
+    final shouldResume = _resumeAfterSeek;
+    setState(() => _dragging = false);
+    unawaited(_seekToFraction(fraction, resume: shouldResume));
+  }
+
+  Future<void> _seekToFraction(double fraction, {required bool resume}) async {
+    try {
+      if (_loadedSource != widget.source) {
+        if (mounted) setState(() => _loading = true);
+        await _cachedPreload;
+        if (_loadedSource != widget.source) await _loadSource();
+      }
+      final duration = _effectiveDuration;
+      final target = Duration(
+        milliseconds: (duration.inMilliseconds * fraction.clamp(0.0, 1.0))
+            .round(),
+      );
+      await _player.seek(target);
+      if (mounted) {
+        setState(() {
+          _position = target;
+          _dragFraction = null;
+          _loading = false;
+        });
+      }
+      if (resume && !_player.playing) unawaited(_playAndHandleErrors());
+    } catch (error) {
+      _showPlaybackError(error);
+      if (mounted) {
+        setState(() {
+          _dragFraction = null;
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  void _tapSeek(double localX, double width) {
+    if (width <= 0 || _loading) return;
+    unawaited(
+      _seekToFraction((localX / width).clamp(0.0, 1.0), resume: _playing),
+    );
   }
 
   void _showPlaybackError(Object error) {
@@ -143,6 +221,9 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
       _downloadCancelToken?.cancel('语音来源已更新');
       _loadedSource = null;
       _cachedPreload = Future<void>.value();
+      _position = Duration.zero;
+      _dragFraction = null;
+      _dragging = false;
       unawaited(_player.stop());
     }
   }
@@ -152,6 +233,7 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
     if (_activePlayer == _player) _activePlayer = null;
     _downloadCancelToken?.cancel('语音组件已关闭');
     _stateSubscription?.cancel();
+    _positionSubscription?.cancel();
     _player.dispose();
     super.dispose();
   }
@@ -159,57 +241,99 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   @override
   Widget build(BuildContext context) {
     final seconds = widget.payload.durationSeconds;
-    final width = (88.0 + seconds * 2.1).clamp(92.0, 210.0);
+    final width = voiceBubbleWidth(seconds);
+    final foregroundColor = widget.isMe
+        ? const Color(0xFF1769AA)
+        : const Color(0xFF333333);
     return Material(
       color: widget.isMe ? Colors.blue[100] : Colors.white,
       borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: _toggle,
-        borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          width: width,
-          height: 46,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              textDirection: widget.isMe
-                  ? TextDirection.rtl
-                  : TextDirection.ltr,
-              children: [
-                if (_loading)
-                  const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  Icon(
-                    _playing ? Icons.pause_rounded : Icons.volume_up_rounded,
-                    size: 22,
-                  ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: List.generate(
-                      7,
-                      (index) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 2.5,
-                        height: _playing
-                            ? 8.0 + ((index * 7) % 15)
-                            : 5.0 + ((index * 5) % 11),
-                        decoration: BoxDecoration(
-                          color: Colors.black45,
-                          borderRadius: BorderRadius.circular(2),
+      child: SizedBox(
+        width: width,
+        height: 50,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: [
+              SizedBox.square(
+                dimension: 34,
+                child: _loading
+                    ? const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        key: const ValueKey('voice_play_button'),
+                        padding: EdgeInsets.zero,
+                        onPressed: _toggle,
+                        icon: Icon(
+                          _playing
+                              ? Icons.pause_circle_filled_rounded
+                              : Icons.play_circle_fill_rounded,
+                          size: 30,
+                          color: foregroundColor,
                         ),
                       ),
-                    ),
-                  ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final progress = _progressFraction;
+                    final barCount = (constraints.maxWidth / 5).floor().clamp(
+                      10,
+                      34,
+                    );
+                    return Semantics(
+                      label: '语音播放进度',
+                      value: '${(progress * 100).round()}%',
+                      child: GestureDetector(
+                        key: const ValueKey('voice_progress_track'),
+                        behavior: HitTestBehavior.opaque,
+                        onTapUp: (details) => _tapSeek(
+                          details.localPosition.dx,
+                          constraints.maxWidth,
+                        ),
+                        onHorizontalDragStart: (details) => _startSeeking(
+                          details.localPosition.dx,
+                          constraints.maxWidth,
+                        ),
+                        onHorizontalDragUpdate: (details) => _updateSeeking(
+                          details.localPosition.dx,
+                          constraints.maxWidth,
+                        ),
+                        onHorizontalDragEnd: (_) => _finishSeeking(),
+                        onHorizontalDragCancel: _finishSeeking,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: List.generate(barCount, (index) {
+                            final normalized = barCount <= 1
+                                ? 0.0
+                                : index / (barCount - 1);
+                            final played = normalized <= progress;
+                            return Container(
+                              width: 2.4,
+                              height: 7.0 + ((index * 7) % 16),
+                              decoration: BoxDecoration(
+                                color: played
+                                    ? foregroundColor
+                                    : foregroundColor.withValues(alpha: 0.28),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                const SizedBox(width: 7),
-                Text('$seconds″', style: const TextStyle(fontSize: 12)),
-              ],
-            ),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                '$seconds″',
+                style: TextStyle(fontSize: 12, color: foregroundColor),
+              ),
+            ],
           ),
         ),
       ),

@@ -8,6 +8,19 @@ const int maxVoiceDurationSeconds = 60;
 const int minVoiceDurationMilliseconds = 700;
 const int minVoiceFileBytes = 256;
 
+double voiceBubbleWidth(int durationSeconds) {
+  return (126.0 + durationSeconds.clamp(1, 60) * 2.35)
+      .clamp(132.0, 267.0)
+      .toDouble();
+}
+
+double voiceProgressFraction(Duration position, Duration duration) {
+  if (duration.inMilliseconds <= 0) return 0;
+  return (position.inMilliseconds / duration.inMilliseconds)
+      .clamp(0.0, 1.0)
+      .toDouble();
+}
+
 class VoiceMessagePayload {
   const VoiceMessagePayload({
     required this.audioName,

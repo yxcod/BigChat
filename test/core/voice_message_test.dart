@@ -32,4 +32,24 @@ void main() {
     );
     expect(chatVoicePreview('普通文本'), '普通文本');
   });
+
+  test('voice bubble grows with duration and progress stays normalized', () {
+    expect(voiceBubbleWidth(1), lessThan(voiceBubbleWidth(15)));
+    expect(voiceBubbleWidth(15), lessThan(voiceBubbleWidth(60)));
+    expect(voiceBubbleWidth(120), voiceBubbleWidth(60));
+    expect(
+      voiceProgressFraction(
+        const Duration(seconds: 5),
+        const Duration(seconds: 20),
+      ),
+      0.25,
+    );
+    expect(
+      voiceProgressFraction(
+        const Duration(seconds: 30),
+        const Duration(seconds: 20),
+      ),
+      1,
+    );
+  });
 }
