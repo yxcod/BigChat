@@ -27,6 +27,7 @@ import '../shared/utils/chat_scroll_util.dart';
 import '../shared/widgets/chat_background.dart';
 import '../features/location/data/app_location_service.dart';
 import '../features/location/domain/distance_retry.dart';
+import '../features/location/presentation/chat_location_draft.dart';
 import '../core/media/video_media.dart';
 import '../core/media/chat_file.dart';
 import '../shared/widgets/app_video_player.dart';
@@ -74,6 +75,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   final Set<int> _failedFileMessageIds = {};
   CancelToken? _audioUploadCancelToken;
   bool _isUploadingAudio = false;
+  bool _isResolvingLocation = false;
   bool _isMoreActionsVisible = false;
   MessageQuote? _pendingQuote;
   Timer? _distanceTimer;
@@ -1046,19 +1048,42 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     }
   }
 
-  void _showUnavailableAction(String label) {
-    if (!mounted) return;
-    final message = label == '语音输入'
-        ? '请在输入框中长按发送语音'
-        : '$label消息需要后端消息协议支持，暂未开放';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
   void _toggleMoreActions() {
     FocusScope.of(context).unfocus();
     setState(() => _isMoreActionsVisible = !_isMoreActionsVisible);
+  }
+
+  Future<void> _fillCurrentLocationDraft() async {
+    if (_isResolvingLocation) return;
+    setState(() => _isResolvingLocation = true);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('正在获取当前位置…'),
+        duration: Duration(seconds: 15),
+      ),
+    );
+    try {
+      final place = await AppLocationService().locate();
+      if (!mounted) return;
+      final locationText = place.address.trim();
+      if (locationText.isEmpty) throw Exception('未能解析当前位置');
+      messenger.hideCurrentSnackBar();
+      replaceChatDraftWithLocation(_textController, locationText);
+      setState(() => _isComposing = true);
+      _textFieldFocusNode.requestFocus();
+    } catch (error) {
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+      final message = error.toString().replaceFirst('Exception: ', '').trim();
+      messenger.showSnackBar(
+        SnackBar(content: Text(message.isEmpty ? '位置获取失败，请稍后重试' : message)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isResolvingLocation = false);
+      }
+    }
   }
 
   Future<void> _handleMoreAction(ChatMoreActionType action) async {
@@ -1071,7 +1096,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       case ChatMoreActionType.capture:
         await _showMediaTypePicker(ImageSource.camera);
       case ChatMoreActionType.location:
-        _showUnavailableAction('位置');
+        await _fillCurrentLocationDraft();
       case ChatMoreActionType.file:
         await _pickFile();
     }
