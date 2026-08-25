@@ -24,7 +24,7 @@
     <uses-feature android:name="android.hardware.microphone" />
     
     <application
-        android:label="flutter_base"
+        android:label="全信"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
