@@ -73,4 +73,21 @@ void main() {
       '北京市',
     );
   });
+
+  test('nearby fallback names strip province city and district prefixes', () {
+    expect(
+      compactPlacemarkNames(
+        const Placemark(
+          country: '中国',
+          administrativeArea: '江苏省',
+          locality: '南京市',
+          subLocality: '玄武区',
+          name: '江苏省南京市玄武区中山东路305号',
+          street: '南京市玄武区中山东路',
+          thoroughfare: '中山东路',
+        ),
+      ),
+      ['中山东路305号', '中山东路'],
+    );
+  });
 }

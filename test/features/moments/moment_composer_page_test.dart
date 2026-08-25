@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_base/features/moments/data/moments_repository.dart';
 import 'package:flutter_base/features/moments/presentation/moment_composer_page.dart';
+import 'package:flutter_base/features/location/domain/nearby_place.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -44,7 +45,7 @@ void main() {
     expect(find.text('打开编辑器'), findsOneWidget);
   });
 
-  testWidgets('choosing a location does not retain a disposed controller', (
+  testWidgets('choosing a location opens a page and keeps the selected POI', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -54,20 +55,28 @@ void main() {
           authorId: 'me',
           authorName: '小明',
           authorAvatarUrl: '',
+          locationLoader: () async => const NearbyPlacesResult(
+            currentCity: '南京市',
+            places: [
+              NearbyPlace(
+                name: '中山东路',
+                address: '江苏省南京市玄武区中山东路',
+                distanceMeters: 180,
+              ),
+            ],
+          ),
         ),
       ),
     );
 
     await tester.tap(find.byKey(const Key('moment_location_button')));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('moment_location_field')),
-      '上海·徐家汇',
-    );
-    await tester.tap(find.text('确定'));
+    expect(find.text('南京市'), findsOneWidget);
+    expect(find.text('中山东路'), findsOneWidget);
+    await tester.tap(find.text('中山东路'));
     await tester.pumpAndSettle();
 
-    expect(find.text('上海·徐家汇'), findsOneWidget);
+    expect(find.text('中山东路'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

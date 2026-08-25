@@ -16,12 +16,14 @@ class CurrentPlace {
     required this.accuracy,
     required this.address,
     this.cityRegion = '',
+    this.placeCandidates = const [],
   });
   final double latitude;
   final double longitude;
   final double accuracy;
   final String address;
   final String cityRegion;
+  final List<String> placeCandidates;
 }
 
 class AppLocationService {
@@ -106,6 +108,7 @@ class AppLocationService {
     var address =
         '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
     var cityRegion = '';
+    var placeCandidates = const <String>[];
     if (resolveAddress) {
       try {
         final placemarks = await Geocoding(
@@ -114,6 +117,7 @@ class AppLocationService {
         if (placemarks.isNotEmpty) {
           address = _formatPlacemark(placemarks.first);
           cityRegion = formatCityRegion(placemarks.first);
+          placeCandidates = compactPlacemarkNames(placemarks.first);
         }
       } catch (_) {}
     }
@@ -123,6 +127,7 @@ class AppLocationService {
       accuracy: position.accuracy,
       address: address,
       cityRegion: cityRegion,
+      placeCandidates: placeCandidates,
     );
     if (upload && _userName.isNotEmpty) await updateServer(place);
     return place;
@@ -252,4 +257,34 @@ String formatDistance(int meters) {
   if (meters < 1000) return '${meters.clamp(0, 999)}米';
   if (meters < 10000) return '${(meters / 1000).toStringAsFixed(1)}公里';
   return '${(meters / 1000).round()}公里';
+}
+
+List<String> compactPlacemarkNames(Placemark placemark) {
+  final prefixes =
+      <String?>[
+            placemark.country,
+            placemark.administrativeArea,
+            placemark.locality,
+            placemark.subLocality,
+          ]
+          .whereType<String>()
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty);
+  final results = <String>[];
+  for (final raw in <String?>[
+    placemark.name,
+    placemark.street,
+    placemark.thoroughfare,
+  ]) {
+    var value = raw?.trim() ?? '';
+    if (value.isEmpty) continue;
+    for (final prefix in prefixes) {
+      if (value.startsWith(prefix)) {
+        value = value.substring(prefix.length).trim();
+      }
+    }
+    value = value.replaceFirst(RegExp(r'^[·,，\s]+'), '');
+    if (value.isNotEmpty && !results.contains(value)) results.add(value);
+  }
+  return List<String>.unmodifiable(results);
 }

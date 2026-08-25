@@ -11,7 +11,7 @@ import '../data/moments_repository.dart';
 import '../domain/moment.dart';
 import '../../../core/media/video_media.dart';
 import '../../../shared/widgets/app_video_player.dart';
-import '../../location/data/app_location_service.dart';
+import 'moment_location_picker_page.dart';
 
 class MomentComposerPage extends StatefulWidget {
   const MomentComposerPage({
@@ -21,6 +21,7 @@ class MomentComposerPage extends StatefulWidget {
     required this.authorName,
     required this.authorAvatarUrl,
     this.mediaUploader,
+    this.locationLoader,
   });
 
   final MomentsRepository repository;
@@ -28,6 +29,7 @@ class MomentComposerPage extends StatefulWidget {
   final String authorName;
   final String authorAvatarUrl;
   final MomentMediaUploader? mediaUploader;
+  final NearbyPlacesLoader? locationLoader;
 
   @override
   State<MomentComposerPage> createState() => _MomentComposerPageState();
@@ -40,7 +42,6 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
   MomentVisibility _visibility = MomentVisibility.public;
   String? _location;
   bool _isPublishing = false;
-  bool _isLocating = false;
 
   bool get _canPublish =>
       _contentController.text.trim().isNotEmpty || _mediaPaths.isNotEmpty;
@@ -176,48 +177,12 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
   }
 
   Future<void> _editLocation() async {
-    if (_isLocating) return;
-    var editedLocation = _location ?? '';
-    setState(() => _isLocating = true);
-    try {
-      final place = await AppLocationService().locate().timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => throw Exception('定位超时'),
-      );
-      editedLocation = place.address;
-      if (mounted) setState(() => _location = place.address);
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('自动定位失败：$error，可手动填写位置')));
-      }
-    } finally {
-      if (mounted) setState(() => _isLocating = false);
-    }
-    if (!mounted) return;
-    final location = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('所在位置'),
-        content: TextFormField(
-          key: const Key('moment_location_field'),
-          initialValue: editedLocation,
-          autofocus: true,
-          maxLength: 30,
-          onChanged: (value) => editedLocation = value,
-          decoration: const InputDecoration(hintText: '例如：上海·徐家汇'),
+    final location = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => MomentLocationPickerPage(
+          selectedLocation: _location,
+          loader: widget.locationLoader,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, ''),
-            child: const Text('不显示'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, editedLocation.trim()),
-            child: const Text('确定'),
-          ),
-        ],
       ),
     );
     if (location != null && mounted) {
@@ -290,21 +255,21 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.location_on_outlined),
             title: const Text('所在位置'),
-            trailing: _isLocating
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _location ?? '不显示',
-                        style: TextStyle(color: context.appTextSecondary),
-                      ),
-                      const Icon(Icons.chevron_right),
-                    ],
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 150),
+                  child: Text(
+                    _location ?? '不显示',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: context.appTextSecondary),
                   ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
             onTap: _editLocation,
           ),
           const Divider(height: 1),
