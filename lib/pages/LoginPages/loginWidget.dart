@@ -93,7 +93,7 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
           // 获取token
           String? token = loginData['token'];
           int? code = loginData['code'];
-          debugPrint('状态码：${code}');
+          debugPrint('状态码：$code');
 
           //登录成功
           if (code == 100) {
@@ -241,12 +241,14 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 TextButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    final changed = await Navigator.pushNamed<bool>(
+                      context,
+                      '/forgotPasswordPage',
+                    );
+                    if (!context.mounted || changed != true) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('忘记密码功能开发中'),
-                        duration: Duration(seconds: 2),
-                      ),
+                      const SnackBar(content: Text('密码修改成功，请使用新密码登录')),
                     );
                   },
                   child: Text('忘记密码', style: TextStyle(color: Colors.green)),

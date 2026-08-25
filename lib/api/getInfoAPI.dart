@@ -98,3 +98,18 @@ Future<int> changePasswordApi(
     throw Exception(e.error);
   }
 }
+
+// 忘记密码页面使用的密码重置接口。安全码由前端页面校验，接口只接收账号和新密码。
+Future<int> resetPasswordApi(String userName, String newPassword) async {
+  try {
+    final response = await HttpUtil().post(
+      '/api/user/passwordReset',
+      data: {'userName': userName, 'newPassword': newPassword},
+    );
+    final mapData = response.data as Map<String, dynamic>;
+    return JsonValueParser.intValue(mapData['code'], fallback: -1);
+  } on DioException catch (error) {
+    debugPrint('重置密码请求失败：${error.error}');
+    throw Exception(error.error);
+  }
+}

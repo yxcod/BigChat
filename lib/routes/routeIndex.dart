@@ -15,6 +15,7 @@ import '../pages/friendManage/friendAddManagerPage.dart';
 import '../pages/friendManage/addFriendRequestPage.dart';
 import '../pages/profileEditPage.dart';
 import '../pages/LoginPages/registerPage.dart';
+import '../pages/LoginPages/forgot_password_page.dart';
 import '../model/friendRequestModel.dart';
 import '../features/moments/presentation/my_moments_page.dart';
 import '../features/settings/presentation/settings_page.dart';
@@ -138,5 +139,6 @@ Map<String, Widget Function(BuildContext)> getRoutes() {
     '/mainWidget': (context) => BigchatMainPage(),
     '/searchFriendPage': (context) => SearchFriendPage(),
     '/registerPage': (context) => RegisterPage(),
+    '/forgotPasswordPage': (context) => const ForgotPasswordPage(),
   };
 }
