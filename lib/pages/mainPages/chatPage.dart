@@ -20,37 +20,27 @@ import '../../features/chat/domain/chat_realtime_event.dart';
 import '../../features/chat/domain/chat_message_mapper.dart';
 import '../../features/chat/data/hidden_conversations_store.dart';
 import '../../shared/widgets/swipe_action_cell.dart';
+import '../../app/theme/app_colors.dart';
+import '../../utils/presence_event.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
   final Function(int)? onUnreadCountChanged;
+  final bool autoRefresh;
 
-  Chatpage({Key? key, required this.chatList, this.onUnreadCountChanged})
-    : super(key: key);
+  const Chatpage({
+    super.key,
+    required this.chatList,
+    this.onUnreadCountChanged,
+    this.autoRefresh = true,
+  });
 
   @override
-  _ChatpageState createState() => _ChatpageState();
+  State<Chatpage> createState() => _ChatpageState();
 }
 
 class _ChatpageState extends State<Chatpage> {
-  final List<Chat> _chats = [
-    // Chat(
-    //   name: '赵六',
-    //   avatar: 'https://via.placeholder.com/40',
-    //   lastMessage: '好的，明天见',
-    //   time: '3天前',
-    //   unreadCount: 0,
-    //   userName: 'zhaoliu',
-    // ),
-    // Chat(
-    //   name: '孙七',
-    //   avatar: 'https://via.placeholder.com/40',
-    //   lastMessage: '收到',
-    //   time: '1周前',
-    //   unreadCount: 0,
-    //   userName: 'sunqi',
-    // ),
-  ];
+  final List<Chat> _chats = [];
 
   Timer? _fallbackRefreshTimer;
   Timer? _refreshDebounceTimer;
@@ -58,6 +48,7 @@ class _ChatpageState extends State<Chatpage> {
   GlobalUtil globalUtil = GlobalUtil();
   bool _isFetchingConversations = false;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _conversationScrollController = ScrollController();
   String _searchQuery = '';
   final HiddenConversationsStore _hiddenConversationsStore =
       HiddenConversationsStore();
@@ -65,11 +56,13 @@ class _ChatpageState extends State<Chatpage> {
   String _hiddenConversationsOwner = '';
   final Set<int> _locallyReadGroupIds = {};
   // 头像 URL 缓存，用于避免重复加载
-  Map<String, String> _avatarCache = {};
+  final Map<String, String> _avatarCache = {};
 
   @override
   void initState() {
     super.initState();
+    _chats.addAll(sortChatsByLatest(widget.chatList));
+    if (!widget.autoRefresh) return;
     // 延迟到构建完成后执行需要setState的操作
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _notifyUnreadCountChanged();
@@ -97,6 +90,7 @@ class _ChatpageState extends State<Chatpage> {
     _refreshDebounceTimer?.cancel();
     _messageSubscription?.cancel();
     _searchController.dispose();
+    _conversationScrollController.dispose();
     super.dispose();
   }
 
@@ -114,6 +108,11 @@ class _ChatpageState extends State<Chatpage> {
 
   void _handleWebSocketMessage(dynamic message) {
     if (message is! Map<String, dynamic>) {
+      return;
+    }
+    final presence = PresenceEvent.tryParse(message);
+    if (presence != null) {
+      _updatePresence(presence.userName, presence.isOnline);
       return;
     }
     final event = ChatRealtimeEvent.parse(message);
@@ -185,6 +184,17 @@ class _ChatpageState extends State<Chatpage> {
       if (mounted) {
         fetchConversations();
       }
+    });
+  }
+
+  void _updatePresence(String userName, bool isOnline) {
+    if (!mounted) return;
+    final index = _chats.indexWhere(
+      (chat) => !chat.isGroup && chat.userName == userName,
+    );
+    if (index == -1 || _chats[index].isOnline == isOnline) return;
+    setState(() {
+      _chats[index] = _chats[index].copyWith(isOnline: isOnline);
     });
   }
 
@@ -369,18 +379,7 @@ class _ChatpageState extends State<Chatpage> {
       });
       if (index != -1) {
         // 更新未读消息数
-        final updatedChat = Chat(
-          name: _chats[index].name,
-          avatar: _chats[index].avatar,
-          lastMessage: _chats[index].lastMessage,
-          time: _chats[index].time,
-          unreadCount: count,
-          userName: _chats[index].userName,
-          isGroup: _chats[index].isGroup,
-          lastSenderName: _chats[index].lastSenderName,
-          updateTime: _chats[index].updateTime,
-        );
-        _chats[index] = updatedChat;
+        _chats[index] = _chats[index].copyWith(unreadCount: count);
         _notifyUnreadCountChanged();
       }
     });
@@ -457,6 +456,7 @@ class _ChatpageState extends State<Chatpage> {
           unreadCount: conversation.unreadCount,
           userName: targetUserName,
           isGroup: false,
+          isOnline: friend.isOnline ?? false,
           updateTime: conversation.updateTime,
         ),
       );
@@ -960,108 +960,350 @@ class _ChatpageState extends State<Chatpage> {
     }
   }
 
+  void _scrollToFirstUnread() {
+    final index = _chats.indexWhere((chat) => chat.unreadCount > 0);
+    if (index < 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_conversationScrollController.hasClients) return;
+      final target = (index * 79.0).clamp(
+        0.0,
+        _conversationScrollController.position.maxScrollExtent,
+      );
+      _conversationScrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  Widget _buildUnreadSummary() {
+    final total = _calculateTotalUnreadCount();
+    if (total <= 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+      child: Material(
+        key: const ValueKey('chat_unread_summary'),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _scrollToFirstUnread,
+          child: Container(
+            height: 58,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.divider),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEAF8F0),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.notifications_none_rounded,
+                    color: AppColors.primary,
+                    size: 21,
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Text(
+                    '$total 条未读消息',
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Text(
+                  '快速定位',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConversationAvatar(Chat chat) {
+    final hasAvatar = chat.avatar.trim().isNotEmpty;
+    return SizedBox(
+      width: 52,
+      height: 52,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CircleAvatar(
+            radius: 26,
+            backgroundColor: const Color(0xFFEAF8F0),
+            backgroundImage: hasAvatar
+                ? AppImageCache.provider(chat.avatar)
+                : null,
+            child: hasAvatar
+                ? null
+                : Icon(
+                    chat.isGroup
+                        ? Icons.groups_2_outlined
+                        : Icons.person_outline_rounded,
+                    color: AppColors.primary,
+                    size: 25,
+                  ),
+          ),
+          if (!chat.isGroup && chat.isOnline)
+            Positioned(
+              right: -1,
+              bottom: 1,
+              child: Container(
+                key: ValueKey('chat_online_${chat.userName}'),
+                width: 13,
+                height: 13,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.surface, width: 2),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _conversationPreview(Chat chat) {
+    if (chat.isGroup && chat.lastSenderName?.isNotEmpty == true) {
+      return '${chat.lastSenderName}：${chat.lastMessage}';
+    }
+    return chat.lastMessage;
+  }
+
+  Widget _buildUnreadBadge(Chat chat) {
+    final label = chat.unreadCount > 99 ? '99+' : chat.unreadCount.toString();
+    return Container(
+      key: ValueKey('chat_unread_badge_${chat.userName}'),
+      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.danger,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w600,
+          height: 1.15,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConversationTile(Chat chat) {
+    return SwipeActionCell(
+      key: ValueKey('chat_${chat.isGroup}_${chat.userName}'),
+      onDelete: () => _hideConversation(chat),
+      child: InkWell(
+        onTap: () => _openChat(chat),
+        child: SizedBox(
+          height: 78,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+            child: Row(
+              children: [
+                _buildConversationAvatar(chat),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              chat.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            chat.time,
+                            style: const TextStyle(
+                              color: Color(0xFFA4A7AC),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _conversationPreview(chat),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          if (chat.unreadCount > 0) ...[
+                            const SizedBox(width: 10),
+                            _buildUnreadBadge(chat),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConversationList() {
+    if (_chats.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline_rounded,
+              size: 46,
+              color: Color(0xFFC6C8CC),
+            ),
+            SizedBox(height: 12),
+            Text(
+              '暂无聊天会话',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            ),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: fetchConversations,
+      child: ListView.separated(
+        key: const ValueKey('chat_conversation_list'),
+        controller: _conversationScrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: _chats.length,
+        separatorBuilder: (_, _) => const Divider(
+          height: 1,
+          thickness: 0.6,
+          indent: 81,
+          endIndent: 16,
+          color: AppColors.divider,
+        ),
+        itemBuilder: (context, index) => _buildConversationTile(_chats[index]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        toolbarHeight: 70,
-        titleSpacing: 12,
-        title: AppSearchField(
-          controller: _searchController,
-          query: _searchQuery,
-          hintText: '搜索聊天记录',
-          onChanged: (value) => setState(() => _searchQuery = value),
+        toolbarHeight: 56,
+        centerTitle: true,
+        title: const Text(
+          '聊天',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
         ),
-      ),
-      body: _searchQuery.trim().isNotEmpty
-          ? _buildSearchResults()
-          : Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: ListView.separated(
-                itemCount: _chats.length,
-                separatorBuilder: (_, _) => const Divider(
-                  height: 1,
-                  indent: 72,
-                  color: Color(0xFFE5E5E5),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              key: const ValueKey('chat_create_group_button'),
+              tooltip: '创建群聊',
+              onPressed: () => Navigator.pushNamed(context, '/groupCreatePage'),
+              icon: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF34373C)),
                 ),
-                itemBuilder: (context, index) {
-                  final chat = _chats[index];
-                  return SwipeActionCell(
-                    key: ValueKey('chat_${chat.isGroup}_${chat.userName}'),
-                    onDelete: () => _hideConversation(chat),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: AppImageCache.provider(chat.avatar),
-                        backgroundColor: Colors.grey[200],
-                      ),
-                      title: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            chat.name,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black,
-                            ), // 确保文本颜色可见
-                          ),
-                          Text(
-                            chat.time,
-                            style: TextStyle(color: Colors.grey, fontSize: 10),
-                          ),
-                        ],
-                      ),
-                      subtitle: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: chat.isGroup
-                                ? Text(
-                                    chat.lastSenderName != null
-                                        ? '${chat.lastSenderName}: ${chat.lastMessage}'
-                                        : chat.lastMessage,
-                                    style: TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 12,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  )
-                                : Text(
-                                    chat.lastMessage,
-                                    style: TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 12,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                          ),
-                          if (chat.unreadCount > 0)
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                chat.unreadCount.toString(),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      onTap: () => _openChat(chat),
-                    ),
-                  );
-                },
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: AppColors.textPrimary,
+                  size: 22,
+                ),
               ),
             ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+            child: AppSearchField(
+              controller: _searchController,
+              query: _searchQuery,
+              hintText: '搜索聊天记录',
+              onChanged: (value) => setState(() => _searchQuery = value),
+              height: 44,
+            ),
+          ),
+          if (_searchQuery.trim().isEmpty) _buildUnreadSummary(),
+          Expanded(
+            child: Container(
+              key: const ValueKey('chat_list_surface'),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: _searchQuery.trim().isNotEmpty
+                  ? _buildSearchResults()
+                  : _buildConversationList(),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1087,6 +1329,7 @@ class Chat {
   final int unreadCount;
   final String userName;
   final bool isGroup; // 是否为群聊
+  final bool isOnline;
   final String? lastSenderName; // 群聊最后一条消息的发送者名称
   final int updateTime;
 
@@ -1098,9 +1341,25 @@ class Chat {
     required this.unreadCount,
     required this.userName,
     this.isGroup = false,
+    this.isOnline = false,
     this.lastSenderName,
     required this.updateTime,
   });
+
+  Chat copyWith({int? unreadCount, bool? isOnline}) {
+    return Chat(
+      name: name,
+      avatar: avatar,
+      lastMessage: lastMessage,
+      time: time,
+      unreadCount: unreadCount ?? this.unreadCount,
+      userName: userName,
+      isGroup: isGroup,
+      isOnline: isOnline ?? this.isOnline,
+      lastSenderName: lastSenderName,
+      updateTime: updateTime,
+    );
+  }
 }
 
 List<Chat> sortChatsByLatest(Iterable<Chat> chats) {

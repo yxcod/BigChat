@@ -5,17 +5,20 @@ import 'ProfilePage.dart';
 import '../../api/getChatMessagesAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../model/messageModel.dart';
+import '../../app/theme/app_colors.dart';
 
 class BigchatMainPage extends StatefulWidget {
+  const BigchatMainPage({super.key});
+
   @override
-  _BigchatMainPageState createState() => _BigchatMainPageState();
+  State<BigchatMainPage> createState() => _BigchatMainPageState();
 }
 
 class _BigchatMainPageState extends State<BigchatMainPage> {
   final List<Friend> _friends = [];
   final List<Chat> _chats = [];
 
-  int _currentIndex = 1;
+  int _currentIndex = 0;
   int _totalUnreadCount = 0;
 
   void _onUnreadCountChanged(int count) {
@@ -32,7 +35,7 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
     _pages = [
       Chatpage(chatList: _chats, onUnreadCountChanged: _onUnreadCountChanged),
       Friendspage(friendListDate: _friends),
-      ProfilePage(),
+      const ProfilePage(),
     ];
 
     // 在页面构建完成后获取未读消息
@@ -147,47 +150,105 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
           });
         },
         type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: Colors.green,
-        unselectedItemColor: Colors.grey,
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.textSecondary,
         selectedFontSize: 12,
         unselectedFontSize: 12,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
         items: [
           BottomNavigationBarItem(
-            icon: Stack(
-              children: [
-                Icon(Icons.chat),
-                if (_totalUnreadCount > 0)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Container(
-                      padding: EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      constraints: BoxConstraints(minWidth: 12, minHeight: 12),
-                      child: Text(
-                        _totalUnreadCount.toString(),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
+            icon: _buildNavigationIcon(
+              icon: Icons.chat_bubble_outline_rounded,
+              selected: false,
+              unreadCount: _totalUnreadCount,
+            ),
+            activeIcon: _buildNavigationIcon(
+              icon: Icons.chat_bubble_rounded,
+              selected: true,
+              unreadCount: _totalUnreadCount,
             ),
             label: '聊天',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: '好友'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_circle),
+            icon: _buildNavigationIcon(
+              icon: Icons.person_outline_rounded,
+              selected: false,
+            ),
+            activeIcon: _buildNavigationIcon(
+              icon: Icons.person_rounded,
+              selected: true,
+            ),
+            label: '好友',
+          ),
+          BottomNavigationBarItem(
+            icon: _buildNavigationIcon(
+              icon: Icons.account_circle_outlined,
+              selected: false,
+            ),
+            activeIcon: _buildNavigationIcon(
+              icon: Icons.account_circle_rounded,
+              selected: true,
+            ),
             label: '我的',
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavigationIcon({
+    required IconData icon,
+    required bool selected,
+    int unreadCount = 0,
+  }) {
+    return SizedBox(
+      width: 52,
+      height: 34,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 48,
+            height: 32,
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFFEAF8F0) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              size: 23,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+            ),
+          ),
+          if (unreadCount > 0)
+            Positioned(
+              top: -1,
+              right: -1,
+              child: Container(
+                key: const ValueKey('main_chat_unread_badge'),
+                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.danger,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: AppColors.surface, width: 1.5),
+                ),
+                child: Text(
+                  unreadCount > 99 ? '99+' : unreadCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
