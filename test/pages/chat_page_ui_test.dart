@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_base/app/theme/app_colors.dart';
 import 'package:flutter_base/app/theme/app_theme.dart';
+import 'package:flutter_base/features/groups/application/group_notification_settings_service.dart';
 import 'package:flutter_base/pages/mainPages/chatPage.dart';
+import 'package:flutter_base/utils/gloabl.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('聊天首页展示未读定位、在线状态和红色徽标', (tester) async {
@@ -59,6 +62,45 @@ void main() {
     );
     final decoration = unreadBadge.decoration! as BoxDecoration;
     expect(decoration.color, AppColors.danger);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('免打扰群只显示灰点且不计入红色未读数', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    GlobalUtil().userName = 'muted-chat-ui-owner';
+    final settings = GroupNotificationSettingsService.instance;
+    await settings.load(ownerId: 'muted-chat-ui-owner');
+    await settings.setMuted(12001, true);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Chatpage(
+          autoRefresh: false,
+          chatList: [
+            Chat(
+              name: '免打扰群',
+              avatar: '',
+              lastMessage: '有一条新消息',
+              time: '11:30',
+              unreadCount: 4,
+              userName: '12001',
+              isGroup: true,
+              updateTime: 300,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('chat_muted_unread_dot_12001')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('chat_unread_badge_12001')), findsNothing);
+    expect(find.byKey(const Key('chat_unread_summary')), findsNothing);
+    expect(find.byIcon(Icons.notifications_off_outlined), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

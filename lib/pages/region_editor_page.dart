@@ -108,13 +108,17 @@ class _RegionEditorPageState extends State<RegionEditorPage> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                minimumSize: const Size(58, 36),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+                minimumSize: const Size(50, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(7),
                 ),
               ),
-              child: const Text('完成'),
+              child: const Text(
+                '保存',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
             ),
           ),
         ],

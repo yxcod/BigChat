@@ -10,10 +10,12 @@ import '../../../features/chat/domain/chat_realtime_event.dart';
 import '../../../utils/gloabl.dart';
 import '../data/app_settings_repository.dart';
 import '../domain/app_settings.dart';
+import '../../groups/application/group_notification_settings_service.dart';
 
 typedef NotificationSettingsLoader = Future<AppSettings> Function();
 typedef NotificationVibrator = Future<void> Function();
 typedef NotificationSoundPlayer = Future<void> Function(String soundId);
+typedef GroupMuteReader = Future<bool> Function(int groupId);
 
 class AppMessageNotice {
   const AppMessageNotice({
@@ -32,13 +34,18 @@ class AppNotificationFeedbackService {
     NotificationSettingsLoader? loadSettings,
     NotificationVibrator? vibrate,
     NotificationSoundPlayer? playSound,
+    GroupMuteReader? isGroupMuted,
   }) : _loadSettings = loadSettings,
        _vibrate = vibrate ?? _defaultVibrate,
-       _playSound = playSound ?? AppNotificationTonePlayer.play;
+       _playSound = playSound ?? AppNotificationTonePlayer.play,
+       _isGroupMuted =
+           isGroupMuted ??
+           GroupNotificationSettingsService.instance.isCurrentUserMuted;
 
   final NotificationSettingsLoader? _loadSettings;
   final NotificationVibrator _vibrate;
   final NotificationSoundPlayer _playSound;
+  final GroupMuteReader _isGroupMuted;
 
   Future<AppMessageNotice?> handle(
     ChatRealtimeEvent event, {
@@ -48,6 +55,10 @@ class AppNotificationFeedbackService {
     if (!appIsForeground ||
         conversationIsActive ||
         !_isIncomingMessage(event)) {
+      return null;
+    }
+    if (event.type == ChatRealtimeEventType.groupMessage &&
+        await _isGroupMuted(event.groupId)) {
       return null;
     }
 

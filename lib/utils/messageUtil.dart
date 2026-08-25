@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../shared/pages/app_text_editor_page.dart';
+
 class MessageUtil {
   // 显示成功提示（绿色）
   static void showSuccess(BuildContext context, String message) {
@@ -94,36 +96,18 @@ class MessageUtil {
     int maxLines = 1,
     String? initialValue,
   }) {
-    TextEditingController controller = TextEditingController(
-      text: initialValue,
-    );
-
-    return showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(title),
-          content: TextField(
-            controller: controller,
-            maxLines: maxLines,
-            decoration: InputDecoration(
-              hintText: hintText,
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: Text(cancelText),
-            ),
-            ElevatedButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(controller.text.trim()),
-              child: Text(confirmText),
-            ),
-          ],
-        );
-      },
+    return Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => AppTextEditorPage(
+          title: title,
+          initialValue: initialValue ?? '',
+          hintText: hintText,
+          maxLength: 500,
+          maxLines: maxLines,
+          saveText: confirmText,
+          cancelText: cancelText,
+        ),
+      ),
     );
   }
 

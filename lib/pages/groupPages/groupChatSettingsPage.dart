@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
@@ -24,17 +23,21 @@ import '../../features/group_resources/presentation/group_resources_page.dart';
 import '../../features/group_resources/presentation/group_resource_list_page.dart';
 import '../../features/group_resources/domain/group_resource.dart';
 import '../../app/theme/app_theme_context.dart';
+import '../../shared/pages/app_text_editor_page.dart';
+import '../../features/groups/application/group_notification_settings_service.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
   final String groupName;
   final List<GroupMemberModel> groupMembers;
+  final bool loadRemoteData;
 
   const GroupChatSettingsPage({
     Key? key,
     required this.groupId,
     required this.groupName,
     this.groupMembers = const [],
+    this.loadRemoteData = true,
   }) : super(key: key);
 
   @override
@@ -47,8 +50,8 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   String _groupAvatar = 'https://via.placeholder.com/60';
   List<Map<String, dynamic>> _members = [];
   // 存储所有定时器，便于在需要时停止
-  late Timer _timer;
-  late Timer _groupInfoTimer;
+  Timer? _timer;
+  Timer? _groupInfoTimer;
   final globalUtil = GlobalUtil();
   // 静态缓存已经加载成功的头像 URL，避免重复加载
   static Map<String, String> _avatarCache = {};
@@ -66,6 +69,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   GroupInfoModel? _groupInfoModel;
   // 上传取消令牌
   CancelToken? _uploadCancelToken;
+  final GroupNotificationSettingsService _groupNotificationSettings =
+      GroupNotificationSettingsService.instance;
+  bool _groupMuted = false;
 
   Future<void> _pickGroupAvatar() async {
     final ImagePicker picker = ImagePicker();
@@ -258,22 +264,50 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     _groupName = widget.groupName;
     _groupAnnouncement = '未设置';
     _groupDescription = '未设置';
+    unawaited(_loadGroupNotificationSetting());
     // 初始化时不需要手动设置群头像 URL，会在 _fetchGroupInfo 中自动设置
     // 群头像 URL 会根据 GroupInfoModel 中的 groupAvatar 字段动态生成
     // 只有当 groupAvatar 字段发生变化时，才会重新从网络上获取头像
     // 初始化时获取一次成员列表
-    _fetchGroupMembers();
-    // 初始化时获取一次群信息
-    _fetchGroupInfo();
-    // 操作完成后会主动刷新，定时器只作为低频兜底。
-    _timer = Timer.periodic(
-      RefreshIntervals.groupFallback,
-      (timer) => _fetchGroupMembers(),
-    );
-    _groupInfoTimer = Timer.periodic(
-      RefreshIntervals.groupFallback,
-      (timer) => _fetchGroupInfo(),
-    );
+    if (widget.loadRemoteData) {
+      _fetchGroupMembers();
+      // 初始化时获取一次群信息
+      _fetchGroupInfo();
+      // 操作完成后会主动刷新，定时器只作为低频兜底。
+      _timer = Timer.periodic(
+        RefreshIntervals.groupFallback,
+        (timer) => _fetchGroupMembers(),
+      );
+      _groupInfoTimer = Timer.periodic(
+        RefreshIntervals.groupFallback,
+        (timer) => _fetchGroupInfo(),
+      );
+    }
+  }
+
+  Future<void> _loadGroupNotificationSetting() async {
+    await _groupNotificationSettings.ensureCurrentUserLoaded();
+    if (!mounted) return;
+    setState(() {
+      _groupMuted = _groupNotificationSettings.isMuted(
+        int.tryParse(widget.groupId) ?? 0,
+      );
+    });
+  }
+
+  Future<void> _setGroupMuted(bool value) async {
+    final previous = _groupMuted;
+    setState(() => _groupMuted = value);
+    try {
+      await _groupNotificationSettings.setMuted(
+        int.tryParse(widget.groupId) ?? 0,
+        value,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _groupMuted = previous);
+      _showSnackBar('免打扰设置保存失败，请重试');
+    }
   }
 
   // 获取群信息
@@ -293,6 +327,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           setState(() {
             _groupCreatedAt = formattedDate;
             _groupDescription = group.description;
+            _groupAnnouncement = group.description.isEmpty
+                ? '未设置'
+                : group.description;
             _groupName = group.groupName; // 更新群名称
             _groupInfoModel = group; // 存储完整的群信息
             // 更新群头像 URL 为 groupAvatar 字段对应的 URL
@@ -319,8 +356,8 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     GroupRouteRegistry.leave(int.tryParse(widget.groupId) ?? 0);
     _groupEventSubscription?.cancel();
     // 清理所有定时器
-    _timer.cancel();
-    _groupInfoTimer.cancel();
+    _timer?.cancel();
+    _groupInfoTimer?.cancel();
     // 取消上传操作
     if (_uploadCancelToken != null && !_uploadCancelToken!.isCancelled) {
       _uploadCancelToken!.cancel('页面已关闭');
@@ -366,8 +403,8 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         if (!foundUser) {
           print('未找到当前用户在群成员列表中');
           // 停止所有定时器，防止重复触发弹窗
-          _timer.cancel();
-          _groupInfoTimer.cancel();
+          _timer?.cancel();
+          _groupInfoTimer?.cancel();
           // 用户不在群成员列表中，说明已被移除出群聊
           if (mounted) {
             // 导航到主界面并传递被移除群聊的信号，同时清除导航栈
@@ -439,30 +476,20 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   }
 
   void _editGroupName() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        TextEditingController controller = TextEditingController(
-          text: _groupName,
-        );
-        return AlertDialog(
-          title: Text('编辑群聊名称'),
-          content: TextField(
-            controller: controller,
-            decoration: InputDecoration(hintText: '请输入群聊名称'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('取消'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: Text('确定'),
-            ),
-          ],
-        );
-      },
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AppTextEditorPage(
+          title: '编辑群聊名称',
+          initialValue: _groupName,
+          hintText: '请输入群聊名称',
+          maxLength: 30,
+          allowEmpty: false,
+          emptyMessage: '群聊名称不能为空',
+          fieldKey: const Key('group_name_editor'),
+          saveButtonKey: const Key('group_name_save_button'),
+        ),
+      ),
     );
 
     if (result != null && result.isNotEmpty) {
@@ -504,7 +531,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
 
         if (code == 100) {
           setState(() {
-            _groupName = result;
+            _groupName = result.trim();
           });
 
           // 显示成功提示
@@ -527,36 +554,19 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   }
 
   void _editGroupAnnouncement() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        TextEditingController controller = TextEditingController(
-          text: _groupAnnouncement == '未设置' ? '' : _groupAnnouncement,
-        );
-        return AlertDialog(
-          title: Text('编辑群公告'),
-          content: TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              hintText: '请输入群公告（最多20字）',
-              counterText: '${controller.text.length}/20',
-            ),
-            maxLines: 3,
-            maxLength: 20,
-            inputFormatters: [LengthLimitingTextInputFormatter(20)],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('取消'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: Text('确定'),
-            ),
-          ],
-        );
-      },
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AppTextEditorPage(
+          title: '编辑群介绍',
+          initialValue: _groupAnnouncement == '未设置' ? '' : _groupAnnouncement,
+          hintText: '请输入群介绍',
+          maxLength: 20,
+          maxLines: 4,
+          fieldKey: const Key('group_description_editor'),
+          saveButtonKey: const Key('group_description_save_button'),
+        ),
+      ),
     );
 
     if (result != null) {
@@ -797,30 +807,18 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   }
 
   void _editMyNickname() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        TextEditingController controller = TextEditingController(
-          text: _myNickname,
-        );
-        return AlertDialog(
-          title: Text('编辑我在本群的昵称'),
-          content: TextField(
-            controller: controller,
-            decoration: InputDecoration(hintText: '请输入昵称'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('取消'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: Text('确定'),
-            ),
-          ],
-        );
-      },
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AppTextEditorPage(
+          title: '设置本群昵称',
+          initialValue: _myNickname,
+          hintText: '请输入我在本群的昵称',
+          maxLength: 30,
+          fieldKey: const Key('group_nickname_editor'),
+          saveButtonKey: const Key('group_nickname_save_button'),
+        ),
+      ),
     );
 
     if (result != null) {
@@ -838,12 +836,12 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         int code = await updateGroupMemberNickname(
           currentUserId,
           groupIdInt,
-          result,
+          result.trim(),
         );
 
         if (code == 100) {
           setState(() {
-            _myNickname = result;
+            _myNickname = result.trim();
           });
 
           // 显示成功提示
@@ -947,6 +945,32 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                   ),
                 ),
               ],
+            ),
+          ),
+
+          Container(
+            key: const ValueKey('group_notification_settings_card'),
+            margin: const EdgeInsets.only(top: 12),
+            color: context.appSurface,
+            child: SwitchListTile.adaptive(
+              key: const ValueKey('group_mute_switch'),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 3,
+              ),
+              title: const Text(
+                '群消息免打扰',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              subtitle: Text(
+                '开启后不震动、不播放提示音、不显示横幅和红色未读数',
+                style: TextStyle(
+                  color: context.appTextSecondary,
+                  fontSize: 12.5,
+                ),
+              ),
+              value: _groupMuted,
+              onChanged: _setGroupMuted,
             ),
           ),
 

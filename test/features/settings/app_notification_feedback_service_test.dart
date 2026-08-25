@@ -69,4 +69,32 @@ void main() {
       expect(soundCount, 0);
     },
   );
+
+  test('muted group skips vibration sound and banner', () async {
+    var vibrationCount = 0;
+    var soundCount = 0;
+    final service = AppNotificationFeedbackService(
+      loadSettings: () async => const AppSettings(
+        vibrationEnabled: true,
+        bannerEnabled: true,
+        messageSoundEnabled: true,
+      ),
+      vibrate: () async => vibrationCount++,
+      playSound: (_) async => soundCount++,
+      isGroupMuted: (groupId) async => groupId == 123456,
+    );
+    final event = ChatRealtimeEvent.parse({
+      'type': 'groupChat',
+      'sendUserId': 'notification_sender_987',
+      'groupId': 123456,
+      'msgContent': '免打扰消息',
+      'msgType': 1,
+    });
+
+    final notice = await service.handle(event, appIsForeground: true);
+
+    expect(notice, isNull);
+    expect(vibrationCount, 0);
+    expect(soundCount, 0);
+  });
 }

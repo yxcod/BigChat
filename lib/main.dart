@@ -16,6 +16,7 @@ import './features/location/data/app_location_service.dart';
 import './features/settings/application/app_notification_feedback_service.dart';
 import './features/privacy/application/privacy_settings_service.dart';
 import './features/privacy/presentation/privacy_unlock_page.dart';
+import './features/groups/application/group_notification_settings_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +26,7 @@ Future<void> main() async {
   final hasAuthenticatedSession =
       await StorageUtil.restoreAuthenticatedSession();
   await PrivacySettingsService.instance.load();
+  await GroupNotificationSettingsService.instance.load();
   final privacySettings = PrivacySettingsService.instance.settings;
 
   runApp(

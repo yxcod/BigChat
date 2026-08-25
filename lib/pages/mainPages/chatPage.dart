@@ -23,6 +23,7 @@ import '../../shared/widgets/swipe_action_cell.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import '../../utils/presence_event.dart';
+import '../../features/groups/application/group_notification_settings_service.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
@@ -56,6 +57,8 @@ class _ChatpageState extends State<Chatpage> {
   Map<String, int> _hiddenConversations = {};
   String _hiddenConversationsOwner = '';
   final Set<int> _locallyReadGroupIds = {};
+  final GroupNotificationSettingsService _groupNotificationSettings =
+      GroupNotificationSettingsService.instance;
   // 头像 URL 缓存，用于避免重复加载
   final Map<String, String> _avatarCache = {};
 
@@ -63,11 +66,17 @@ class _ChatpageState extends State<Chatpage> {
   void initState() {
     super.initState();
     globalUtil.privacyMessagesRevision.addListener(_refreshPrivacyMessages);
-    _chats.addAll(sortChatsByLatest(widget.chatList));
+    _groupNotificationSettings.addListener(
+      _handleGroupNotificationSettingsChanged,
+    );
+    _chats.addAll(
+      sortChatsByLatest(widget.chatList.map(_applyGroupNotificationSetting)),
+    );
     if (!widget.autoRefresh) return;
     // 延迟到构建完成后执行需要setState的操作
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _notifyUnreadCountChanged();
+      await _groupNotificationSettings.ensureCurrentUserLoaded();
       await _ensureHiddenConversationsLoaded();
       fetchConversations();
       _startFallbackRefreshTimer();
@@ -90,9 +99,35 @@ class _ChatpageState extends State<Chatpage> {
     if (mounted) setState(() {});
   }
 
+  Chat _applyGroupNotificationSetting(Chat chat) {
+    if (!chat.isGroup) return chat;
+    final groupId = int.tryParse(chat.userName) ?? 0;
+    final muted = _groupNotificationSettings.isMuted(groupId);
+    final rawUnreadCount = chat.rawUnreadCount;
+    return chat.copyWith(
+      isMuted: muted,
+      unreadCount: muted ? 0 : rawUnreadCount,
+      hasMutedUnread: muted && rawUnreadCount > 0,
+    );
+  }
+
+  void _handleGroupNotificationSettingsChanged() {
+    if (!mounted) return;
+    setState(() {
+      for (var index = 0; index < _chats.length; index++) {
+        _chats[index] = _applyGroupNotificationSetting(_chats[index]);
+      }
+      _notifyUnreadCountChanged();
+    });
+    if (widget.autoRefresh) unawaited(fetchConversations());
+  }
+
   @override
   void dispose() {
     globalUtil.privacyMessagesRevision.removeListener(_refreshPrivacyMessages);
+    _groupNotificationSettings.removeListener(
+      _handleGroupNotificationSettingsChanged,
+    );
     _fallbackRefreshTimer?.cancel();
     _refreshDebounceTimer?.cancel();
     _messageSubscription?.cancel();
@@ -344,7 +379,26 @@ class _ChatpageState extends State<Chatpage> {
             180,
       ),
     );
-    globalUtil.addUnreadMessage(conversationKey, event.messageId);
+    final muted = _groupNotificationSettings.isMuted(event.groupId);
+    if (muted) {
+      final index = _chats.indexWhere(
+        (chat) => chat.isGroup && chat.userName == groupId,
+      );
+      if (index >= 0 && mounted) {
+        setState(() {
+          final chat = _chats[index];
+          _chats[index] = chat.copyWith(
+            isMuted: true,
+            unreadCount: 0,
+            rawUnreadCount: chat.rawUnreadCount + 1,
+            hasMutedUnread: true,
+          );
+          _notifyUnreadCountChanged();
+        });
+      }
+    } else {
+      globalUtil.addUnreadMessage(conversationKey, event.messageId);
+    }
   }
 
   void updateChat(String userName, Chat chat) {
@@ -421,7 +475,12 @@ class _ChatpageState extends State<Chatpage> {
       });
       if (index != -1) {
         // 更新未读消息数
-        _chats[index] = _chats[index].copyWith(unreadCount: count);
+        final chat = _chats[index];
+        _chats[index] = chat.copyWith(
+          unreadCount: chat.isMuted ? 0 : count,
+          rawUnreadCount: count,
+          hasMutedUnread: chat.isMuted && count > 0,
+        );
         _notifyUnreadCountChanged();
       }
     });
@@ -613,15 +672,22 @@ class _ChatpageState extends State<Chatpage> {
           if (serverUnreadCount == 0) {
             _locallyReadGroupIds.remove(groupConversation.groupId);
           }
+          final rawUnreadCount = locallyRead ? 0 : serverUnreadCount;
+          final muted = _groupNotificationSettings.isMuted(
+            groupConversation.groupId,
+          );
           chatList.add(
             Chat(
               name: groupInfo.groupName,
               avatar: avatarURL,
               lastMessage: chatVoicePreview(groupConversation.lastMsg),
               time: formattedTime.substring(11, 16), // 只显示时分
-              unreadCount: locallyRead ? 0 : serverUnreadCount,
+              unreadCount: muted ? 0 : rawUnreadCount,
+              rawUnreadCount: rawUnreadCount,
               userName: groupIdStr,
               isGroup: true,
+              isMuted: muted,
+              hasMutedUnread: muted && rawUnreadCount > 0,
               lastSenderName: lastSenderName,
               updateTime: groupConversation.updateTime,
             ),
@@ -1160,6 +1226,19 @@ class _ChatpageState extends State<Chatpage> {
     );
   }
 
+  Widget _buildMutedUnreadDot(Chat chat) {
+    return Container(
+      key: ValueKey('chat_muted_unread_dot_${chat.userName}'),
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: const Color(0xFFB8BBC2),
+        shape: BoxShape.circle,
+        border: Border.all(color: context.appSurface, width: 1.5),
+      ),
+    );
+  }
+
   Widget _buildConversationTile(Chat chat) {
     return SwipeActionCell(
       key: ValueKey('chat_${chat.isGroup}_${chat.userName}'),
@@ -1201,6 +1280,14 @@ class _ChatpageState extends State<Chatpage> {
                               fontSize: 11,
                             ),
                           ),
+                          if (chat.isGroup && chat.isMuted) ...[
+                            const SizedBox(width: 5),
+                            const Icon(
+                              Icons.notifications_off_outlined,
+                              color: Color(0xFFB5B8BE),
+                              size: 16,
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 7),
@@ -1217,7 +1304,10 @@ class _ChatpageState extends State<Chatpage> {
                               ),
                             ),
                           ),
-                          if (chat.unreadCount > 0) ...[
+                          if (chat.hasMutedUnread) ...[
+                            const SizedBox(width: 10),
+                            _buildMutedUnreadDot(chat),
+                          ] else if (chat.unreadCount > 0) ...[
                             const SizedBox(width: 10),
                             _buildUnreadBadge(chat),
                           ],
@@ -1371,11 +1461,14 @@ class Chat {
   final String lastMessage;
   final String time;
   final int unreadCount;
+  final int rawUnreadCount;
   final String userName;
   final bool isGroup; // 是否为群聊
   final bool isOnline;
   final String? lastSenderName; // 群聊最后一条消息的发送者名称
   final int updateTime;
+  final bool isMuted;
+  final bool hasMutedUnread;
 
   Chat({
     required this.name,
@@ -1383,25 +1476,37 @@ class Chat {
     required this.lastMessage,
     required this.time,
     required this.unreadCount,
+    int? rawUnreadCount,
     required this.userName,
     this.isGroup = false,
     this.isOnline = false,
     this.lastSenderName,
     required this.updateTime,
-  });
+    this.isMuted = false,
+    this.hasMutedUnread = false,
+  }) : rawUnreadCount = rawUnreadCount ?? unreadCount;
 
-  Chat copyWith({int? unreadCount, bool? isOnline}) {
+  Chat copyWith({
+    int? unreadCount,
+    int? rawUnreadCount,
+    bool? isOnline,
+    bool? isMuted,
+    bool? hasMutedUnread,
+  }) {
     return Chat(
       name: name,
       avatar: avatar,
       lastMessage: lastMessage,
       time: time,
       unreadCount: unreadCount ?? this.unreadCount,
+      rawUnreadCount: rawUnreadCount ?? this.rawUnreadCount,
       userName: userName,
       isGroup: isGroup,
       isOnline: isOnline ?? this.isOnline,
       lastSenderName: lastSenderName,
       updateTime: updateTime,
+      isMuted: isMuted ?? this.isMuted,
+      hasMutedUnread: hasMutedUnread ?? this.hasMutedUnread,
     );
   }
 }
