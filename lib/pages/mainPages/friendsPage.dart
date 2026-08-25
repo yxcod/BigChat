@@ -552,18 +552,18 @@ class _FriendsPage extends State<Friendspage>
             child: VerticalDivider(width: 1, color: AppColors.divider),
           ),
           _buildShortcutAction(
-            icon: Icons.groups_rounded,
-            label: '我的群聊',
-            onTap: () => Navigator.pushNamed(context, '/groupChatListPage'),
+            icon: Icons.person_add_rounded,
+            label: '添加好友',
+            onTap: _showFindFriend,
           ),
           const SizedBox(
             height: 46,
             child: VerticalDivider(width: 1, color: AppColors.divider),
           ),
           _buildShortcutAction(
-            icon: Icons.person_add_rounded,
-            label: '添加好友',
-            onTap: _showFindFriend,
+            icon: Icons.groups_rounded,
+            label: '我的群聊',
+            onTap: () => Navigator.pushNamed(context, '/groupChatListPage'),
           ),
         ],
       ),
@@ -742,15 +742,10 @@ class _FriendsPage extends State<Friendspage>
                 ),
               ),
               itemBuilder: (context) => const [
-                PopupMenuItem<String>(value: 'findFriend', child: Text('添加好友')),
                 PopupMenuItem<String>(value: 'findGroup', child: Text('创建群聊')),
               ],
               onSelected: (value) {
-                if (value == 'findFriend') {
-                  _showFindFriend();
-                } else if (value == 'findGroup') {
-                  _showFindGroup();
-                }
+                if (value == 'findGroup') _showFindGroup();
               },
             ),
           ),

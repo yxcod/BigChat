@@ -51,6 +51,10 @@ void main() {
     expect(find.text('新的朋友'), findsOneWidget);
     expect(find.text('我的群聊'), findsOneWidget);
     expect(find.text('添加好友'), findsOneWidget);
+    expect(
+      tester.getCenter(find.text('添加好友')).dx,
+      lessThan(tester.getCenter(find.text('我的群聊')).dx),
+    );
     expect(find.text('在线优先'), findsOneWidget);
     expect(find.byKey(const ValueKey('friends_shortcut_card')), findsOneWidget);
     expect(find.byKey(const ValueKey('friends_list_surface')), findsOneWidget);
@@ -61,6 +65,17 @@ void main() {
     expect(find.text('林夏'), findsOneWidget);
     expect(find.text('叶翔'), findsOneWidget);
     expect(find.text('动态'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('右上角菜单只保留创建群聊', (tester) async {
+    await pumpFriendsPage(tester);
+
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('创建群聊'), findsOneWidget);
+    expect(find.text('添加好友'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
