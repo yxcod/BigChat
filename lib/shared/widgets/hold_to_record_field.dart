@@ -17,7 +17,7 @@ class HoldToRecordField extends StatefulWidget {
     required this.onError,
     this.enabled = true,
     this.recorder,
-    this.holdDuration = const Duration(milliseconds: 420),
+    this.holdDuration = const Duration(milliseconds: 320),
   });
 
   final TextEditingController controller;

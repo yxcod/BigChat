@@ -67,7 +67,6 @@ void main() {
             controller: controller,
             focusNode: focusNode,
             recorder: recorder,
-            holdDuration: const Duration(milliseconds: 100),
             onChanged: (_) {},
             onSubmitted: (_) {},
             onRecorded: (result) async => recorded = result,
@@ -80,7 +79,10 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byType(HoldToRecordField)),
     );
-    await tester.pump(const Duration(milliseconds: 110));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(recorder.started, isFalse);
+
+    await tester.pump(const Duration(milliseconds: 30));
     await tester.pump();
     expect(recorder.started, isTrue);
     expect(find.textContaining('松开发送'), findsOneWidget);
