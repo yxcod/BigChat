@@ -1,342 +1,480 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../utils/gloabl.dart';
+import 'package:image_picker/image_picker.dart';
+
 import '../../api/getGroupInfoAPI.dart';
+import '../../app/theme/app_colors.dart';
 import '../../shared/widgets/app_back_button.dart';
+import '../../utils/gloabl.dart';
+import '../../utils/http.dart';
 
 class GroupCreatePage extends StatefulWidget {
-  const GroupCreatePage({Key? key}) : super(key: key);
+  const GroupCreatePage({super.key});
 
   @override
-  _GroupCreatePageState createState() => _GroupCreatePageState();
+  State<GroupCreatePage> createState() => _GroupCreatePageState();
 }
 
 class _GroupCreatePageState extends State<GroupCreatePage> {
-  GlobalUtil globalUtil = GlobalUtil();
-  TextEditingController _groupIdController = TextEditingController();
-  TextEditingController _groupNameController = TextEditingController();
-  String _groupIdError = '';
+  final GlobalUtil _globalUtil = GlobalUtil();
+  final ImagePicker _imagePicker = ImagePicker();
+  final TextEditingController _groupIdController = TextEditingController();
+  final TextEditingController _groupNameController = TextEditingController();
 
-  void _validateGroupId(String value) {
-    if (value.isEmpty) {
-      setState(() {
-        _groupIdError = '请输入群聊号';
-      });
-    } else if (value.length != 6) {
-      setState(() {
-        _groupIdError = '群聊号必须为6位';
-      });
-    } else if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
-      setState(() {
-        _groupIdError = '群聊号必须为纯数字';
-      });
-    } else {
-      setState(() {
-        _groupIdError = '';
-      });
-    }
+  XFile? _groupAvatar;
+  String? _groupIdError;
+  bool _isCreating = false;
+
+  bool get _canCreate {
+    return !_isCreating &&
+        _groupAvatar != null &&
+        _groupIdController.text.trim().length == 6 &&
+        RegExp(r'^\d{6}$').hasMatch(_groupIdController.text.trim()) &&
+        _groupNameController.text.trim().isNotEmpty;
   }
 
-  void _createGroup() async {
-    if (_groupIdController.text.isEmpty || _groupNameController.text.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text('提示'),
-            content: Text('请填写群聊号和群聊名称'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('确定'),
-              ),
-            ],
-          );
-        },
-      );
-      return;
-    }
+  @override
+  void dispose() {
+    _groupIdController.dispose();
+    _groupNameController.dispose();
+    super.dispose();
+  }
 
-    if (_groupIdError.isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text('提示'),
-            content: Text(_groupIdError),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('确定'),
-              ),
-            ],
-          );
-        },
-      );
-      return;
-    }
+  void _validateGroupId(String value) {
+    final normalized = value.trim();
+    setState(() {
+      if (normalized.isEmpty) {
+        _groupIdError = null;
+      } else if (!RegExp(r'^\d+$').hasMatch(normalized)) {
+        _groupIdError = '群号只能输入数字';
+      } else if (normalized.length != 6) {
+        _groupIdError = '请输入6位群号';
+      } else {
+        _groupIdError = null;
+      }
+    });
+  }
 
-    // 显示加载对话框
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('创建群聊'),
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Text('正在创建群聊...'),
-            ],
-          ),
-        );
-      },
-    );
-
+  Future<void> _pickGroupAvatar() async {
     try {
-      // 检查 userName 是否为空
-      if (globalUtil.userName == null) {
-        // 关闭加载对话框
-        Navigator.pop(context);
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 82,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (image == null || !mounted) return;
 
-        // 显示错误提示
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: Text('错误'),
-              content: Text('用户信息未初始化，请重新登录'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('确定'),
-                ),
-              ],
-            );
-          },
-        );
+      if (await image.length() > 5 * 1024 * 1024) {
+        _showMessage('图片不能超过5MB');
         return;
       }
 
-      // 调用 createGroup 函数创建群聊
-      int code = await createGroup(
-        globalUtil.userName!,
-        _groupNameController.text,
-        int.parse(_groupIdController.text),
-      );
-
-      // 关闭加载对话框
-      Navigator.pop(context);
-
-      if (code == 100) {
-        // 创建成功
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: Text('成功'),
-              content: Text('群聊创建成功！'),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.pop(context);
-                  },
-                  child: Text('确定'),
-                ),
-              ],
-            );
-          },
-        );
-      } else if (code == 102) {
-        // 群 ID 重复
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: Text('提示'),
-              content: Text('群聊号已存在，请更换其他群聊号'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('确定'),
-                ),
-              ],
-            );
-          },
-        );
-      } else {
-        // 其他错误
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: Text('提示'),
-              content: Text('创建群聊失败，请稍后重试'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('确定'),
-                ),
-              ],
-            );
-          },
-        );
-      }
-    } catch (e) {
-      // 关闭加载对话框
-      Navigator.pop(context);
-
-      // 显示错误提示
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text('错误'),
-            content: Text('创建群聊失败，请稍后重试'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('确定'),
-              ),
-            ],
-          );
-        },
-      );
+      setState(() => _groupAvatar = image);
+    } catch (_) {
+      if (mounted) _showMessage('无法读取图片，请检查相册权限');
     }
+  }
+
+  String _avatarFileName(String path) {
+    final extensionMatch = RegExp(r'\.([A-Za-z0-9]+)$').firstMatch(path);
+    final rawExtension = extensionMatch?.group(1)?.toLowerCase();
+    final extension = switch (rawExtension) {
+      'png' || 'webp' || 'jpeg' || 'jpg' => rawExtension!,
+      _ => 'jpg',
+    };
+    return 'head_${DateTime.now().millisecondsSinceEpoch}.$extension';
+  }
+
+  Future<bool> _uploadGroupAvatar({
+    required String groupId,
+    required String groupName,
+    required XFile avatar,
+  }) async {
+    final avatarName = _avatarFileName(avatar.path);
+    final uploaded = await HttpUtil().uploadImageFile(
+      avatarName,
+      avatar.path,
+      userName: groupId,
+    );
+    if (!uploaded) return false;
+
+    final updateCode = await updateGroupInfo(
+      _globalUtil.userName!,
+      int.parse(groupId),
+      groupName,
+      'This is a new group',
+      200,
+      1,
+      avatarName,
+    );
+    return updateCode == 100;
+  }
+
+  Future<void> _createGroup() async {
+    FocusScope.of(context).unfocus();
+    final groupId = _groupIdController.text.trim();
+    final groupName = _groupNameController.text.trim();
+
+    if (_groupAvatar == null) {
+      _showMessage('请上传群头像');
+      return;
+    }
+    if (groupId.isEmpty || groupName.isEmpty) {
+      _showMessage('请填写群号和群名称');
+      return;
+    }
+    _validateGroupId(groupId);
+    if (!RegExp(r'^\d{6}$').hasMatch(groupId)) return;
+    if (_globalUtil.userName == null) {
+      _showMessage('用户信息未初始化，请重新登录');
+      return;
+    }
+
+    setState(() => _isCreating = true);
+    try {
+      final code = await createGroup(
+        _globalUtil.userName!,
+        groupName,
+        int.parse(groupId),
+      );
+      if (!mounted) return;
+
+      if (code == 102) {
+        _showMessage('群号已存在，请更换其他群号');
+        return;
+      }
+      if (code != 100) {
+        _showMessage('创建群聊失败，请稍后重试');
+        return;
+      }
+
+      var avatarUpdated = false;
+      try {
+        avatarUpdated = await _uploadGroupAvatar(
+          groupId: groupId,
+          groupName: groupName,
+          avatar: _groupAvatar!,
+        );
+      } catch (_) {
+        avatarUpdated = false;
+      }
+      if (!mounted) return;
+      if (!avatarUpdated) {
+        _showMessage('群聊已创建，但群头像上传失败，可稍后在群设置中修改');
+        Navigator.of(context).pop(true);
+        return;
+      }
+
+      _showMessage('群聊创建成功');
+      Navigator.of(context).pop(true);
+    } catch (_) {
+      if (mounted) _showMessage('创建群聊失败，请稍后重试');
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
-        title: Text('创建群聊'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        title: const Text(
+          '创建群聊',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         shadowColor: Colors.transparent,
         systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.white,
+          statusBarColor: AppColors.surface,
           statusBarIconBrightness: Brightness.dark,
           statusBarBrightness: Brightness.light,
         ),
         leading: const AppBackButton(),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(0.5),
-          child: Divider(height: 0.5, thickness: 0.5, color: Color(0xFFE5E5E5)),
+          child: Divider(height: 0.5, thickness: 0.5, color: AppColors.divider),
         ),
       ),
-      body: Container(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 群聊号输入
-            Container(
-              margin: EdgeInsets.only(bottom: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '群聊号',
-                    style: TextStyle(
-                      fontSize: 14.0,
-                      color: Colors.grey[800],
-                      fontWeight: FontWeight.w500,
-                    ),
+      body: SafeArea(
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 20),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - 52,
+                ),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      _GroupAvatarPicker(
+                        avatar: _groupAvatar,
+                        onTap: _isCreating ? null : _pickGroupAvatar,
+                      ),
+                      const SizedBox(height: 38),
+                      _buildFormCard(),
+                      const Spacer(),
+                      const SizedBox(height: 48),
+                      _buildCreateButton(),
+                    ],
                   ),
-                  SizedBox(height: 8.0),
-                  TextField(
-                    controller: _groupIdController,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    onChanged: _validateGroupId,
-                    decoration: InputDecoration(
-                      hintText: '请输入6位纯数字群聊号',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                        borderSide: BorderSide(
-                          color: Colors.grey[300]!,
-                          width: 1.0,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                        borderSide: BorderSide(color: Colors.blue, width: 1.0),
-                      ),
-                      errorText: _groupIdError.isNotEmpty
-                          ? _groupIdError
-                          : null,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12.0,
-                        vertical: 10.0,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // 群聊名称输入
-            Container(
-              margin: EdgeInsets.only(bottom: 24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '群聊名称',
-                    style: TextStyle(
-                      fontSize: 14.0,
-                      color: Colors.grey[800],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  SizedBox(height: 8.0),
-                  TextField(
-                    controller: _groupNameController,
-                    decoration: InputDecoration(
-                      hintText: '请输入群聊名称',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                        borderSide: BorderSide(
-                          color: Colors.grey[300]!,
-                          width: 1.0,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                        borderSide: BorderSide(color: Colors.blue, width: 1.0),
-                      ),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12.0,
-                        vertical: 10.0,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // 创建按钮
-            ElevatedButton(
-              onPressed: _createGroup,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                minimumSize: Size(double.infinity, 48.0),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
                 ),
               ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        children: [
+          _GroupFormField(
+            key: const ValueKey('group_id_field'),
+            label: '群号',
+            hintText: '请输入群号',
+            controller: _groupIdController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            maxLength: 6,
+            errorText: _groupIdError,
+            onChanged: _validateGroupId,
+          ),
+          const Padding(
+            padding: EdgeInsets.only(left: 22, right: 18),
+            child: Divider(height: 0.5, thickness: 0.5),
+          ),
+          _GroupFormField(
+            key: const ValueKey('group_name_field'),
+            label: '群名称',
+            hintText: '请输入群名称',
+            controller: _groupNameController,
+            maxLength: 30,
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCreateButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: FilledButton(
+        key: const ValueKey('create_group_button'),
+        onPressed: _canCreate ? _createGroup : null,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.42),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(13),
+          ),
+          elevation: 0,
+        ),
+        child: _isCreating
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Text(
+                '创建群聊',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+              ),
+      ),
+    );
+  }
+}
+
+class _GroupAvatarPicker extends StatelessWidget {
+  const _GroupAvatarPicker({required this.avatar, required this.onTap});
+
+  final XFile? avatar;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '上传群头像',
+      child: InkWell(
+        key: const ValueKey('group_avatar_picker'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+          child: Column(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 104,
+                    height: 104,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F5F4),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: avatar == null
+                        ? const Icon(
+                            Icons.groups_rounded,
+                            size: 56,
+                            color: AppColors.primary,
+                          )
+                        : Image.file(File(avatar!.path), fit: BoxFit.cover),
+                  ),
+                  Positioned(
+                    right: -5,
+                    bottom: -5,
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.divider),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x14000000),
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.photo_camera_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                avatar == null ? '上传群头像' : '更换群头像',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupFormField extends StatelessWidget {
+  const _GroupFormField({
+    super.key,
+    required this.label,
+    required this.hintText,
+    required this.controller,
+    this.keyboardType,
+    this.inputFormatters,
+    this.maxLength,
+    this.errorText,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String hintText;
+  final TextEditingController controller;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final int? maxLength;
+  final String? errorText;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 6, 18, 6),
+      child: Row(
+        crossAxisAlignment: errorText == null
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(top: errorText == null ? 0 : 14),
+            child: SizedBox(
+              width: 82,
               child: Text(
-                '创建',
-                style: TextStyle(fontSize: 16.0, color: Colors.white),
+                label,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: keyboardType,
+              inputFormatters: inputFormatters,
+              maxLength: maxLength,
+              onChanged: onChanged,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 16,
+              ),
+              decoration: InputDecoration(
+                hintText: hintText,
+                hintStyle: const TextStyle(
+                  color: Color(0xFFAAAAAA),
+                  fontSize: 16,
+                ),
+                errorText: errorText,
+                errorStyle: const TextStyle(fontSize: 12, height: 1),
+                counterText: '',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
