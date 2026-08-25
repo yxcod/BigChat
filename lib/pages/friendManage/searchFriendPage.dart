@@ -7,6 +7,7 @@ import '../../shared/widgets/app_back_button.dart';
 import '../../model/userInfoModel.dart';
 import 'friendDetailPage.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class SearchFriendPage extends StatefulWidget {
   const SearchFriendPage({
@@ -50,19 +51,19 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         leading: const AppBackButton(),
         centerTitle: true,
-        title: const Text(
+        title: Text(
           '添加好友',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.appTextPrimary,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
@@ -82,7 +83,7 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
   Widget _buildSearchSection() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      color: AppColors.surface,
+      color: context.appSurface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -99,19 +100,19 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
                     onSubmitted: (_) {
                       if (!_isLoading) _performSearch();
                     },
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    style: TextStyle(
+                      color: context.appTextPrimary,
                       fontSize: 15,
                     ),
                     decoration: InputDecoration(
                       hintText: '请输入账号或手机号',
-                      hintStyle: const TextStyle(
-                        color: AppColors.textSecondary,
+                      hintStyle: TextStyle(
+                        color: context.appTextSecondary,
                         fontSize: 14,
                       ),
-                      prefixIcon: const Icon(
+                      prefixIcon: Icon(
                         Icons.search_rounded,
-                        color: AppColors.textSecondary,
+                        color: context.appTextSecondary,
                         size: 22,
                       ),
                       suffixIcon: _phoneController.text.isEmpty
@@ -129,7 +130,7 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
                               ),
                             ),
                       filled: true,
-                      fillColor: AppColors.searchBackground,
+                      fillColor: context.appSearchBackground,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide.none,
@@ -181,9 +182,9 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
             ],
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             '可通过账号或手机号查找用户',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+            style: TextStyle(color: context.appTextSecondary, fontSize: 12.5),
           ),
         ],
       ),
@@ -193,20 +194,20 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
   // 构建搜索结果区域
   Widget _buildSearchResultSection() {
     if (_isLoading) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CircularProgressIndicator(color: AppColors.primary),
             SizedBox(height: 14),
-            Text('搜索中...', style: TextStyle(color: AppColors.textSecondary)),
+            Text('搜索中...', style: TextStyle(color: context.appTextSecondary)),
           ],
         ),
       );
     }
 
     if (_searchResult == null) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -218,7 +219,7 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
             SizedBox(height: 14),
             Text(
               '输入账号或手机号搜索好友',
-              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 14, color: context.appTextSecondary),
             ),
           ],
         ),
@@ -230,10 +231,10 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
       children: [
-        const Text(
+        Text(
           '搜索结果',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.appTextPrimary,
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -241,14 +242,14 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
         const SizedBox(height: 12),
         _buildUserCard(),
         const SizedBox(height: 18),
-        const Row(
+        Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.shield_outlined, color: AppColors.primary, size: 17),
             SizedBox(width: 7),
             Text(
               '仅会展示对方公开的基本资料',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+              style: TextStyle(color: context.appTextSecondary, fontSize: 12.5),
             ),
           ],
         ),
@@ -265,7 +266,7 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
         key: const Key('search_friend_result_card'),
         padding: const EdgeInsets.fromLTRB(16, 16, 12, 0),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(16),
           boxShadow: const [
             BoxShadow(
@@ -287,7 +288,7 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
                           _searchResult!['avatar'].isNotEmpty
                       ? AppImageCache.provider(_searchResult!['avatar'])
                       : null,
-                  backgroundColor: const Color(0xFFF0F1F3),
+                  backgroundColor: context.appSearchBackground,
                   child:
                       _searchResult!['avatar'] == null ||
                           _searchResult!['avatar'].isEmpty
@@ -296,9 +297,9 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
                                   _searchResult!['nickname'].isNotEmpty
                               ? _searchResult!['nickname'][0]
                               : '?',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 21,
-                            color: AppColors.textSecondary,
+                            color: context.appTextSecondary,
                           ),
                         )
                       : null,
@@ -312,8 +313,8 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
                         _searchResult!['nickname'] ?? '',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: context.appTextPrimary,
                           fontSize: 17,
                           fontWeight: FontWeight.w600,
                         ),
@@ -321,16 +322,16 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
                       const SizedBox(height: 5),
                       Text(
                         '账号：${_searchResult!['phone'] ?? ''}',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.appTextSecondary,
                           fontSize: 12.5,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         _profileMeta,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.appTextSecondary,
                           fontSize: 12.5,
                         ),
                       ),
@@ -343,8 +344,8 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
                           _searchResult!['signature'].toString(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
+                          style: TextStyle(
+                            color: context.appTextSecondary,
                             fontSize: 12.5,
                           ),
                         ),
@@ -360,13 +361,13 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 13),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF0F1F3),
+                          color: context.appSearchBackground,
                           borderRadius: BorderRadius.circular(17),
                         ),
-                        child: const Text(
+                        child: Text(
                           '已添加',
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: context.appTextSecondary,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
@@ -398,15 +399,15 @@ class _SearchFriendPageState extends State<SearchFriendPage> {
               ],
             ),
             const SizedBox(height: 15),
-            const Divider(height: 1, color: AppColors.divider),
+            Divider(height: 1, color: context.appDivider),
             SizedBox(
               height: 48,
               child: Row(
                 children: [
-                  const Text(
+                  Text(
                     '点击查看公开资料',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: context.appTextSecondary,
                       fontSize: 13,
                     ),
                   ),

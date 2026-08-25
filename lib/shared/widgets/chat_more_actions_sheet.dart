@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/theme/app_theme_context.dart';
+
 const chatChromeBackgroundColor = Colors.white;
 const chatChromeDividerColor = Color(0xFFE8E8E8);
 
@@ -50,11 +52,11 @@ class ChatMoreActionsSheet extends StatelessWidget {
     ];
 
     return Material(
-      color: const Color(0xFFF5F5F7),
+      color: context.appPageBackground,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Divider(height: 1, color: chatChromeDividerColor),
+          Divider(height: 1, color: context.appDivider),
           SafeArea(
             top: false,
             child: GridView.builder(
@@ -86,22 +88,22 @@ class ChatMoreActionsSheet extends StatelessWidget {
                         width: 64,
                         height: 64,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: context.appSurface,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         alignment: Alignment.center,
                         child: Icon(
                           action.icon,
                           size: 30,
-                          color: Colors.black54,
+                          color: context.appTextPrimary,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         action.label,
                         maxLines: 1,
-                        style: const TextStyle(
-                          color: Colors.black54,
+                        style: TextStyle(
+                          color: context.appTextSecondary,
                           fontSize: 13,
                         ),
                       ),

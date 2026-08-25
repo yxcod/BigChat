@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/getInfoAPI.dart';
 import '../app/theme/app_colors.dart';
+import '../app/theme/app_theme_context.dart';
 import '../utils/WebSocketManager.dart';
 import '../utils/gloabl.dart';
 import '../utils/storageUtil.dart';
@@ -139,7 +140,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       onSubmitted: (_) => onSubmitted?.call(),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: const TextStyle(color: AppColors.textSecondary),
+        hintStyle: TextStyle(color: context.appTextSecondary),
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
@@ -155,19 +156,19 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: context.appSurface,
+        surfaceTintColor: context.appSurface,
         elevation: 0,
         centerTitle: true,
         leadingWidth: 76,
         leading: TextButton(
           onPressed: _isSubmitting ? null : () => Navigator.pop(context),
-          child: const Text(
+          child: Text(
             '取消',
-            style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+            style: TextStyle(color: context.appTextPrimary, fontSize: 16),
           ),
         ),
         title: const Text('修改密码'),
@@ -207,7 +208,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ColoredBox(
-            color: Colors.white,
+            color: context.appSurface,
             child: Column(
               children: [
                 _passwordField(
@@ -233,11 +234,11 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               ],
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: Text(
               '密码修改成功后，需要使用新密码重新登录。',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: TextStyle(color: context.appTextSecondary, fontSize: 13),
             ),
           ),
         ],

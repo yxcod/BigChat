@@ -9,6 +9,7 @@ import '../../model/groupInfoModel.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../shared/widgets/app_search_field.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class GroupChat {
   final int groupId;
@@ -159,19 +160,19 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         leading: const AppBackButton(),
         centerTitle: true,
-        title: const Text(
+        title: Text(
           '我的群聊',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.appTextPrimary,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -187,9 +188,9 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
                   shape: BoxShape.circle,
                   border: Border.all(color: const Color(0xFF34373C)),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.add_rounded,
-                  color: AppColors.textPrimary,
+                  color: context.appTextPrimary,
                   size: 22,
                 ),
               ),
@@ -200,7 +201,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
       body: Column(
         children: [
           Container(
-            color: AppColors.surface,
+            color: context.appSurface,
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: AppSearchField(
               controller: _searchController,
@@ -263,10 +264,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
               const SizedBox(height: 12),
               Text(
                 searching ? '没有找到匹配的群聊' : '暂时还没有群聊',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: context.appTextSecondary, fontSize: 14),
               ),
             ],
           ),
@@ -296,7 +294,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
   Widget _buildSummaryCard() {
     return Material(
       key: const ValueKey('group_summary_card'),
-      color: AppColors.surface,
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: _openGroupCreator,
@@ -315,8 +313,8 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
                 const SizedBox(width: 12),
                 Text(
                   '共 ${_groupChats.length} 个群聊',
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: context.appTextPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
@@ -357,18 +355,15 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
             children: [
               TextSpan(
                 text: title,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: context.appTextPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               TextSpan(
                 text: '  ${groups.length}',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: context.appTextSecondary, fontSize: 14),
               ),
             ],
           ),
@@ -376,7 +371,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
         const SizedBox(height: 11),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(16),
           ),
           clipBehavior: Clip.antiAlias,
@@ -386,11 +381,11 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
                 children: [
                   _buildGroupRow(groups[index], showOwnerBadge: showOwnerBadge),
                   if (index < groups.length - 1)
-                    const Divider(
+                    Divider(
                       height: 1,
                       indent: 80,
                       endIndent: 14,
-                      color: AppColors.divider,
+                      color: context.appDivider,
                     ),
                 ],
               );
@@ -403,7 +398,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
 
   Widget _buildGroupRow(GroupChat group, {required bool showOwnerBadge}) {
     return Material(
-      color: AppColors.surface,
+      color: context.appSurface,
       child: InkWell(
         onTap: () => _openGroup(group),
         child: SizedBox(
@@ -423,8 +418,8 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
                         group.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: context.appTextPrimary,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -436,8 +431,8 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
                             : group.description,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.appTextSecondary,
                           fontSize: 12.5,
                         ),
                       ),

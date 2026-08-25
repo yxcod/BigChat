@@ -37,6 +37,7 @@ import '../core/media/voice_message.dart';
 import '../core/media/voice_media.dart';
 import 'videoCallPage.dart';
 import '../app/theme/app_colors.dart';
+import '../app/theme/app_theme_context.dart';
 
 class ChatDialogPage extends StatefulWidget {
   ChatDialogPage({Key? key}) : super(key: key);
@@ -903,7 +904,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     FocusScope.of(context).unfocus();
     final mediaType = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: context.appSurface,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: Column(
@@ -1015,7 +1016,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         centerTitle: true,
         titleSpacing: 0,
@@ -1040,8 +1041,8 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                     '未知用户',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: context.appTextPrimary,
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.1,
@@ -1068,8 +1069,8 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                         _privateChatStatus,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.appTextSecondary,
                           fontSize: 11.5,
                         ),
                       ),
@@ -1080,20 +1081,20 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
             ],
           ),
         ),
-        backgroundColor: chatChromeBackgroundColor,
+        backgroundColor: context.appSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: chatChromeDividerColor),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: context.appDivider),
         ),
         actions: [
           IconButton(
             key: const ValueKey('private_video_call_button'),
             tooltip: '视频通话',
-            icon: const Icon(
+            icon: Icon(
               Icons.videocam_outlined,
-              color: AppColors.textPrimary,
+              color: context.appTextPrimary,
               size: 25,
             ),
             onPressed: () {
@@ -1184,7 +1185,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                   },
                 ),
               ),
-              const Divider(height: 1, color: chatChromeDividerColor),
+              Divider(height: 1, color: context.appDivider),
               ChatComposerPanel(
                 composer: _buildTextComposer(),
                 moreActionsVisible: _isMoreActionsVisible,
@@ -2059,8 +2060,8 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = message.isMe ? AppColors.primary : Colors.white;
-    final textColor = message.isMe ? Colors.white : AppColors.textPrimary;
+    final bubbleColor = message.isMe ? AppColors.primary : context.appSurface;
+    final textColor = message.isMe ? Colors.white : context.appTextPrimary;
     final borderRadius = BorderRadius.only(
       topLeft: const Radius.circular(16),
       topRight: const Radius.circular(16),
@@ -2195,7 +2196,7 @@ class MessageBubble extends StatelessWidget {
                         style: TextStyle(
                           color: message.status == MessageStatus.failed
                               ? AppColors.danger
-                              : AppColors.textSecondary,
+                              : context.appTextSecondary,
                           fontSize: 10.5,
                         ),
                       ),

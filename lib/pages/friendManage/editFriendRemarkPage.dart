@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class EditFriendRemarkPage extends StatefulWidget {
   const EditFriendRemarkPage({super.key, required this.initialRemark});
@@ -41,19 +42,19 @@ class _EditFriendRemarkPageState extends State<EditFriendRemarkPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: context.appSurface,
+        surfaceTintColor: context.appSurface,
         elevation: 0,
         centerTitle: true,
         leadingWidth: 76,
         leading: TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text(
+          child: Text(
             '取消',
-            style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+            style: TextStyle(color: context.appTextPrimary, fontSize: 16),
           ),
         ),
         title: const Text('设置备注'),
@@ -82,7 +83,7 @@ class _EditFriendRemarkPageState extends State<EditFriendRemarkPage> {
         ),
       ),
       body: ColoredBox(
-        color: Colors.white,
+        color: context.appSurface,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: TextField(

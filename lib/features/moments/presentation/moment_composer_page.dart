@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_context.dart';
 import '../data/moment_media_uploader.dart';
 import '../../../shared/widgets/fullscreen_image_viewer.dart';
 import '../data/moments_repository.dart';
@@ -227,7 +228,7 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.appSurface,
       appBar: AppBar(
         leading: TextButton(
           onPressed: () => Navigator.maybePop(context),
@@ -299,7 +300,7 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
                     children: [
                       Text(
                         _location ?? '不显示',
-                        style: const TextStyle(color: AppColors.textSecondary),
+                        style: TextStyle(color: context.appTextSecondary),
                       ),
                       const Icon(Icons.chevron_right),
                     ],
@@ -316,7 +317,7 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
               children: [
                 Text(
                   _visibilityLabel(_visibility),
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: context.appTextSecondary),
                 ),
                 const Icon(Icons.chevron_right),
               ],
@@ -361,9 +362,9 @@ class _MediaGrid extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: AppColors.searchBackground,
+                color: context.appSearchBackground,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.divider),
+                border: Border.all(color: context.appDivider),
               ),
               child: const Column(
                 mainAxisAlignment: MainAxisAlignment.center,

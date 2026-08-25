@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/theme/app_theme_context.dart';
 import 'package:dio/dio.dart';
 import '../../utils/http.dart';
 import '../../utils/gloabl.dart';
@@ -155,9 +156,9 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF5F5F7),
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
-        backgroundColor: Color(0xFFF5F5F7),
+        backgroundColor: context.appPageBackground,
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
@@ -172,7 +173,7 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
               style: TextStyle(
                 fontSize: 28.0,
                 fontWeight: FontWeight.bold,
-                color: Colors.black,
+                color: context.appTextPrimary,
               ),
             ),
             SizedBox(height: 60),

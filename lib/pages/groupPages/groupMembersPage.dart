@@ -12,6 +12,7 @@ import '../../features/groups/domain/group_role_policy.dart';
 import '../../features/chat/domain/chat_realtime_event.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../shared/widgets/app_back_button.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class GroupMembersPage extends StatefulWidget {
   final String groupId;
@@ -178,10 +179,10 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
   Widget build(BuildContext context) {
     try {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: context.appPageBackground,
         appBar: AppBar(
           title: Text('群聊成员'),
-          backgroundColor: Colors.white,
+          backgroundColor: context.appSurface,
           elevation: 1,
           leading: const AppBackButton(),
           actions: [
@@ -218,7 +219,7 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
                     borderSide: BorderSide.none,
                   ),
                   filled: true,
-                  fillColor: Colors.grey[100],
+                  fillColor: context.appSearchBackground,
                 ),
               ),
             ),
@@ -288,10 +289,10 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
       print('构建页面失败: $e');
       // 显示错误页面
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: context.appPageBackground,
         appBar: AppBar(
           title: Text('群聊成员'),
-          backgroundColor: Colors.white,
+          backgroundColor: context.appSurface,
           elevation: 1,
           leading: const AppBackButton(),
         ),

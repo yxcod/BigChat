@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class AppSearchField extends StatelessWidget {
   const AppSearchField({
@@ -35,17 +36,17 @@ class AppSearchField extends StatelessWidget {
           hintText: hintText,
           isDense: true,
           filled: true,
-          fillColor: AppColors.searchBackground,
-          prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+          fillColor: context.appSearchBackground,
+          prefixIcon: Icon(Icons.search, color: context.appTextSecondary),
           prefixIconConstraints: const BoxConstraints(minWidth: 40),
           suffixIcon: query.isEmpty
               ? null
               : IconButton(
                   tooltip: '清除',
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.cancel,
-                    color: AppColors.textSecondary,
+                    color: context.appTextSecondary,
                     size: 20,
                   ),
                   onPressed: _clear,

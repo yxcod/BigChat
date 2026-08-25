@@ -21,6 +21,7 @@ import '../../features/chat/domain/chat_message_mapper.dart';
 import '../../features/chat/data/hidden_conversations_store.dart';
 import '../../shared/widgets/swipe_action_cell.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 import '../../utils/presence_event.dart';
 
 class Chatpage extends StatefulWidget {
@@ -984,7 +985,7 @@ class _ChatpageState extends State<Chatpage> {
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
       child: Material(
         key: const ValueKey('chat_unread_summary'),
-        color: AppColors.surface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
@@ -993,7 +994,7 @@ class _ChatpageState extends State<Chatpage> {
             height: 58,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              border: Border.all(color: AppColors.divider),
+              border: Border.all(color: context.appDivider),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -1015,8 +1016,8 @@ class _ChatpageState extends State<Chatpage> {
                 Expanded(
                   child: Text(
                     '$total 条未读消息',
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    style: TextStyle(
+                      color: context.appTextPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1079,7 +1080,7 @@ class _ChatpageState extends State<Chatpage> {
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.surface, width: 2),
+                  border: Border.all(color: context.appSurface, width: 2),
                 ),
               ),
             ),
@@ -1144,8 +1145,8 @@ class _ChatpageState extends State<Chatpage> {
                               chat.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
+                              style: TextStyle(
+                                color: context.appTextPrimary,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1169,8 +1170,8 @@ class _ChatpageState extends State<Chatpage> {
                               _conversationPreview(chat),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
+                              style: TextStyle(
+                                color: context.appTextSecondary,
                                 fontSize: 13,
                               ),
                             ),
@@ -1194,7 +1195,7 @@ class _ChatpageState extends State<Chatpage> {
 
   Widget _buildConversationList() {
     if (_chats.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1206,7 +1207,7 @@ class _ChatpageState extends State<Chatpage> {
             SizedBox(height: 12),
             Text(
               '暂无聊天会话',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              style: TextStyle(color: context.appTextSecondary, fontSize: 14),
             ),
           ],
         ),
@@ -1220,12 +1221,12 @@ class _ChatpageState extends State<Chatpage> {
         controller: _conversationScrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: _chats.length,
-        separatorBuilder: (_, _) => const Divider(
+        separatorBuilder: (_, _) => Divider(
           height: 1,
           thickness: 0.6,
           indent: 81,
           endIndent: 16,
-          color: AppColors.divider,
+          color: context.appDivider,
         ),
         itemBuilder: (context, index) => _buildConversationTile(_chats[index]),
       ),
@@ -1235,17 +1236,17 @@ class _ChatpageState extends State<Chatpage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         toolbarHeight: 56,
         centerTitle: true,
-        title: const Text(
+        title: Text(
           '聊天',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.appTextPrimary,
             fontSize: 18,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
@@ -1265,9 +1266,9 @@ class _ChatpageState extends State<Chatpage> {
                   shape: BoxShape.circle,
                   border: Border.all(color: const Color(0xFF34373C)),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.add_rounded,
-                  color: AppColors.textPrimary,
+                  color: context.appTextPrimary,
                   size: 22,
                 ),
               ),
@@ -1278,7 +1279,7 @@ class _ChatpageState extends State<Chatpage> {
       body: Column(
         children: [
           Container(
-            color: AppColors.surface,
+            color: context.appSurface,
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
             child: AppSearchField(
               controller: _searchController,
@@ -1292,9 +1293,11 @@ class _ChatpageState extends State<Chatpage> {
           Expanded(
             child: Container(
               key: const ValueKey('chat_list_surface'),
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
               ),
               clipBehavior: Clip.antiAlias,
               child: _searchQuery.trim().isNotEmpty

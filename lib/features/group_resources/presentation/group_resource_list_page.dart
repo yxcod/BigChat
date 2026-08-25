@@ -13,6 +13,7 @@ import '../../../core/cache/app_image_cache.dart';
 import '../../../shared/widgets/app_video_player.dart';
 import '../../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../../utils/http.dart';
+import '../../../app/theme/app_theme_context.dart';
 import '../data/group_resource_repository.dart';
 import '../domain/group_resource.dart';
 
@@ -192,7 +193,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F8),
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         leading: const AppBackButton(),
         title: Text(_isAlbum ? '群相册' : '群文件'),
@@ -273,9 +274,9 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
                 imageUrl: url,
                 cacheKey: AppImageCache.cacheKey(url),
                 fit: BoxFit.cover,
-                errorWidget: (_, _, _) => const ColoredBox(
-                  color: Colors.white,
-                  child: Icon(Icons.broken_image_outlined),
+                errorWidget: (_, _, _) => ColoredBox(
+                  color: context.appSurface,
+                  child: const Icon(Icons.broken_image_outlined),
                 ),
               ),
             ),
@@ -310,7 +311,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     itemBuilder: (context, index) {
       final item = _items[index];
       return ListTile(
-        tileColor: Colors.white,
+        tileColor: context.appSurface,
         leading: Container(
           width: 44,
           height: 44,

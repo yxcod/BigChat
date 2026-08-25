@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_context.dart';
 import '../data/app_settings_repository.dart';
 import '../domain/app_settings.dart';
 import 'sound_selection_page.dart';
@@ -46,7 +47,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   Widget build(BuildContext context) {
     final selectedSound = NotificationSound.byId(_settings.messageSoundId);
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(title: const Text('通知')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -54,7 +55,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
               children: [
                 const SizedBox(height: 12),
                 Material(
-                  color: Colors.white,
+                  color: context.appSurface,
                   child: Column(
                     children: [
                       _NotificationSwitchTile(
@@ -66,7 +67,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                           () => widget.repository.setVibrationEnabled(value),
                         ),
                       ),
-                      const _SettingsDivider(),
+                      _SettingsDivider(color: context.appDivider),
                       _NotificationSwitchTile(
                         key: const Key('banner_switch'),
                         title: '横幅',
@@ -76,7 +77,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                           () => widget.repository.setBannerEnabled(value),
                         ),
                       ),
-                      const _SettingsDivider(),
+                      _SettingsDivider(color: context.appDivider),
                       _NotificationSwitchTile(
                         key: const Key('message_sound_switch'),
                         title: '消息提示音',
@@ -86,7 +87,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                           () => widget.repository.setMessageSoundEnabled(value),
                         ),
                       ),
-                      const _SettingsDivider(),
+                      _SettingsDivider(color: context.appDivider),
                       ListTile(
                         key: const Key('message_sound_settings_entry'),
                         title: const Text('消息提示音设置'),
@@ -96,12 +97,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                           children: [
                             Text(
                               selectedSound.label,
-                              style: TextStyle(color: Colors.grey[600]),
+                              style: TextStyle(color: context.appTextSecondary),
                             ),
                             const SizedBox(width: 4),
-                            const Icon(
+                            Icon(
                               Icons.chevron_right,
-                              color: Color(0xFFB6B6B6),
+                              color: context.appTextSecondary,
                             ),
                           ],
                         ),
@@ -155,10 +156,12 @@ class _NotificationSwitchTile extends StatelessWidget {
 }
 
 class _SettingsDivider extends StatelessWidget {
-  const _SettingsDivider();
+  const _SettingsDivider({required this.color});
+
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return const Divider(height: 1, indent: 16, color: Color(0xFFE5E5E5));
+    return Divider(height: 1, indent: 16, color: color);
   }
 }

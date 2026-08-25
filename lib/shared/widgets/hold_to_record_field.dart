@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/media/voice_message.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class HoldToRecordField extends StatefulWidget {
   const HoldToRecordField({
@@ -184,7 +185,11 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
         decoration: BoxDecoration(
           color: _cancelRequested
               ? Colors.red.shade50
-              : (_recording ? Colors.green.shade50 : Colors.grey[200]),
+              : (_recording
+                    ? (context.isDarkMode
+                          ? const Color(0xFF183326)
+                          : Colors.green.shade50)
+                    : context.appSearchBackground),
           borderRadius: BorderRadius.circular(20),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -203,7 +208,9 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
                         ? '松开取消'
                         : '松开发送  ${_elapsedSeconds.clamp(0, 60)}″  ·  上滑取消',
                     style: TextStyle(
-                      color: _cancelRequested ? Colors.red : Colors.black87,
+                      color: _cancelRequested
+                          ? Colors.red
+                          : context.appTextPrimary,
                       fontSize: 13,
                     ),
                   ),
@@ -219,9 +226,10 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
                 enableInteractiveSelection: false,
                 enableSuggestions: true,
                 autocorrect: true,
-                decoration: const InputDecoration.collapsed(
+                style: TextStyle(color: context.appTextPrimary),
+                decoration: InputDecoration.collapsed(
                   hintText: '长按发送语音',
-                  hintStyle: TextStyle(color: Color(0xFFAAAAAA)),
+                  hintStyle: TextStyle(color: context.appTextSecondary),
                 ),
               ),
       ),

@@ -2,19 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_context.dart';
+import '../../../app/theme/app_theme_controller.dart';
+import '../../../utils/WebSocketManager.dart';
 import '../../../utils/gloabl.dart';
+import '../../../utils/storageUtil.dart';
 import '../../location/data/app_location_service.dart';
 import '../data/app_settings_repository.dart';
 import '../domain/app_settings.dart';
 import 'notification_settings_page.dart';
+import 'theme_settings_page.dart';
 
 typedef ChatBackgroundPicker = Future<String?> Function();
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key, this.repository, this.pickChatBackground});
+  const SettingsPage({
+    super.key,
+    this.repository,
+    this.pickChatBackground,
+    this.themeController,
+    this.logoutHandler,
+  });
 
   final AppSettingsRepository? repository;
   final ChatBackgroundPicker? pickChatBackground;
+  final AppThemeController? themeController;
+  final Future<void> Function()? logoutHandler;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -22,6 +35,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late final AppSettingsRepository _repository;
+  late final AppThemeController _themeController;
   AppSettings _settings = const AppSettings();
   bool _loading = true;
   bool _savingBackground = false;
@@ -32,7 +46,19 @@ class _SettingsPageState extends State<SettingsPage> {
     _repository =
         widget.repository ??
         AppSettingsRepository(ownerId: GlobalUtil().userName ?? '');
+    _themeController = widget.themeController ?? AppThemeController.instance;
+    _themeController.addListener(_handleThemeChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _themeController.removeListener(_handleThemeChanged);
+    super.dispose();
+  }
+
+  void _handleThemeChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
@@ -91,10 +117,47 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('退出登录'),
+        content: const Text('退出后将返回登录页面，本地账号登录状态会被清除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            key: const Key('confirm_logout_button'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              '退出登录',
+              style: TextStyle(color: AppColors.danger),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    if (widget.logoutHandler != null) {
+      await widget.logoutHandler!();
+    } else {
+      WebSocketManager().disconnect();
+      final global = GlobalUtil();
+      await global.flushChatRecordsToLocal();
+      global.resetSessionState();
+      await StorageUtil.logout();
+    }
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(title: const Text('设置')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -102,7 +165,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 const SizedBox(height: 12),
                 Material(
-                  color: Colors.white,
+                  color: context.appSurface,
                   child: Column(
                     children: [
                       _SettingsSwitchTile(
@@ -111,22 +174,40 @@ class _SettingsPageState extends State<SettingsPage> {
                         value: _settings.privacyMode,
                         onChanged: _setPrivacyMode,
                       ),
-                      const Divider(
-                        height: 1,
-                        indent: 16,
-                        color: Color(0xFFE5E5E5),
-                      ),
+                      Divider(height: 1, indent: 16, color: context.appDivider),
                       _SettingsSwitchTile(
                         key: const Key('location_enabled_switch'),
                         title: '位置信息',
                         value: _settings.locationEnabled,
                         onChanged: _setLocationEnabled,
                       ),
-                      const Divider(
-                        height: 1,
-                        indent: 16,
-                        color: Color(0xFFE5E5E5),
+                      Divider(height: 1, indent: 16, color: context.appDivider),
+                      ListTile(
+                        key: const Key('theme_settings_entry'),
+                        title: const Text('主题设置'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _themeController.isDark ? '深色' : '浅色',
+                              style: TextStyle(color: context.appTextSecondary),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.chevron_right,
+                              color: context.appTextSecondary,
+                            ),
+                          ],
+                        ),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ThemeSettingsPage(controller: _themeController),
+                          ),
+                        ),
                       ),
+                      Divider(height: 1, indent: 16, color: context.appDivider),
                       ListTile(
                         key: const Key('chat_background_settings_entry'),
                         title: const Text('聊天背景设置'),
@@ -146,30 +227,26 @@ class _SettingsPageState extends State<SettingsPage> {
                                 _settings.chatBackgroundPath.isEmpty
                                     ? '默认'
                                     : '已设置',
-                                style: const TextStyle(
-                                  color: Color(0xFF999999),
+                                style: TextStyle(
+                                  color: context.appTextSecondary,
                                 ),
                               ),
                             const SizedBox(width: 4),
-                            const Icon(
+                            Icon(
                               Icons.chevron_right,
-                              color: Color(0xFFB6B6B6),
+                              color: context.appTextSecondary,
                             ),
                           ],
                         ),
                         onTap: _savingBackground ? null : _selectChatBackground,
                       ),
-                      const Divider(
-                        height: 1,
-                        indent: 16,
-                        color: Color(0xFFE5E5E5),
-                      ),
+                      Divider(height: 1, indent: 16, color: context.appDivider),
                       ListTile(
                         key: const Key('notification_settings_entry'),
                         title: const Text('通知'),
-                        trailing: const Icon(
+                        trailing: Icon(
                           Icons.chevron_right,
-                          color: Color(0xFFB6B6B6),
+                          color: context.appTextSecondary,
                         ),
                         onTap: () async {
                           await Navigator.push(
@@ -186,6 +263,24 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 20),
+                Material(
+                  color: context.appSurface,
+                  child: ListTile(
+                    key: const Key('logout_button'),
+                    title: const Center(
+                      child: Text(
+                        '退出登录',
+                        style: TextStyle(
+                          color: AppColors.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    onTap: _confirmLogout,
+                  ),
+                ),
+                const SizedBox(height: 28),
               ],
             ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../api/delete_chat_history_api.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 import '../../core/parsing/json_value_parser.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../utils/gloabl.dart';
@@ -214,15 +215,15 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         leading: AppBackButton(onPressed: _close),
         title: const Text('设置'),
-        backgroundColor: Colors.white,
+        backgroundColor: context.appSurface,
         elevation: 0,
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFE5E5E5)),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: context.appDivider),
         ),
       ),
       body: Stack(
@@ -276,7 +277,7 @@ class _SettingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -357,7 +358,7 @@ class _DestructiveActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

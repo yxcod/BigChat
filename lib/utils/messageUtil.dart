@@ -23,12 +23,12 @@ class MessageUtil {
 
   // 显示自定义提示
   static void showCustom(
-    BuildContext context, 
-    String message, 
-    IconData icon, 
-    Color color,
-    {int duration = 2}
-  ) {
+    BuildContext context,
+    String message,
+    IconData icon,
+    Color color, {
+    int duration = 2,
+  }) {
     _showMessage(context, message, icon, color, duration: duration);
   }
 
@@ -94,8 +94,10 @@ class MessageUtil {
     int maxLines = 1,
     String? initialValue,
   }) {
-    TextEditingController controller = TextEditingController(text: initialValue);
-    
+    TextEditingController controller = TextEditingController(
+      text: initialValue,
+    );
+
     return showDialog<String>(
       context: context,
       builder: (BuildContext context) {
@@ -115,7 +117,8 @@ class MessageUtil {
               child: Text(cancelText),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
               child: Text(confirmText),
             ),
           ],
@@ -142,7 +145,7 @@ class MessageUtil {
             children: options.asMap().entries.map((entry) {
               int index = entry.key;
               String option = entry.value;
-              
+
               return ListTile(
                 title: Text(option),
                 onTap: () => Navigator.of(context).pop(index),
@@ -169,7 +172,7 @@ class MessageUtil {
     int duration = 2,
   }) {
     if (message.isEmpty) return;
-    
+
     final snackBar = SnackBar(
       content: Row(
         children: [
@@ -189,7 +192,7 @@ class MessageUtil {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       margin: EdgeInsets.all(16),
     );
-    
+
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
 }
@@ -200,8 +203,16 @@ extension MessageExtension on BuildContext {
   void showError(String message) => MessageUtil.showError(this, message);
   void showWarning(String message) => MessageUtil.showWarning(this, message);
   void showInfo(String message) => MessageUtil.showInfo(this, message);
-  Future<bool?> showConfirm(String content, {String? title}) => 
-      MessageUtil.showConfirmDialog(this, content: content, title: title ?? '确认操作');
-  Future<bool?> showDeleteConfirm(String content, {String? title}) => 
-      MessageUtil.showDeleteConfirm(this, content: content, title: title ?? '删除确认');
+  Future<bool?> showConfirm(String content, {String? title}) =>
+      MessageUtil.showConfirmDialog(
+        this,
+        content: content,
+        title: title ?? '确认操作',
+      );
+  Future<bool?> showDeleteConfirm(String content, {String? title}) =>
+      MessageUtil.showDeleteConfirm(
+        this,
+        content: content,
+        title: title ?? '删除确认',
+      );
 }

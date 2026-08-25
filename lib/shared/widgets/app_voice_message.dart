@@ -10,6 +10,7 @@ import '../../core/media/voice_media.dart';
 import '../../core/media/voice_message.dart';
 import '../../utils/http.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 import 'message_action_menu.dart';
 
 typedef VoiceTranscriber =
@@ -372,7 +373,7 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   Widget build(BuildContext context) {
     final seconds = widget.payload.durationSeconds;
     final width = voiceBubbleWidth(seconds);
-    final foregroundColor = widget.isMe ? Colors.white : AppColors.textPrimary;
+    final foregroundColor = widget.isMe ? Colors.white : context.appTextPrimary;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onLongPressStart: (details) => _showVoiceActions(
@@ -386,7 +387,7 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Material(
-            color: widget.isMe ? AppColors.primary : Colors.white,
+            color: widget.isMe ? AppColors.primary : context.appSurface,
             borderRadius: BorderRadius.circular(16),
             child: SizedBox(
               width: width,
@@ -487,9 +488,9 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
               margin: const EdgeInsets.only(top: 2),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.94),
+                color: context.appElevatedSurface.withValues(alpha: 0.96),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE1E5E9)),
+                border: Border.all(color: context.appDivider),
               ),
               child: SelectableText(
                 _transcript!,

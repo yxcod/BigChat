@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../api/getInfoAPI.dart';
 import '../app/theme/app_colors.dart';
+import '../app/theme/app_theme_context.dart';
 import '../core/cache/app_image_cache.dart';
 import '../model/userInfoModel.dart';
 import '../shared/widgets/app_back_button.dart';
@@ -118,7 +119,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Future<void> _editGender() async {
     final selected = await showModalBottomSheet<int>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: context.appSurface,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: SingleChildScrollView(
@@ -194,10 +195,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             ),
           ),
           const SizedBox(width: 16),
-          const Expanded(
+          Expanded(
             child: Text(
               '头像',
-              style: TextStyle(fontSize: 17, color: AppColors.textPrimary),
+              style: TextStyle(fontSize: 17, color: context.appTextPrimary),
             ),
           ),
           TextButton(
@@ -234,10 +235,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: context.appTextSecondary, fontSize: 16),
               ),
             ),
             const SizedBox(width: 4),
@@ -252,12 +250,12 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         leading: const AppBackButton(),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: context.appSurface,
+        surfaceTintColor: context.appSurface,
         elevation: 0,
         centerTitle: true,
         title: const Text('编辑资料'),
@@ -286,7 +284,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             child: Column(
               children: [
                 Material(
-                  color: Colors.white,
+                  color: context.appSurface,
                   borderRadius: BorderRadius.circular(14),
                   clipBehavior: Clip.antiAlias,
                   child: Column(
@@ -351,10 +349,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                   child: const Text('保存', style: TextStyle(fontSize: 17)),
                 ),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   '完善资料，让好友更了解你',
                   style: TextStyle(
-                    color: AppColors.textSecondary,
+                    color: context.appTextSecondary,
                     fontSize: 13,
                   ),
                 ),

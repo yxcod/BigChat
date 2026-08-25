@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 import '../../model/messageModel.dart';
 
 bool shouldShowChatTimeSeparator({
@@ -30,16 +30,16 @@ class ChatTimeSeparator extends StatelessWidget {
       child: Center(
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.78),
+            color: context.appSurface.withValues(alpha: 0.82),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.divider),
+            border: Border.all(color: context.appDivider),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
             child: Text(
               label,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: context.appTextSecondary,
                 fontSize: 11,
                 height: 1.1,
               ),

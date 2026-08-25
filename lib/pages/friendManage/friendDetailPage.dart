@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../features/moments/data/moments_repository.dart';
 import '../../features/moments/data/server_moments_repository.dart';
@@ -122,9 +123,9 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.appSurface,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
@@ -164,9 +165,9 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
 
   Widget _buildBottomActionBar() {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.divider)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        border: Border(top: BorderSide(color: context.appDivider)),
       ),
       child: SafeArea(
         top: false,
@@ -205,7 +206,9 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
             Icons.location_on_outlined,
             key: const Key('profile_region_icon'),
             size: 18,
-            color: hasRegion ? AppColors.textPrimary : AppColors.textSecondary,
+            color: hasRegion
+                ? context.appTextPrimary
+                : context.appTextSecondary,
           ),
           const SizedBox(width: 5),
           ConstrainedBox(
@@ -219,8 +222,8 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: hasRegion
-                    ? AppColors.textPrimary
-                    : AppColors.textSecondary,
+                    ? context.appTextPrimary
+                    : context.appTextSecondary,
               ),
             ),
           ),
@@ -234,10 +237,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
       children: items
           .map(
             (item) => DefaultTextStyle(
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-              ),
+              style: TextStyle(color: context.appTextPrimary, fontSize: 15),
               child: item,
             ),
           )
@@ -270,10 +270,10 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                       displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 25,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                        color: context.appTextPrimary,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -281,9 +281,9 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                       '账号：${widget.friendData['userName'] ?? 'unknown'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
-                        color: AppColors.textSecondary,
+                        color: context.appTextSecondary,
                       ),
                     ),
                     if (_isFriend &&
@@ -295,9 +295,9 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                         '昵称：$nickname',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: AppColors.textSecondary,
+                          color: context.appTextSecondary,
                         ),
                       ),
                     ],
@@ -314,17 +314,17 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF7F7F8),
+                color: context.appElevatedSurface,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     '个性签名',
                     style: TextStyle(
                       fontSize: 13,
-                      color: AppColors.textSecondary,
+                      color: context.appTextSecondary,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -332,10 +332,10 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                     signature,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       height: 1.4,
-                      color: AppColors.textPrimary,
+                      color: context.appTextPrimary,
                     ),
                   ),
                 ],
@@ -354,9 +354,11 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: Color(0xFFF4F4F5), width: 10)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        border: Border(
+          top: BorderSide(color: context.appPageBackground, width: 10),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -452,8 +454,8 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
                 _latestVisibleMoment!.content,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: context.appTextSecondary,
                   fontSize: 14,
                   height: 1.4,
                 ),
@@ -472,14 +474,14 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: context.appElevatedSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: context.appDivider),
       ),
       child: Text(
         message,
         textAlign: TextAlign.center,
-        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+        style: TextStyle(color: context.appTextSecondary, fontSize: 14),
       ),
     );
   }
@@ -515,8 +517,8 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
               icon: const Icon(Icons.videocam_outlined, size: 22),
               label: const Text('视频通话'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
-                side: const BorderSide(color: Color(0xFFB8B8B8)),
+                foregroundColor: context.appTextPrimary,
+                side: BorderSide(color: context.appDivider),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),

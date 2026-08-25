@@ -6,17 +6,20 @@ import './utils/storageUtil.dart';
 import './utils/GlobalNavigatorKey.dart';
 import './core/config/app_config.dart';
 import './app/theme/app_theme.dart';
+import './app/theme/app_theme_controller.dart';
 import './utils/gloabl.dart';
 import './utils/WebSocketManager.dart';
 import './core/network/app_connection_monitor.dart';
 import './features/chat/domain/chat_realtime_event.dart';
 import './features/groups/presentation/group_route_registry.dart';
 import './features/location/data/app_location_service.dart';
+import './features/settings/application/app_notification_feedback_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.validate();
   await StorageUtil.init();
+  await AppThemeController.instance.load();
   final hasAuthenticatedSession =
       await StorageUtil.restoreAuthenticatedSession();
 
@@ -32,11 +35,15 @@ class MyApp extends StatefulWidget {
     this.connectionMonitor,
     this.initialRoute,
     this.connectionNoticeDelay = const Duration(seconds: 2),
+    this.themeController,
+    this.notificationFeedbackService,
   });
 
   final AppConnectionMonitor? connectionMonitor;
   final String? initialRoute;
   final Duration connectionNoticeDelay;
+  final AppThemeController? themeController;
+  final AppNotificationFeedbackService? notificationFeedbackService;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -44,6 +51,8 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final AppConnectionMonitor _connectionMonitor;
+  late final AppThemeController _themeController;
+  late final AppNotificationFeedbackService _notificationFeedbackService;
   AppConnectionStatus _lastConnectionStatus = AppConnectionStatus.unknown;
   AppConnectionStatus? _connectionNoticeStatus;
   late final WebSocketMessageSubscription _groupEventSubscription;
@@ -58,6 +67,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.initState();
     _connectionMonitor =
         widget.connectionMonitor ?? AppConnectionMonitor.instance;
+    _themeController = widget.themeController ?? AppThemeController.instance;
+    _notificationFeedbackService =
+        widget.notificationFeedbackService ?? AppNotificationFeedbackService();
     // 添加应用生命周期监听
     WidgetsBinding.instance.addObserver(this);
     _lastConnectionStatus = _connectionMonitor.status;
@@ -101,12 +113,88 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void _handleGlobalGroupEvent(dynamic rawMessage) {
     if (rawMessage is! Map<String, dynamic>) return;
     final event = ChatRealtimeEvent.parse(rawMessage);
+    unawaited(_handleIncomingMessageNotification(event));
     if (event.type != ChatRealtimeEventType.groupMemberRemoved ||
         event.groupId <= 0 ||
         !_handlingRemovedGroups.add(event.groupId)) {
       return;
     }
     unawaited(_handleRemovedFromGroup(event));
+  }
+
+  Future<void> _handleIncomingMessageNotification(
+    ChatRealtimeEvent event,
+  ) async {
+    final global = GlobalUtil();
+    final activeConversation = event.type == ChatRealtimeEventType.groupMessage
+        ? GlobalUtil.groupConversationKey(event.groupId)
+        : event.senderId;
+    final notice = await _notificationFeedbackService.handle(
+      event,
+      appIsForeground: _isAppForeground,
+      conversationIsActive:
+          global.isChatting == true &&
+          global.currentChatUserName == activeConversation,
+    );
+    if (!mounted || notice == null) return;
+    _showMessageBanner(notice);
+  }
+
+  void _showMessageBanner(AppMessageNotice notice) {
+    final navigator = GlobalNavigatorKey.navigatorState;
+    if (navigator == null) return;
+    final messenger = ScaffoldMessenger.maybeOf(navigator.context);
+    if (messenger == null) return;
+    messenger
+      ..hideCurrentMaterialBanner()
+      ..showMaterialBanner(
+        MaterialBanner(
+          leading: const CircleAvatar(
+            backgroundColor: Color(0x1F07C160),
+            child: Icon(Icons.notifications_rounded, color: Color(0xFF07C160)),
+          ),
+          content: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              messenger.hideCurrentMaterialBanner();
+              if (notice.event.type == ChatRealtimeEventType.groupMessage) {
+                navigator.pushNamed(
+                  '/groupChatDialog',
+                  arguments: {
+                    'groupId': notice.event.groupId,
+                    'groupName': '群聊',
+                  },
+                );
+              } else {
+                navigator.pushNamed(
+                  '/chatDialog',
+                  arguments: notice.event.senderId,
+                );
+              }
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  notice.title,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 3),
+                Text(notice.body, maxLines: 2, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          actions: [
+            IconButton(
+              tooltip: '关闭',
+              onPressed: messenger.hideCurrentMaterialBanner,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+      );
+    Timer(const Duration(seconds: 4), messenger.hideCurrentMaterialBanner);
   }
 
   Future<void> _handleRemovedFromGroup(ChatRealtimeEvent event) async {
@@ -269,23 +357,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: "全信",
-      theme: AppTheme.light,
-      navigatorKey: GlobalNavigatorKey.navigatorKey,
-      initialRoute:
-          widget.initialRoute ??
-          appInitialRoute(
-            (GlobalUtil().userName ?? '').isNotEmpty &&
-                (GlobalUtil().token ?? '').isNotEmpty,
-          ),
-      routes: getRoutes(),
-      onGenerateRoute: generateRoute,
-      builder: (context, child) => Stack(
-        children: [
-          if (child != null) child,
-          if (_connectionNoticeStatus != null) _buildConnectionNotice(),
-        ],
+    return AnimatedBuilder(
+      animation: _themeController,
+      builder: (context, _) => MaterialApp(
+        title: "全信",
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: _themeController.themeMode,
+        navigatorKey: GlobalNavigatorKey.navigatorKey,
+        initialRoute:
+            widget.initialRoute ??
+            appInitialRoute(
+              (GlobalUtil().userName ?? '').isNotEmpty &&
+                  (GlobalUtil().token ?? '').isNotEmpty,
+            ),
+        routes: getRoutes(),
+        onGenerateRoute: generateRoute,
+        builder: (context, child) => Stack(
+          children: [
+            if (child != null) child,
+            if (_connectionNoticeStatus != null) _buildConnectionNotice(),
+          ],
+        ),
       ),
     );
   }

@@ -5,6 +5,7 @@ import '../../utils/gloabl.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
 import '../../features/groups/domain/group_role_policy.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class SelectGroupMembersToRemovePage extends StatefulWidget {
   final String groupId;
@@ -330,7 +331,7 @@ class _SelectGroupMembersToRemovePageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         title: Text('选择要移除的成员'),
         leading: IconButton(
@@ -339,7 +340,7 @@ class _SelectGroupMembersToRemovePageState
             Navigator.pop(context);
           },
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: context.appSurface,
         elevation: 0,
       ),
       body: _isLoading
@@ -349,7 +350,7 @@ class _SelectGroupMembersToRemovePageState
                 // 搜索框
                 Container(
                   padding: EdgeInsets.all(12.0),
-                  color: Colors.white,
+                  color: context.appSurface,
                   child: TextField(
                     controller: _searchController,
                     onChanged: _filterMembers,
@@ -361,7 +362,7 @@ class _SelectGroupMembersToRemovePageState
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor: context.appSearchBackground,
                     ),
                   ),
                 ),

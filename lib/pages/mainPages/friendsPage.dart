@@ -13,6 +13,7 @@ import '../../utils/WebSocketManager.dart';
 import '../../utils/presence_event.dart';
 import '../../utils/friend_sort_util.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
@@ -327,7 +328,7 @@ class _FriendsPage extends State<Friendspage>
         friend.nickName.isNotEmpty &&
         friend.nickName.trim() != friend.name.trim();
     return Material(
-      color: AppColors.surface,
+      color: context.appSurface,
       child: InkWell(
         onTap: () => _openFriendDetail(friend),
         child: SizedBox(
@@ -340,7 +341,7 @@ class _FriendsPage extends State<Friendspage>
                   clipBehavior: Clip.none,
                   children: [
                     CircleAvatar(
-                      backgroundColor: const Color(0xFFF0F1F3),
+                      backgroundColor: context.appSearchBackground,
                       radius: 23,
                       child: ClipOval(
                         child: friend.avatar != '👤'
@@ -351,15 +352,14 @@ class _FriendsPage extends State<Friendspage>
                                 fit: BoxFit.cover,
                                 width: 46,
                                 height: 46,
-                                errorWidget: (context, url, error) =>
-                                    const Icon(
-                                      Icons.person_rounded,
-                                      color: AppColors.textSecondary,
-                                    ),
+                                errorWidget: (context, url, error) => Icon(
+                                  Icons.person_rounded,
+                                  color: context.appTextSecondary,
+                                ),
                               )
-                            : const Icon(
+                            : Icon(
                                 Icons.person_rounded,
-                                color: AppColors.textSecondary,
+                                color: context.appTextSecondary,
                               ),
                       ),
                     ),
@@ -374,7 +374,7 @@ class _FriendsPage extends State<Friendspage>
                             color: AppColors.primary,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: AppColors.surface,
+                              color: context.appSurface,
                               width: 2,
                             ),
                           ),
@@ -391,8 +391,8 @@ class _FriendsPage extends State<Friendspage>
                       isSearching
                           ? _buildHighlightedText(
                               friend.name,
-                              normalStyle: const TextStyle(
-                                color: AppColors.textPrimary,
+                              normalStyle: TextStyle(
+                                color: context.appTextPrimary,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -401,8 +401,8 @@ class _FriendsPage extends State<Friendspage>
                               friend.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
+                              style: TextStyle(
+                                color: context.appTextPrimary,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -411,18 +411,18 @@ class _FriendsPage extends State<Friendspage>
                       if (isSearching && hasDistinctNickname)
                         Row(
                           children: [
-                            const Text(
+                            Text(
                               '昵称：',
                               style: TextStyle(
-                                color: AppColors.textSecondary,
+                                color: context.appTextSecondary,
                                 fontSize: 12,
                               ),
                             ),
                             Expanded(
                               child: _buildHighlightedText(
                                 friend.nickName,
-                                normalStyle: const TextStyle(
-                                  color: AppColors.textSecondary,
+                                normalStyle: TextStyle(
+                                  color: context.appTextSecondary,
                                   fontSize: 12,
                                 ),
                               ),
@@ -436,8 +436,8 @@ class _FriendsPage extends State<Friendspage>
                               : friend.signature,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
+                          style: TextStyle(
+                            color: context.appTextSecondary,
                             fontSize: 12.5,
                           ),
                         ),
@@ -502,8 +502,8 @@ class _FriendsPage extends State<Friendspage>
               const SizedBox(height: 10),
               Text(
                 label,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: context.appTextPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -520,7 +520,7 @@ class _FriendsPage extends State<Friendspage>
       key: const ValueKey('friends_shortcut_card'),
       margin: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
           BoxShadow(
@@ -547,18 +547,18 @@ class _FriendsPage extends State<Friendspage>
               });
             },
           ),
-          const SizedBox(
+          SizedBox(
             height: 46,
-            child: VerticalDivider(width: 1, color: AppColors.divider),
+            child: VerticalDivider(width: 1, color: context.appDivider),
           ),
           _buildShortcutAction(
             icon: Icons.person_add_rounded,
             label: '添加好友',
             onTap: _showFindFriend,
           ),
-          const SizedBox(
+          SizedBox(
             height: 46,
-            child: VerticalDivider(width: 1, color: AppColors.divider),
+            child: VerticalDivider(width: 1, color: context.appDivider),
           ),
           _buildShortcutAction(
             icon: Icons.groups_rounded,
@@ -647,10 +647,7 @@ class _FriendsPage extends State<Friendspage>
               const SizedBox(height: 12),
               Text(
                 searching ? '没有找到匹配的好友' : '暂时还没有好友',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: context.appTextSecondary, fontSize: 14),
               ),
             ],
           ),
@@ -680,12 +677,12 @@ class _FriendsPage extends State<Friendspage>
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.only(right: searching ? 0 : 18),
             itemCount: _filteredFriends.length,
-            separatorBuilder: (context, index) => const Divider(
+            separatorBuilder: (context, index) => Divider(
               height: 1,
               thickness: 0.6,
               indent: 76,
               endIndent: 16,
-              color: AppColors.divider,
+              color: context.appDivider,
             ),
             itemBuilder: (context, index) => _buildFriendTile(
               _filteredFriends[index],
@@ -703,17 +700,17 @@ class _FriendsPage extends State<Friendspage>
     super.build(context);
     final searching = _searchQuery.trim().isNotEmpty;
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         toolbarHeight: 56,
         centerTitle: true,
-        title: const Text(
+        title: Text(
           '好友',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.appTextPrimary,
             fontSize: 18,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
@@ -735,9 +732,9 @@ class _FriendsPage extends State<Friendspage>
                   shape: BoxShape.circle,
                   border: Border.all(color: const Color(0xFF34373C)),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.add_rounded,
-                  color: AppColors.textPrimary,
+                  color: context.appTextPrimary,
                   size: 22,
                 ),
               ),
@@ -754,7 +751,7 @@ class _FriendsPage extends State<Friendspage>
       body: Column(
         children: [
           Container(
-            color: AppColors.surface,
+            color: context.appSurface,
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
             child: AppSearchField(
               controller: _searchController,
@@ -768,9 +765,11 @@ class _FriendsPage extends State<Friendspage>
           Expanded(
             child: Container(
               key: const ValueKey('friends_list_surface'),
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -779,10 +778,10 @@ class _FriendsPage extends State<Friendspage>
                     padding: const EdgeInsets.fromLTRB(16, 15, 16, 12),
                     child: Row(
                       children: [
-                        const Text(
+                        Text(
                           '好友',
                           style: TextStyle(
-                            color: AppColors.textPrimary,
+                            color: context.appTextPrimary,
                             fontSize: 17,
                             fontWeight: FontWeight.w600,
                           ),
@@ -790,14 +789,14 @@ class _FriendsPage extends State<Friendspage>
                         const SizedBox(width: 8),
                         Text(
                           '${_filteredFriends.length}',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
+                          style: TextStyle(
+                            color: context.appTextSecondary,
                             fontSize: 15,
                           ),
                         ),
                         const Spacer(),
                         if (!searching)
-                          const Row(
+                          Row(
                             children: [
                               Icon(
                                 Icons.circle,
@@ -808,7 +807,7 @@ class _FriendsPage extends State<Friendspage>
                               Text(
                                 '在线优先',
                                 style: TextStyle(
-                                  color: AppColors.textSecondary,
+                                  color: context.appTextSecondary,
                                   fontSize: 13,
                                 ),
                               ),
@@ -817,7 +816,7 @@ class _FriendsPage extends State<Friendspage>
                       ],
                     ),
                   ),
-                  const Divider(height: 1, color: AppColors.divider),
+                  Divider(height: 1, color: context.appDivider),
                   Expanded(child: _buildFriendList()),
                 ],
               ),

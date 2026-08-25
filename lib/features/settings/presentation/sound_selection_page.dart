@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_context.dart';
+import '../application/app_notification_feedback_service.dart';
 import '../domain/app_settings.dart';
 
 class SoundSelectionPage extends StatelessWidget {
@@ -11,25 +15,28 @@ class SoundSelectionPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(title: const Text('消息提示音')),
       body: ListView.separated(
         padding: const EdgeInsets.only(top: 12),
         itemCount: NotificationSound.values.length,
         separatorBuilder: (_, _) =>
-            const Divider(height: 1, indent: 16, color: Color(0xFFE5E5E5)),
+            Divider(height: 1, indent: 16, color: context.appDivider),
         itemBuilder: (context, index) {
           final sound = NotificationSound.values[index];
           final selected = sound.id == selectedSoundId;
           return Material(
-            color: Colors.white,
+            color: context.appSurface,
             child: ListTile(
               key: ValueKey('notification_sound_${sound.id}'),
               title: Text(sound.label),
               trailing: selected
                   ? const Icon(Icons.check, color: AppColors.primary)
                   : null,
-              onTap: () => Navigator.pop(context, sound.id),
+              onTap: () {
+                Navigator.pop(context, sound.id);
+                unawaited(AppNotificationTonePlayer.play(sound.id));
+              },
             ),
           );
         },

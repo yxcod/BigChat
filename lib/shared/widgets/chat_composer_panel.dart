@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'chat_more_actions_sheet.dart';
+import '../../app/theme/app_theme_context.dart';
 
 /// Keeps the chat editor clear of the iPhone home indicator while ensuring
 /// the expanded actions panel remains directly below the editor.
@@ -22,7 +22,7 @@ class ChatComposerPanel extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          color: chatChromeBackgroundColor,
+          color: context.appSurface,
           child: SafeArea(
             top: false,
             bottom: !moreActionsVisible,

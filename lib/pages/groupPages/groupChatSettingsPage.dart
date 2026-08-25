@@ -23,6 +23,7 @@ import '../../utils/WebSocketManager.dart';
 import '../../features/group_resources/presentation/group_resources_page.dart';
 import '../../features/group_resources/presentation/group_resource_list_page.dart';
 import '../../features/group_resources/domain/group_resource.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
@@ -866,10 +867,10 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         title: Text('群聊设置'),
-        backgroundColor: Colors.white,
+        backgroundColor: context.appSurface,
         elevation: 1,
         leading: const AppBackButton(),
       ),
@@ -882,7 +883,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
               border: Border(
                 bottom: BorderSide(color: Colors.grey[200]!, width: 1.0),
               ),
-              color: Colors.white,
+              color: context.appSurface,
             ),
             child: Row(
               children: [
@@ -953,7 +954,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           Container(
             margin: EdgeInsets.only(top: 12.0),
             padding: EdgeInsets.all(16.0),
-            decoration: BoxDecoration(color: Colors.white),
+            decoration: BoxDecoration(color: context.appSurface),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1160,7 +1161,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           Container(
             margin: EdgeInsets.only(top: 12.0),
             padding: EdgeInsets.all(16.0),
-            decoration: BoxDecoration(color: Colors.white),
+            decoration: BoxDecoration(color: context.appSurface),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1206,7 +1207,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           Container(
             margin: EdgeInsets.only(top: 12.0),
             padding: EdgeInsets.all(16.0),
-            decoration: BoxDecoration(color: Colors.white),
+            decoration: BoxDecoration(color: context.appSurface),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

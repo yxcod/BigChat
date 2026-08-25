@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../model/messageModel.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class QuotedMessageView extends StatelessWidget {
   const QuotedMessageView({
@@ -33,8 +34,8 @@ class QuotedMessageView extends StatelessWidget {
             quote.senderLabel.isEmpty ? quote.senderId : quote.senderLabel,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF52606D),
+            style: TextStyle(
+              color: context.appTextPrimary.withValues(alpha: 0.82),
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -44,8 +45,8 @@ class QuotedMessageView extends StatelessWidget {
             quote.preview,
             maxLines: compact ? 1 : 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF65717C),
+            style: TextStyle(
+              color: context.appTextSecondary,
               fontSize: 12,
               height: 1.2,
             ),
@@ -72,7 +73,7 @@ class QuoteComposerPreview extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.only(left: 9, right: 3, top: 5, bottom: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F2F4),
+        color: context.appSearchBackground,
         borderRadius: BorderRadius.circular(9),
       ),
       child: Row(
@@ -83,7 +84,7 @@ class QuoteComposerPreview extends StatelessWidget {
             tooltip: '取消引用',
             visualDensity: VisualDensity.compact,
             onPressed: onClose,
-            icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+            icon: Icon(Icons.close, size: 18, color: context.appTextSecondary),
           ),
         ],
       ),

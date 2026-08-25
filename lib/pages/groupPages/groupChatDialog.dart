@@ -43,6 +43,7 @@ import '../../shared/widgets/message_action_menu.dart';
 import '../../shared/widgets/quoted_message_view.dart';
 import '../../core/media/chat_media_saver.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -1210,7 +1211,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     FocusScope.of(context).unfocus();
     final mediaType = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: context.appSurface,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: Column(
@@ -1314,7 +1315,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         centerTitle: true,
         titleSpacing: 0,
@@ -1337,8 +1338,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
               if (_currentMemberCount != null)
                 TextSpan(
                   text: ' (${_currentMemberCount!})',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appTextSecondary,
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),
@@ -1347,27 +1348,27 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
+          style: TextStyle(
+            color: context.appTextPrimary,
             fontSize: 18,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
           ),
         ),
-        backgroundColor: chatChromeBackgroundColor,
+        backgroundColor: context.appSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: chatChromeDividerColor),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: context.appDivider),
         ),
         actions: [
           IconButton(
             key: const ValueKey('group_video_call_button'),
             tooltip: '群视频通话',
-            icon: const Icon(
+            icon: Icon(
               Icons.videocam_outlined,
-              color: AppColors.textPrimary,
+              color: context.appTextPrimary,
               size: 25,
             ),
             onPressed: () {
@@ -1401,9 +1402,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           IconButton(
             key: const ValueKey('group_settings_button'),
             tooltip: '群聊设置',
-            icon: const Icon(
+            icon: Icon(
               Icons.more_vert_rounded,
-              color: AppColors.textPrimary,
+              color: context.appTextPrimary,
               size: 25,
             ),
             onPressed: () async {
@@ -1499,7 +1500,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                   },
                 ),
               ),
-              const Divider(height: 1, color: chatChromeDividerColor),
+              Divider(height: 1, color: context.appDivider),
               ChatComposerPanel(
                 composer: _buildTextComposer(),
                 moreActionsVisible: _isMoreActionsVisible,
@@ -2196,9 +2197,9 @@ class GroupMessageBubble extends StatelessWidget {
               padding: const EdgeInsets.only(left: 48, bottom: 4),
               child: Text(
                 _getSenderName(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11.5,
-                  color: AppColors.textSecondary,
+                  color: context.appTextSecondary,
                 ),
               ),
             ),
@@ -2335,8 +2336,8 @@ class GroupMessageBubble extends StatelessWidget {
 
   // 构建文本气泡
   Widget _buildTextBubble(BuildContext context) {
-    final bubbleColor = message.isMe ? AppColors.primary : Colors.white;
-    final textColor = message.isMe ? Colors.white : AppColors.textPrimary;
+    final bubbleColor = message.isMe ? AppColors.primary : context.appSurface;
+    final textColor = message.isMe ? Colors.white : context.appTextPrimary;
     final borderRadius = BorderRadius.only(
       topLeft: Radius.circular(16),
       topRight: Radius.circular(16),
@@ -2390,7 +2391,7 @@ class GroupMessageBubble extends StatelessWidget {
           maxHeight: 200,
         ),
         decoration: BoxDecoration(
-          color: message.isMe ? AppColors.primary : Colors.white,
+          color: message.isMe ? AppColors.primary : context.appSurface,
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(16),
             topRight: Radius.circular(16),

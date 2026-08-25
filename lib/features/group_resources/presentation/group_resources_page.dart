@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/app_back_button.dart';
+import '../../../app/theme/app_theme_context.dart';
 
 import '../domain/group_resource.dart';
 import 'group_resource_list_page.dart';
@@ -29,14 +30,14 @@ class GroupResourcesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F8),
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(leading: const AppBackButton(), title: const Text('群资源')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(

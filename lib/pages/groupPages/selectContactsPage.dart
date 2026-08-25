@@ -4,6 +4,7 @@ import '../../api/getGroupMemberAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class SelectContactsPage extends StatefulWidget {
   final String groupId;
@@ -293,7 +294,7 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         title: Text('选择联系人'),
         leading: IconButton(
@@ -302,7 +303,7 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
             Navigator.pop(context);
           },
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: context.appSurface,
         elevation: 0,
       ),
       body: _isLoading
@@ -312,7 +313,7 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                 // 搜索框
                 Container(
                   padding: EdgeInsets.all(12.0),
-                  color: Colors.white,
+                  color: context.appSurface,
                   child: TextField(
                     controller: _searchController,
                     onChanged: _filterFriends,
@@ -324,7 +325,7 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor: context.appSearchBackground,
                     ),
                   ),
                 ),

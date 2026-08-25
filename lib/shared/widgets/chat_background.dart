@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/cache/app_image_cache.dart';
-import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 import '../../features/settings/data/app_settings_repository.dart';
 import '../../utils/gloabl.dart';
 
@@ -50,11 +50,13 @@ class _ChatBackgroundState extends State<ChatBackground> {
         : AppImageCache.provider(_defaultBackgroundUrl);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppColors.pageBackground,
+        color: context.appPageBackground,
         image: DecorationImage(
           image: provider,
           fit: BoxFit.cover,
-          opacity: _localPath.isEmpty ? 0.08 : 0.28,
+          opacity: _localPath.isEmpty
+              ? (context.isDarkMode ? 0.025 : 0.08)
+              : (context.isDarkMode ? 0.16 : 0.28),
         ),
       ),
       child: widget.child,

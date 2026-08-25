@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 
 /// Shared input row for private and group conversations.
 ///
@@ -93,7 +94,7 @@ class _ComposerActionButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
-    this.color = const Color(0xFF25272A),
+    this.color,
     this.iconSize = 25,
     this.progress,
     this.indeterminateProgress = false,
@@ -102,7 +103,7 @@ class _ComposerActionButton extends StatelessWidget {
   final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
-  final Color color;
+  final Color? color;
   final double iconSize;
   final double? progress;
   final bool indeterminateProgress;
@@ -125,7 +126,11 @@ class _ComposerActionButton extends StatelessWidget {
                   color: AppColors.primary,
                 ),
               )
-            : Icon(icon, size: iconSize, color: color),
+            : Icon(
+                icon,
+                size: iconSize,
+                color: color ?? context.appTextPrimary,
+              ),
       ),
     );
   }

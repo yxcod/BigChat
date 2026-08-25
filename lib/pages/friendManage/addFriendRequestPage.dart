@@ -3,6 +3,7 @@ import '../../api/getFriendRequestsAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../shared/widgets/app_back_button.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class AddFriendRequestPage extends StatefulWidget {
   final Map<String, dynamic> targetUser;
@@ -43,7 +44,7 @@ class _AddFriendRequestPageState extends State<AddFriendRequestPage> {
       appBar: AppBar(
         leading: const AppBackButton(),
         title: Text('添加好友'),
-        backgroundColor: Colors.white,
+        backgroundColor: context.appSurface,
         elevation: 0,
       ),
       body: Column(
@@ -72,7 +73,7 @@ class _AddFriendRequestPageState extends State<AddFriendRequestPage> {
       margin: EdgeInsets.all(16),
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(

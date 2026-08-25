@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/getInfoAPI.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../core/media/video_media.dart';
 import '../../features/moments/data/moments_repository.dart';
@@ -164,16 +165,16 @@ class _ProfilePageState extends State<ProfilePage>
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         centerTitle: true,
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           '我的',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.appTextPrimary,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -202,7 +203,7 @@ class _ProfilePageState extends State<ProfilePage>
       key: const ValueKey('profile_summary_card'),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: const [
           BoxShadow(
@@ -229,8 +230,8 @@ class _ProfilePageState extends State<ProfilePage>
                         nickName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: context.appTextPrimary,
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
                         ),
@@ -264,8 +265,8 @@ class _ProfilePageState extends State<ProfilePage>
                   '账号：${_account.isEmpty ? '未设置' : _account}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appTextSecondary,
                     fontSize: 12.5,
                   ),
                 ),
@@ -274,8 +275,8 @@ class _ProfilePageState extends State<ProfilePage>
                   _profileMeta,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appTextSecondary,
                     fontSize: 12.5,
                   ),
                 ),
@@ -284,8 +285,8 @@ class _ProfilePageState extends State<ProfilePage>
                   signature,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appTextSecondary,
                     fontSize: 12.5,
                   ),
                 ),
@@ -331,7 +332,7 @@ class _ProfilePageState extends State<ProfilePage>
   Widget _buildMomentsCard() {
     return Material(
       key: const ValueKey('my_space_card'),
-      color: AppColors.surface,
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: _openMySpace,
@@ -341,7 +342,7 @@ class _ProfilePageState extends State<ProfilePage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
                   SizedBox(
                     width: 38,
@@ -366,7 +367,7 @@ class _ProfilePageState extends State<ProfilePage>
                         Text(
                           '我的空间',
                           style: TextStyle(
-                            color: AppColors.textPrimary,
+                            color: context.appTextPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -375,7 +376,7 @@ class _ProfilePageState extends State<ProfilePage>
                         Text(
                           '记录生活中的每个瞬间',
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: context.appTextSecondary,
                             fontSize: 12.5,
                           ),
                         ),
@@ -394,8 +395,8 @@ class _ProfilePageState extends State<ProfilePage>
               const SizedBox(height: 12),
               Text(
                 '动态 ${_moments.length} · 获赞 $_totalLikes',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: context.appTextSecondary,
                   fontSize: 12.5,
                 ),
               ),
@@ -423,17 +424,17 @@ class _ProfilePageState extends State<ProfilePage>
       return Container(
         height: 82,
         decoration: BoxDecoration(
-          color: AppColors.searchBackground,
+          color: context.appSearchBackground,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.photo_outlined, color: Color(0xFFB3B6BA), size: 22),
             SizedBox(width: 8),
             Text(
               '还没有带图片的动态',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+              style: TextStyle(color: context.appTextSecondary, fontSize: 12.5),
             ),
           ],
         ),
@@ -457,9 +458,9 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildPreviewImage(String path) {
-    final fallback = const ColoredBox(
-      color: AppColors.searchBackground,
-      child: Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
+    final fallback = ColoredBox(
+      color: context.appSearchBackground,
+      child: Icon(Icons.broken_image_outlined, color: context.appTextSecondary),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(11),
@@ -483,7 +484,7 @@ class _ProfilePageState extends State<ProfilePage>
     return Container(
       key: const ValueKey('profile_settings_card'),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(18),
       ),
       clipBehavior: Clip.antiAlias,
@@ -495,11 +496,11 @@ class _ProfilePageState extends State<ProfilePage>
             subtitle: '偏好设置与更多',
             onTap: () => Navigator.pushNamed(context, '/settings'),
           ),
-          const Divider(
+          Divider(
             height: 1,
             indent: 66,
             endIndent: 14,
-            color: AppColors.divider,
+            color: context.appDivider,
           ),
           _buildMenuRow(
             icon: Icons.more_horiz_rounded,
@@ -519,7 +520,7 @@ class _ProfilePageState extends State<ProfilePage>
     required VoidCallback onTap,
   }) {
     return Material(
-      color: AppColors.surface,
+      color: context.appSurface,
       child: InkWell(
         onTap: onTap,
         child: SizedBox(
@@ -545,8 +546,8 @@ class _ProfilePageState extends State<ProfilePage>
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: context.appTextPrimary,
                           fontSize: 15.5,
                           fontWeight: FontWeight.w600,
                         ),
@@ -554,8 +555,8 @@ class _ProfilePageState extends State<ProfilePage>
                       const SizedBox(height: 3),
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.appTextSecondary,
                           fontSize: 12,
                         ),
                       ),

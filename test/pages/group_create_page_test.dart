@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_base/app/theme/app_theme.dart';
 import 'package:flutter_base/pages/groupPages/groupCreatePage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,7 +7,9 @@ void main() {
   testWidgets('group creation chrome uses one color and a thin divider', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: GroupCreatePage()));
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: const GroupCreatePage()),
+    );
 
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
     final appBar = tester.widget<AppBar>(find.byType(AppBar));
@@ -26,7 +29,9 @@ void main() {
   });
 
   testWidgets('创建群聊页面包含头像和紧凑表单且不显示说明文字', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: GroupCreatePage()));
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: const GroupCreatePage()),
+    );
 
     expect(find.text('上传群头像'), findsOneWidget);
     expect(find.byKey(const ValueKey('group_avatar_picker')), findsOneWidget);
@@ -44,7 +49,9 @@ void main() {
   });
 
   testWidgets('群号只允许输入六位数字', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: GroupCreatePage()));
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: const GroupCreatePage()),
+    );
 
     await tester.enterText(
       find.descendant(

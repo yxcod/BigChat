@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme_context.dart';
 import '../../../core/cache/app_image_cache.dart';
 import '../../../core/media/video_media.dart';
 import '../../../utils/gloabl.dart';
@@ -151,7 +152,7 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
                 decoration: InputDecoration(
                   hintText: '评论这条动态……',
                   filled: true,
-                  fillColor: AppColors.searchBackground,
+                  fillColor: context.appSearchBackground,
                   counterText: '',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(20),
@@ -201,7 +202,7 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         title: Text(
           widget.pageTitle ?? (widget.allowPublishing ? '我的动态' : '动态'),
@@ -282,7 +283,7 @@ class _ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: context.appSurface,
       child: Column(
         children: [
           Container(
@@ -316,8 +317,8 @@ class _ProfileHeader extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   '$userId  ·  $momentCount 条动态',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appTextSecondary,
                     fontSize: 12,
                   ),
                 ),
@@ -366,7 +367,7 @@ class _EmptyMoments extends StatelessWidget {
             const SizedBox(height: 7),
             Text(
               allowCreate ? '记录生活片段，在这里回看自己的每一刻' : '对方还没有发布你可以查看的动态',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: TextStyle(color: context.appTextSecondary, fontSize: 13),
             ),
             if (allowCreate) ...[
               const SizedBox(height: 20),
@@ -398,7 +399,7 @@ class _MomentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       key: ValueKey('moment-${moment.id}'),
-      color: Colors.white,
+      color: context.appSurface,
       borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
@@ -424,8 +425,8 @@ class _MomentCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         _formatMomentTime(moment.createdAt),
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.appTextSecondary,
                           fontSize: 11,
                         ),
                       ),
@@ -484,7 +485,7 @@ class _MomentCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Container(width: 1, height: 18, color: AppColors.divider),
+                Container(width: 1, height: 18, color: context.appDivider),
                 Expanded(
                   child: TextButton.icon(
                     key: ValueKey('comment-${moment.id}'),
@@ -528,8 +529,8 @@ class _MomentAvatar extends StatelessWidget {
         : displayName.trim().characters.first;
     return Container(
       padding: EdgeInsets.all(borderWidth),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: context.appSurface,
         shape: BoxShape.circle,
       ),
       child: CircleAvatar(
@@ -611,17 +612,17 @@ class _MomentMediaGrid extends StatelessWidget {
                             imageUrl: path,
                             cacheKey: AppImageCache.cacheKey(path),
                             fit: BoxFit.cover,
-                            errorWidget: (_, _, _) => const ColoredBox(
-                              color: AppColors.searchBackground,
-                              child: Icon(Icons.broken_image_outlined),
+                            errorWidget: (_, _, _) => ColoredBox(
+                              color: context.appSearchBackground,
+                              child: const Icon(Icons.broken_image_outlined),
                             ),
                           )
                         : Image.file(
                             File(path),
                             fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => const ColoredBox(
-                              color: AppColors.searchBackground,
-                              child: Icon(Icons.broken_image_outlined),
+                            errorBuilder: (_, _, _) => ColoredBox(
+                              color: context.appSearchBackground,
+                              child: const Icon(Icons.broken_image_outlined),
                             ),
                           ),
                   ),
@@ -650,7 +651,7 @@ class _VisibilityBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.searchBackground,
+        color: context.appSearchBackground,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -677,7 +678,7 @@ class _CommentsPreview extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: AppColors.searchBackground,
+        color: context.appSearchBackground,
         borderRadius: BorderRadius.circular(9),
       ),
       child: Column(

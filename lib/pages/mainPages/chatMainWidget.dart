@@ -6,6 +6,7 @@ import '../../api/getChatMessagesAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../model/messageModel.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class BigchatMainPage extends StatefulWidget {
   const BigchatMainPage({super.key});
@@ -150,10 +151,10 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
           });
         },
         type: BottomNavigationBarType.fixed,
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         elevation: 0,
         selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textSecondary,
+        unselectedItemColor: context.appTextSecondary,
         selectedFontSize: 12,
         unselectedFontSize: 12,
         selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
@@ -221,7 +222,7 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
             child: Icon(
               icon,
               size: 23,
-              color: selected ? AppColors.primary : AppColors.textSecondary,
+              color: selected ? AppColors.primary : context.appTextSecondary,
             ),
           ),
           if (unreadCount > 0)
@@ -236,7 +237,7 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
                 decoration: BoxDecoration(
                   color: AppColors.danger,
                   borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: AppColors.surface, width: 1.5),
+                  border: Border.all(color: context.appSurface, width: 1.5),
                 ),
                 child: Text(
                   unreadCount > 99 ? '99+' : unreadCount.toString(),

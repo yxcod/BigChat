@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../api/getGroupInfoAPI.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../utils/gloabl.dart';
 import '../../utils/http.dart';
@@ -186,31 +187,39 @@ class _GroupCreatePageState extends State<GroupCreatePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.appSurface,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           '创建群聊',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.appTextPrimary,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         centerTitle: true,
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: AppColors.surface,
+        backgroundColor: context.appSurface,
+        surfaceTintColor: context.appSurface,
         elevation: 0,
         scrolledUnderElevation: 0,
         shadowColor: Colors.transparent,
-        systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: AppColors.surface,
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: context.appSurface,
+          statusBarIconBrightness: context.isDarkMode
+              ? Brightness.light
+              : Brightness.dark,
+          statusBarBrightness: context.isDarkMode
+              ? Brightness.dark
+              : Brightness.light,
         ),
         leading: const AppBackButton(),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(0.5),
-          child: Divider(height: 0.5, thickness: 0.5, color: AppColors.divider),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(0.5),
+          child: Divider(
+            height: 0.5,
+            thickness: 0.5,
+            color: context.appDivider,
+          ),
         ),
       ),
       body: SafeArea(
@@ -249,9 +258,9 @@ class _GroupCreatePageState extends State<GroupCreatePage> {
   Widget _buildFormCard() {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appDivider),
       ),
       child: Column(
         children: [
@@ -344,7 +353,7 @@ class _GroupAvatarPicker extends StatelessWidget {
                     height: 104,
                     clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF3F5F4),
+                      color: context.appSearchBackground,
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: avatar == null
@@ -362,9 +371,9 @@ class _GroupAvatarPicker extends StatelessWidget {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: context.appSurface,
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.divider),
+                        border: Border.all(color: context.appDivider),
                         boxShadow: const [
                           BoxShadow(
                             color: Color(0x14000000),
@@ -385,8 +394,8 @@ class _GroupAvatarPicker extends StatelessWidget {
               const SizedBox(height: 14),
               Text(
                 avatar == null ? '上传群头像' : '更换群头像',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: context.appTextSecondary,
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                 ),
@@ -436,8 +445,8 @@ class _GroupFormField extends StatelessWidget {
               width: 82,
               child: Text(
                 label,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: context.appTextPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -451,10 +460,7 @@ class _GroupFormField extends StatelessWidget {
               inputFormatters: inputFormatters,
               maxLength: maxLength,
               onChanged: onChanged,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 16,
-              ),
+              style: TextStyle(color: context.appTextPrimary, fontSize: 16),
               decoration: InputDecoration(
                 hintText: hintText,
                 hintStyle: const TextStyle(

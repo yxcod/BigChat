@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app/theme/app_colors.dart';
+import '../app/theme/app_theme_context.dart';
 import '../features/location/data/app_location_service.dart';
 
 typedef CityLocator = Future<String> Function();
@@ -82,19 +83,19 @@ class _RegionEditorPageState extends State<RegionEditorPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: context.appSurface,
+        surfaceTintColor: context.appSurface,
         elevation: 0,
         centerTitle: true,
         leadingWidth: 76,
         leading: TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text(
+          child: Text(
             '取消',
-            style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+            style: TextStyle(color: context.appTextPrimary, fontSize: 16),
           ),
         ),
         title: const Text('设置地区'),
@@ -122,7 +123,7 @@ class _RegionEditorPageState extends State<RegionEditorPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Material(
-            color: Colors.white,
+            color: context.appSurface,
             child: InkWell(
               key: const Key('use_current_location_button'),
               onTap: _isLocating ? null : _useCurrentLocation,
@@ -154,7 +155,7 @@ class _RegionEditorPageState extends State<RegionEditorPage> {
           ),
           const SizedBox(height: 12),
           ColoredBox(
-            color: Colors.white,
+            color: context.appSurface,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
               child: TextField(
@@ -174,11 +175,11 @@ class _RegionEditorPageState extends State<RegionEditorPage> {
               ),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: Text(
               '地区信息精确到市即可，不会保存具体街道位置。',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: TextStyle(color: context.appTextSecondary, fontSize: 13),
             ),
           ),
         ],

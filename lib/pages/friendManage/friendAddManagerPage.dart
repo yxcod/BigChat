@@ -5,6 +5,7 @@ import '../../api/getFriendRequestsAPI.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_theme_context.dart';
 
 class FriendAddManagerPage extends StatefulWidget {
   final List<FriendRequestModel>? initialRequests;
@@ -88,18 +89,18 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: context.appPageBackground,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           '新的朋友',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.appTextPrimary,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         centerTitle: true,
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.appSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: const AppBackButton(),
@@ -123,20 +124,17 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
         Text.rich(
           TextSpan(
             children: [
-              const TextSpan(
+              TextSpan(
                 text: '待处理',
                 style: TextStyle(
-                  color: AppColors.textPrimary,
+                  color: context.appTextPrimary,
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               TextSpan(
                 text: '  ${_pendingRequests.length}',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: context.appTextSecondary, fontSize: 14),
               ),
             ],
           ),
@@ -145,7 +143,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
         Container(
           key: const ValueKey('friend_request_card'),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(16),
             boxShadow: const [
               BoxShadow(
@@ -156,13 +154,13 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
             ],
           ),
           child: _pendingRequests.isEmpty
-              ? const SizedBox(
+              ? SizedBox(
                   height: 100,
                   child: Center(
                     child: Text(
                       '暂无待处理的好友申请',
                       style: TextStyle(
-                        color: AppColors.textSecondary,
+                        color: context.appTextSecondary,
                         fontSize: 13,
                       ),
                     ),
@@ -174,11 +172,11 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                       children: [
                         _buildRequestItem(_pendingRequests[index]),
                         if (index < _pendingRequests.length - 1)
-                          const Divider(
+                          Divider(
                             height: 1,
                             indent: 78,
                             endIndent: 14,
-                            color: AppColors.divider,
+                            color: context.appDivider,
                           ),
                       ],
                     );
@@ -193,10 +191,10 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '最近添加',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.appTextPrimary,
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -205,7 +203,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
         Container(
           key: const ValueKey('recent_friends_card'),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(16),
             boxShadow: const [
               BoxShadow(
@@ -216,13 +214,13 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
             ],
           ),
           child: _recentFriends.isEmpty
-              ? const SizedBox(
+              ? SizedBox(
                   height: 100,
                   child: Center(
                     child: Text(
                       '最近没有添加新好友',
                       style: TextStyle(
-                        color: AppColors.textSecondary,
+                        color: context.appTextSecondary,
                         fontSize: 13,
                       ),
                     ),
@@ -234,11 +232,11 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                       children: [
                         _buildFriendItem(_recentFriends[index]),
                         if (index < _recentFriends.length - 1)
-                          const Divider(
+                          Divider(
                             height: 1,
                             indent: 76,
                             endIndent: 14,
-                            color: AppColors.divider,
+                            color: context.appDivider,
                           ),
                       ],
                     );
@@ -270,7 +268,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
         children: [
           CircleAvatar(
             radius: 25,
-            backgroundColor: const Color(0xFFF0F1F3),
+            backgroundColor: context.appSearchBackground,
             backgroundImage: isNetworkImage
                 ? AppImageCache.provider(avatarUrl)
                 : null,
@@ -278,9 +276,9 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                 ? null
                 : Text(
                     isNetworkImage ? '' : avatarUrl,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
-                      color: AppColors.textSecondary,
+                      color: context.appTextSecondary,
                     ),
                   ),
           ),
@@ -293,8 +291,8 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                   request.nickName ?? '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: context.appTextPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
@@ -304,8 +302,8 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                   request.verificationMessage?.trim().isNotEmpty == true
                       ? request.verificationMessage!
                       : '申请添加你为好友',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.appTextSecondary,
                     fontSize: 13,
                     height: 1.3,
                   ),
@@ -358,7 +356,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                   child: OutlinedButton(
                     onPressed: () => _handleReject(request),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary,
+                      foregroundColor: context.appTextSecondary,
                       padding: EdgeInsets.zero,
                       side: const BorderSide(color: Color(0xFFD4D6DA)),
                       shape: RoundedRectangleBorder(
@@ -391,7 +389,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     final isNetworkImage = avatarUrl.startsWith('http');
 
     return Material(
-      color: AppColors.surface,
+      color: context.appSurface,
       child: InkWell(
         onTap: () => _showFriendDetail(friend),
         borderRadius: BorderRadius.circular(16),
@@ -403,7 +401,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: const Color(0xFFF0F1F3),
+                  backgroundColor: context.appSearchBackground,
                   backgroundImage: isNetworkImage
                       ? AppImageCache.provider(avatarUrl)
                       : null,
@@ -411,9 +409,9 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                       ? null
                       : Text(
                           avatarUrl,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 19,
-                            color: AppColors.textSecondary,
+                            color: context.appTextSecondary,
                           ),
                         ),
                 ),
@@ -427,8 +425,8 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                         friend.nickName ?? '',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: context.appTextPrimary,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -436,8 +434,8 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                       const SizedBox(height: 5),
                       Text(
                         '已添加 · ${_formatTime(friend.addTime != null ? DateTime.fromMillisecondsSinceEpoch(friend.addTime!) : DateTime.now())}',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.appTextSecondary,
                           fontSize: 12.5,
                         ),
                       ),
