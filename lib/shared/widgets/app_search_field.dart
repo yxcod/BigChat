@@ -31,6 +31,8 @@ class AppSearchField extends StatelessWidget {
       child: TextField(
         controller: controller,
         onChanged: onChanged,
+        onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+        onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: hintText,

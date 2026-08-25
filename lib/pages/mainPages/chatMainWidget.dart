@@ -9,18 +9,22 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 
 class BigchatMainPage extends StatefulWidget {
-  const BigchatMainPage({super.key});
+  const BigchatMainPage({super.key, this.autoRefresh = true});
+
+  final bool autoRefresh;
 
   @override
   State<BigchatMainPage> createState() => _BigchatMainPageState();
 }
 
-class _BigchatMainPageState extends State<BigchatMainPage> {
+class _BigchatMainPageState extends State<BigchatMainPage>
+    with WidgetsBindingObserver {
   final List<Friend> _friends = [];
   final List<Chat> _chats = [];
 
   int _currentIndex = 0;
   int _totalUnreadCount = 0;
+  bool _wasBackgrounded = false;
 
   void _onUnreadCountChanged(int count) {
     setState(() {
@@ -33,15 +37,20 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pages = [
-      Chatpage(chatList: _chats, onUnreadCountChanged: _onUnreadCountChanged),
-      Friendspage(friendListDate: _friends),
+      Chatpage(
+        chatList: _chats,
+        onUnreadCountChanged: _onUnreadCountChanged,
+        autoRefresh: widget.autoRefresh,
+      ),
+      Friendspage(friendListDate: _friends, autoRefresh: widget.autoRefresh),
       const ProfilePage(),
     ];
 
     // 在页面构建完成后获取未读消息
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchUnreadMessages();
+      if (widget.autoRefresh) _fetchUnreadMessages();
 
       // 检查是否有被移除群聊的信号
       final ModalRoute<dynamic>? route = ModalRoute.of(context);
@@ -54,6 +63,27 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
         }
       }
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _wasBackgrounded = true;
+      return;
+    }
+    if (state == AppLifecycleState.resumed && _wasBackgrounded) {
+      _wasBackgrounded = false;
+      if (_currentIndex != 0 && mounted) {
+        setState(() => _currentIndex = 0);
+      }
+    }
   }
 
   // 显示被移除群聊的弹窗提示
@@ -146,6 +176,7 @@ class _BigchatMainPageState extends State<BigchatMainPage> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (int index) {
+          FocusManager.instance.primaryFocus?.unfocus();
           setState(() {
             _currentIndex = index;
           });

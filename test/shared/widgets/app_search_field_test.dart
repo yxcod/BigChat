@@ -31,4 +31,45 @@ void main() {
     expect(value, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('tapping outside the search field releases focus', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              AppSearchField(
+                controller: controller,
+                query: '',
+                hintText: '搜索',
+                onChanged: (_) {},
+              ),
+              const Expanded(
+                child: ColoredBox(
+                  key: Key('search_test_blank_area'),
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    final editableText = tester.widget<EditableText>(find.byType(EditableText));
+    expect(editableText.focusNode.hasFocus, isTrue);
+
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const Key('search_test_blank_area'))),
+    );
+    await tester.pump();
+    expect(editableText.focusNode.hasFocus, isFalse);
+  });
 }
