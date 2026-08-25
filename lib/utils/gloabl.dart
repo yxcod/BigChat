@@ -472,6 +472,16 @@ class GlobalUtil {
         .toString();
   }
 
+  String getFileURL(String userName, String fileName) {
+    final baseUri = Uri.parse(baseURL);
+    return baseUri
+        .replace(
+          path: '${baseUri.path}/api/file/download',
+          queryParameters: {'userName': userName, 'fileName': fileName},
+        )
+        .toString();
+  }
+
   String getChatWebSocketURL(String userName) {
     final baseUri = Uri.parse(baseWebSocketURL);
     return baseUri

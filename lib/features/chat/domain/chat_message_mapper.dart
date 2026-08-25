@@ -50,6 +50,7 @@ class ChatMessageMapper {
         2 => MessageType.image,
         3 => MessageType.audio,
         4 => MessageType.video,
+        5 => MessageType.file,
         _ => MessageType.text,
       },
       status: MessageStatus.sent,

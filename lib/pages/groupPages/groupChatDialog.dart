@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../utils/gloabl.dart';
@@ -33,7 +34,9 @@ import '../../shared/utils/chat_scroll_util.dart';
 import '../../shared/widgets/chat_background.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
 import '../../core/media/video_media.dart';
+import '../../core/media/chat_file.dart';
 import '../../shared/widgets/app_video_player.dart';
+import '../../shared/widgets/chat_file_message.dart';
 import '../../shared/widgets/app_voice_message.dart';
 import '../../shared/widgets/hold_to_record_field.dart';
 import '../../shared/widgets/top_aligned_reversed_list.dart';
@@ -79,6 +82,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   final Map<int, String> _localVideoPaths = {};
   final Map<int, double> _videoMessageProgress = {};
   final Set<int> _failedVideoMessageIds = {};
+  bool _isUploadingFile = false;
+  double _fileUploadProgress = 0;
+  CancelToken? _fileUploadCancelToken;
+  final Map<int, double> _fileMessageProgress = {};
+  final Set<int> _failedFileMessageIds = {};
   CancelToken? _audioUploadCancelToken;
   bool _isUploadingAudio = false;
   bool _isMoreActionsVisible = false;
@@ -677,6 +685,110 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     }
   }
 
+  Future<void> _pickFile() async {
+    if (_isUploadingFile || _isUploadingVideo || _isUploadingImage) return;
+    Message? pendingMessage;
+    int? pendingMessageId;
+    try {
+      final result = await FilePicker.pickFiles(
+        allowMultiple: false,
+        withData: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final selected = result.files.single;
+      final path = selected.path;
+      if (path == null || path.isEmpty) throw Exception('无法读取所选文件');
+      final sizeBytes = await validateChatFile(path);
+      final global = GlobalUtil();
+      final owner = global.userName ?? '';
+      if (owner.isEmpty) throw Exception('无法获取当前用户信息');
+      final msgId = DateTime.now().millisecondsSinceEpoch;
+      pendingMessageId = msgId;
+      final storedName = chatFileStoredName(
+        ownerId: owner,
+        targetId: widget.groupId.toString(),
+        messageId: msgId,
+        originalName: selected.name,
+      );
+      final payload = ChatFilePayload(
+        storedName: storedName,
+        originalName: selected.name,
+        sizeBytes: sizeBytes,
+        ownerId: owner,
+      );
+      pendingMessage = Message(
+        msgId: msgId,
+        content: payload.encode(),
+        isMe: true,
+        time: _getTime(),
+        isRead: false,
+        conversationId: widget.groupId.toString(),
+        messageType: MessageType.file,
+        status: MessageStatus.sending,
+        senderId: owner,
+      );
+      global.addMessage(_conversationKey, pendingMessage);
+      _initializeOutgoingReadStatus(msgId);
+      if (mounted) {
+        setState(() {
+          _isUploadingFile = true;
+          _fileUploadProgress = 0;
+          _fileMessageProgress[msgId] = 0;
+          _failedFileMessageIds.remove(msgId);
+        });
+        _scrollToBottom();
+      }
+      if (!_wsManager.isConnected) throw Exception('当前网络未连接，请稍后重试');
+      final cancelToken = CancelToken();
+      _fileUploadCancelToken = cancelToken;
+      await HttpUtil().uploadChatFile(
+        storedName,
+        path,
+        userName: owner,
+        cancelToken: cancelToken,
+        onSendProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          final progress = (sent / total).clamp(0.0, 1.0);
+          setState(() {
+            _fileUploadProgress = progress;
+            _fileMessageProgress[msgId] = progress;
+          });
+        },
+      );
+      if (mounted) setState(() => _fileMessageProgress[msgId] = 1);
+      final queued = _sendWebSocketMessage(
+        msgId: msgId,
+        content: payload.encode(),
+        receiver: widget.groupId,
+        conversationId: pendingMessage.conversationId,
+        messageType: MessageType.file,
+      );
+      if (!queued) throw Exception('消息发送失败，请检查网络连接');
+      _scrollToBottom();
+    } catch (error) {
+      if (pendingMessage != null) pendingMessage.status = MessageStatus.failed;
+      if (mounted) {
+        if (pendingMessageId != null) {
+          setState(() {
+            _fileMessageProgress.remove(pendingMessageId);
+            _failedFileMessageIds.add(pendingMessageId!);
+          });
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('文件发送失败：$error')));
+      }
+    } finally {
+      _fileUploadCancelToken = null;
+      if (mounted) {
+        setState(() {
+          _isUploadingFile = false;
+          _fileUploadProgress = 0;
+        });
+      }
+    }
+  }
+
   // 处理WebSocket消息
   void _handleWebSocketMessage(dynamic message) {
     debugPrint('=== 收到WebSocket消息 ===');
@@ -858,6 +970,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             2 => MessageType.image,
             3 => MessageType.audio,
             4 => MessageType.video,
+            5 => MessageType.file,
             _ => MessageType.text,
           },
           status: MessageStatus.sent,
@@ -1177,6 +1290,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     _imageUploadCancelToken?.cancel('群聊页面已关闭');
     _videoUploadCancelToken?.cancel('群聊页面已关闭');
     _audioUploadCancelToken?.cancel('群聊页面已关闭');
+    _fileUploadCancelToken?.cancel('群聊页面已关闭');
     // 离开页面前再次提交已读水位，避免会话列表重新出现已读消息红点。
     _sendReadAcksForLoadedMessages();
     _textFieldFocusNode.removeListener(_handleComposerFocusChanged);
@@ -1263,18 +1377,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         await _showMediaTypePicker(ImageSource.gallery);
       case ChatMoreActionType.capture:
         await _showMediaTypePicker(ImageSource.camera);
-      case ChatMoreActionType.voiceInput:
-        _showUnavailableAction('语音输入');
       case ChatMoreActionType.location:
         _showUnavailableAction('位置');
-      case ChatMoreActionType.favorite:
-        _showUnavailableAction('收藏');
-      case ChatMoreActionType.contactCard:
-        _showUnavailableAction('个人名片');
       case ChatMoreActionType.file:
-        _showUnavailableAction('文件');
-      case ChatMoreActionType.music:
-        _showUnavailableAction('音乐');
+        await _pickFile();
     }
   }
 
@@ -1492,6 +1598,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                           videoUploadFailed: _failedVideoMessageIds.contains(
                             message.msgId,
                           ),
+                          fileUploadProgress:
+                              _fileMessageProgress[message.msgId],
+                          fileUploadFailed: _failedFileMessageIds.contains(
+                            message.msgId,
+                          ),
                           onDelete: () => _deleteLocalMessage(message),
                           onQuote: () => _quoteMessage(message),
                         ),
@@ -1544,9 +1655,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             ),
             isComposing: _isComposing,
             isUploadingAudio: _isUploadingAudio,
-            isUploadingMedia: _isUploadingVideo || _isUploadingImage,
+            isUploadingMedia:
+                _isUploadingVideo || _isUploadingImage || _isUploadingFile,
             mediaProgress: _isUploadingVideo && _videoUploadProgress > 0
                 ? _videoUploadProgress
+                : _isUploadingFile && _fileUploadProgress > 0
+                ? _fileUploadProgress
                 : null,
             onMedia: () => _showMediaTypePicker(ImageSource.gallery),
             onMore: _toggleMoreActions,
@@ -1704,6 +1818,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       MessageType.image => 2,
       MessageType.audio => 3,
       MessageType.video => 4,
+      MessageType.file => 5,
       _ => 1,
     };
 
@@ -1908,6 +2023,8 @@ class GroupMessageBubble extends StatelessWidget {
   final String? localVideoPath;
   final double? videoUploadProgress;
   final bool videoUploadFailed;
+  final double? fileUploadProgress;
+  final bool fileUploadFailed;
   final VoidCallback onDelete;
   final VoidCallback onQuote;
   final globalUtil = GlobalUtil();
@@ -1930,6 +2047,8 @@ class GroupMessageBubble extends StatelessWidget {
     this.localVideoPath,
     this.videoUploadProgress,
     this.videoUploadFailed = false,
+    this.fileUploadProgress,
+    this.fileUploadFailed = false,
     required this.onDelete,
     required this.onQuote,
   });
@@ -2280,6 +2399,11 @@ class GroupMessageBubble extends StatelessWidget {
                         isMe: message.isMe,
                         onDelete: onDelete,
                         onQuote: onQuote,
+                      ),
+                      MessageType.file => ChatFileMessage(
+                        payload: ChatFilePayload.parse(message.content),
+                        uploadProgress: fileUploadProgress,
+                        uploadFailed: fileUploadFailed,
                       ),
                       _ => _buildImageBubble(context),
                     },

@@ -260,7 +260,9 @@ class _ChatpageState extends State<Chatpage> {
         conversationId: event.conversationId,
         messageType: switch (event.messageType) {
           2 => MessageType.image,
+          3 => MessageType.audio,
           4 => MessageType.video,
+          5 => MessageType.file,
           _ => MessageType.text,
         },
         status: MessageStatus.sent,
@@ -295,7 +297,9 @@ class _ChatpageState extends State<Chatpage> {
         conversationId: groupId,
         messageType: switch (event.messageType) {
           2 => MessageType.image,
+          3 => MessageType.audio,
           4 => MessageType.video,
+          5 => MessageType.file,
           _ => MessageType.text,
         },
         status: MessageStatus.sent,

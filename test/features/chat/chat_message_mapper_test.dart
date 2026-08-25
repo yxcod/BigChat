@@ -108,4 +108,23 @@ void main() {
     expect(message.messageType, MessageType.audio);
     expect(message.senderId, 'alice');
   });
+
+  test('maps server file type to a file message', () {
+    final record = MessageDetailModel(
+      msgId: 32,
+      groupId: 5,
+      senderId: 'alice',
+      msgContent: '{"storedName":"a.pdf","originalName":"资料.pdf"}',
+      msgType: 5,
+      sendTime: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    final message = ChatMessageMapper.fromGroupRecord(
+      record,
+      currentUserId: 'me',
+      conversationId: '5',
+    );
+
+    expect(message.messageType, MessageType.file);
+  });
 }

@@ -29,17 +29,11 @@ void main() {
       await tester.tap(find.text('更多'));
       await tester.pumpAndSettle();
 
-      for (final label in [
-        '照片/视频',
-        '拍摄',
-        '位置',
-        '语音输入',
-        '收藏',
-        '个人名片',
-        '文件',
-        '音乐',
-      ]) {
+      for (final label in ['照片/视频', '拍摄', '位置', '文件']) {
         expect(find.text(label), findsOneWidget);
+      }
+      for (final removedLabel in ['语音输入', '收藏', '个人名片', '音乐']) {
+        expect(find.text(removedLabel), findsNothing);
       }
 
       await tester.tap(find.text('照片/视频'));

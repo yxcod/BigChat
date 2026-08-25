@@ -28,27 +28,7 @@ class ChatMoreActionsSheet extends StatelessWidget {
         '位置',
         Icons.location_on_outlined,
       ),
-      _ChatMoreAction(
-        ChatMoreActionType.voiceInput,
-        '语音输入',
-        Icons.mic_none_outlined,
-      ),
-      _ChatMoreAction(
-        ChatMoreActionType.favorite,
-        '收藏',
-        Icons.inventory_2_outlined,
-      ),
-      _ChatMoreAction(
-        ChatMoreActionType.contactCard,
-        '个人名片',
-        Icons.person_outline,
-      ),
       _ChatMoreAction(ChatMoreActionType.file, '文件', Icons.folder_outlined),
-      _ChatMoreAction(
-        ChatMoreActionType.music,
-        '音乐',
-        Icons.music_note_outlined,
-      ),
     ];
 
     return Material(
@@ -127,13 +107,4 @@ class _ChatMoreAction {
   final IconData icon;
 }
 
-enum ChatMoreActionType {
-  gallery,
-  capture,
-  location,
-  voiceInput,
-  favorite,
-  contactCard,
-  file,
-  music,
-}
+enum ChatMoreActionType { gallery, capture, location, file }
