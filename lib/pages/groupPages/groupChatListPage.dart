@@ -7,18 +7,24 @@ import '../../utils/gloabl.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../model/groupInfoModel.dart';
 import '../../shared/widgets/app_back_button.dart';
+import '../../shared/widgets/app_search_field.dart';
+import '../../app/theme/app_colors.dart';
 
 class GroupChat {
   final int groupId;
   final String name;
   final String avatar;
   final String previousAvatar;
+  final String creatorId;
+  final String description;
 
   GroupChat({
     required this.groupId,
     required this.name,
     required this.avatar,
     required this.previousAvatar,
+    this.creatorId = '',
+    this.description = '',
   });
 
   factory GroupChat.fromGroupInfoModel(GroupInfoModel model) {
@@ -27,43 +33,55 @@ class GroupChat {
       name: model.groupName,
       avatar: model.groupAvatar, // 默认头像，可根据实际情况修改
       previousAvatar: '',
+      creatorId: model.creatorId,
+      description: model.description,
     );
   }
 }
 
 class GroupChatListPage extends StatefulWidget {
-  const GroupChatListPage({Key? key}) : super(key: key);
+  const GroupChatListPage({
+    super.key,
+    this.initialGroups = const [],
+    this.autoRefresh = true,
+    this.currentUserName,
+  });
+
+  final List<GroupChat> initialGroups;
+  final bool autoRefresh;
+  final String? currentUserName;
 
   @override
   _GroupChatListPageState createState() => _GroupChatListPageState();
 }
 
 class _GroupChatListPageState extends State<GroupChatListPage> {
-  GlobalUtil globalUtil = GlobalUtil();
+  final GlobalUtil globalUtil = GlobalUtil();
   List<GroupChat> _groupChats = [];
-  Map<String, String> previousAvatars = {};
-  TextEditingController _searchController = TextEditingController();
+  final Map<String, String> previousAvatars = {};
+  final TextEditingController _searchController = TextEditingController();
   List<GroupChat> _filteredGroupChats = [];
-  late Timer _timer;
+  Timer? _timer;
   // 静态缓存已经加载成功的头像 URL，避免重复加载
   static final Map<String, String> _avatarCache = {};
   @override
   void initState() {
     super.initState();
-    _filteredGroupChats = _groupChats;
-    // 初始化时获取一次群聊数据
-    _fetchGroups();
-    // 首次立即加载，后续只用低频轮询兜底。
-    _timer = Timer.periodic(
-      RefreshIntervals.groupFallback,
-      (timer) => _fetchGroups(),
-    );
+    _groupChats = List<GroupChat>.from(widget.initialGroups);
+    _filteredGroupChats = List<GroupChat>.from(_groupChats);
+    if (widget.autoRefresh) {
+      _fetchGroups();
+      _timer = Timer.periodic(
+        RefreshIntervals.groupFallback,
+        (timer) => _fetchGroups(),
+      );
+    }
   }
 
   @override
   void dispose() {
-    // 清理定时器
-    _timer.cancel();
+    _timer?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -72,11 +90,11 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
       if (query.isEmpty) {
         _filteredGroupChats = _groupChats;
       } else {
-        _filteredGroupChats = _groupChats
-            .where(
-              (group) => group.name.toLowerCase().contains(query.toLowerCase()),
-            )
-            .toList();
+        final keyword = query.toLowerCase();
+        _filteredGroupChats = _groupChats.where((group) {
+          return group.name.toLowerCase().contains(keyword) ||
+              group.description.toLowerCase().contains(keyword);
+        }).toList();
       }
     });
   }
@@ -107,15 +125,16 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
           name: model.groupName,
           avatar: avatarURL,
           previousAvatar: previousAvatar,
+          creatorId: model.creatorId,
+          description: model.description,
         );
       }).toList();
 
-      setState(() {
-        _groupChats = newGroups;
-        _filterGroupChats(_searchController.text);
-      });
+      if (!mounted) return;
+      _groupChats = newGroups;
+      _filterGroupChats(_searchController.text);
     } catch (e) {
-      print('获取群聊列表失败: $e');
+      debugPrint('获取群聊列表失败: $e');
     }
   }
 
@@ -132,7 +151,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
         return url;
       }
     } catch (e) {
-      print('获取头像 URL 异常: $e');
+      debugPrint('获取头像 URL 异常: $e');
       return '';
     }
   }
@@ -140,151 +159,351 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
         leading: const AppBackButton(),
-        title: Text('群聊'),
-        backgroundColor: Colors.white,
-        elevation: 1,
+        centerTitle: true,
+        title: const Text(
+          '我的群聊',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         actions: [
-          IconButton(
-            icon: Icon(Icons.add),
-            onPressed: () {
-              Navigator.pushNamed(context, '/groupCreatePage');
-            },
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: IconButton(
+              tooltip: '创建群聊',
+              onPressed: _openGroupCreator,
+              icon: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF34373C)),
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: AppColors.textPrimary,
+                  size: 22,
+                ),
+              ),
+            ),
           ),
         ],
       ),
       body: Column(
         children: [
-          // 搜索框
           Container(
-            margin: EdgeInsets.all(16.0),
-            padding: EdgeInsets.symmetric(horizontal: 12.0),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.search, color: Colors.grey[500], size: 20),
-                SizedBox(width: 8.0),
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: _filterGroupChats,
-                    decoration: InputDecoration(
-                      hintText: '搜索群聊',
-                      border: InputBorder.none,
-                      hintStyle: TextStyle(color: Colors.grey[500]),
-                    ),
-                  ),
-                ),
-                if (_searchController.text.isNotEmpty)
-                  GestureDetector(
-                    onTap: () {
-                      _searchController.clear();
-                      _filterGroupChats('');
-                    },
-                    child: Icon(Icons.clear, color: Colors.grey[500], size: 20),
-                  ),
-              ],
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: AppSearchField(
+              controller: _searchController,
+              query: _searchController.text,
+              hintText: '搜索群名称或简介',
+              onChanged: _filterGroupChats,
+              height: 44,
             ),
           ),
-          // 群聊列表
           Expanded(
-            child: ListView.builder(
-              itemCount: _filteredGroupChats.length,
-              itemBuilder: (context, index) {
-                final groupChat = _filteredGroupChats[index];
-                return GestureDetector(
-                  onTap: () {
-                    // 导航到群聊对话框
-                    Navigator.pushNamed(
-                      context,
-                      '/groupChatDialog',
-                      arguments: {
-                        //groupChat.groupId
-                        'groupId': groupChat.groupId,
-                        'groupName': groupChat.name,
-                      },
-                    );
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12.0,
-                      vertical: 12.0,
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // 群头像
-                            Container(
-                              width: 50.0,
-                              height: 50.0,
-                              margin: EdgeInsets.only(right: 12.0),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.grey[200],
-                              ),
-                              child: ClipOval(
-                                child: CachedNetworkImage(
-                                  cacheManager: AppImageCache.manager,
-                                  imageUrl: groupChat.avatar,
-                                  cacheKey: AppImageCache.cacheKey(
-                                    groupChat.avatar,
-                                  ),
-                                  fit: BoxFit.cover,
-                                  width: 50,
-                                  height: 50,
-                                  placeholder: (context, url) {
-                                    return Container(
-                                      color: Colors.grey[200],
-                                      child: Icon(
-                                        Icons.group,
-                                        color: Colors.grey,
-                                      ),
-                                    );
-                                  },
-                                  errorWidget: (context, error, stackTrace) {
-                                    return Container(
-                                      color: Colors.grey[200],
-                                      child: Icon(
-                                        Icons.group,
-                                        color: Colors.grey,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                            // 群名
-                            Expanded(
-                              child: Text(
-                                groupChat.name,
-                                style: TextStyle(
-                                  fontSize: 16.0,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        // 下划线，不覆盖头像
-                        Container(
-                          margin: EdgeInsets.only(left: 54.0, top: 12.0),
-                          height: 1.0,
-                          color: Colors.grey[200],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+            child: RefreshIndicator(
+              color: AppColors.primary,
+              onRefresh: _fetchGroups,
+              child: _buildGroupList(),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  String? get _currentUserName => widget.currentUserName ?? globalUtil.userName;
+
+  List<GroupChat> get _managedGroups => _filteredGroupChats
+      .where((group) => group.creatorId == _currentUserName)
+      .toList();
+
+  List<GroupChat> get _joinedGroups => _filteredGroupChats
+      .where((group) => group.creatorId != _currentUserName)
+      .toList();
+
+  void _openGroupCreator() {
+    Navigator.pushNamed(context, '/groupCreatePage');
+  }
+
+  void _openGroup(GroupChat group) {
+    Navigator.pushNamed(
+      context,
+      '/groupChatDialog',
+      arguments: {'groupId': group.groupId, 'groupName': group.name},
+    );
+  }
+
+  Widget _buildGroupList() {
+    final searching = _searchController.text.trim().isNotEmpty;
+    if (_filteredGroupChats.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+        children: [
+          if (!searching) _buildSummaryCard(),
+          SizedBox(height: searching ? 250 : 220),
+          Column(
+            children: [
+              const Icon(
+                Icons.groups_outlined,
+                size: 50,
+                color: Color(0xFFD1D4D8),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                searching ? '没有找到匹配的群聊' : '暂时还没有群聊',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+      children: [
+        if (!searching) ...[_buildSummaryCard(), const SizedBox(height: 24)],
+        if (_managedGroups.isNotEmpty) ...[
+          _buildGroupSection(
+            title: '我管理的',
+            groups: _managedGroups,
+            showOwnerBadge: true,
+          ),
+          const SizedBox(height: 24),
+        ],
+        if (_joinedGroups.isNotEmpty)
+          _buildGroupSection(title: '我加入的', groups: _joinedGroups),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCard() {
+    return Material(
+      key: const ValueKey('group_summary_card'),
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: _openGroupCreator,
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          height: 68,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.groups_2_outlined,
+                  color: AppColors.primary,
+                  size: 25,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '共 ${_groupChats.length} 个群聊',
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                const Text(
+                  '创建群聊',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 3),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.primary,
+                  size: 21,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGroupSection({
+    required String title,
+    required List<GroupChat> groups,
+    bool showOwnerBadge = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: title,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              TextSpan(
+                text: '  ${groups.length}',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 11),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: List.generate(groups.length, (index) {
+              return Column(
+                children: [
+                  _buildGroupRow(groups[index], showOwnerBadge: showOwnerBadge),
+                  if (index < groups.length - 1)
+                    const Divider(
+                      height: 1,
+                      indent: 80,
+                      endIndent: 14,
+                      color: AppColors.divider,
+                    ),
+                ],
+              );
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupRow(GroupChat group, {required bool showOwnerBadge}) {
+    return Material(
+      color: AppColors.surface,
+      child: InkWell(
+        onTap: () => _openGroup(group),
+        child: SizedBox(
+          height: 76,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                _buildGroupAvatar(group),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        group.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        group.description.trim().isEmpty
+                            ? '暂无群简介'
+                            : group.description,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (showOwnerBadge) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF8F0),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: const Text(
+                      '群主',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 6),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFFA4A7AC),
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGroupAvatar(GroupChat group) {
+    final fallback = Container(
+      color: const Color(0xFFEAF8F0),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.groups_rounded,
+        color: AppColors.primary,
+        size: 26,
+      ),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 52,
+        height: 52,
+        child: group.avatar.trim().isEmpty
+            ? fallback
+            : CachedNetworkImage(
+                cacheManager: AppImageCache.manager,
+                imageUrl: group.avatar,
+                cacheKey: AppImageCache.cacheKey(group.avatar),
+                fit: BoxFit.cover,
+                placeholder: (context, url) => fallback,
+                errorWidget: (context, error, stackTrace) => fallback,
+              ),
       ),
     );
   }

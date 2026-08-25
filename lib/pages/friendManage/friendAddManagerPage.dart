@@ -4,12 +4,19 @@ import '../../utils/Gloabl.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../shared/widgets/app_back_button.dart';
+import '../../app/theme/app_colors.dart';
 
 class FriendAddManagerPage extends StatefulWidget {
   final List<FriendRequestModel>? initialRequests;
+  final List<RecentFriendModel>? initialRecentFriends;
+  final bool autoLoad;
 
-  const FriendAddManagerPage({Key? key, this.initialRequests})
-    : super(key: key);
+  const FriendAddManagerPage({
+    super.key,
+    this.initialRequests,
+    this.initialRecentFriends,
+    this.autoLoad = true,
+  });
 
   @override
   _FriendAddManagerPageState createState() => _FriendAddManagerPageState();
@@ -22,43 +29,15 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
   @override
   void initState() {
     super.initState();
-    // 使用传递过来的初始请求数据，如果没有则使用默认的模拟数据
+    _recentFriends = List<RecentFriendModel>.from(
+      widget.initialRecentFriends ?? const [],
+    );
     if (widget.initialRequests != null && widget.initialRequests!.isNotEmpty) {
-      _pendingRequests = widget.initialRequests!;
+      _pendingRequests = List<FriendRequestModel>.from(widget.initialRequests!);
 
-      // 当进入页面时，为所有好友申请发送requestResult=4的请求
-      _sendAllRequestsSeen();
-    } else {
-      _pendingRequests = [
-        // FriendRequestModel(
-        //   requestId: 1,
-        //   userName: 'user001',
-        //   nickName: '李四',
-        //   verificationMessage: '我是李四，我们之前见过面',
-        //   requestTime: DateTime.now().subtract(Duration(hours: 2)),
-        // ),
-        // FriendRequestModel(
-        //   requestId: 2,
-        //   userName: 'user002',
-        //   nickName: '王五',
-        //   verificationMessage: '通过朋友介绍，想和你成为好友',
-        //   requestTime: DateTime.now().subtract(Duration(hours: 5)),
-        // ),
-        // FriendRequestModel(
-        //   requestId: 3,
-        //   userName: 'user003',
-        //   nickName: '赵六',
-        //   verificationMessage: '同学，想加个好友',
-        //   requestTime: DateTime.now().subtract(Duration(days: 1)),
-        // ),
-      ];
+      if (widget.autoLoad) _sendAllRequestsSeen();
     }
-    // 在_pendingRequests赋值之后打印大小
-    int size = _pendingRequests.length;
-    debugPrint("xxxxxxxxx ==$size");
-
-    // 获取当前用户信息并加载最近好友列表
-    _loadRecentFriends();
+    if (widget.autoLoad) _loadRecentFriends();
   }
 
   // 加载最近好友列表
@@ -72,6 +51,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     // 调用API获取最近好友列表
     getRecentFriendsApi(currentUserName)
         .then((friends) {
+          if (!mounted) return;
           setState(() {
             _recentFriends = friends;
           });
@@ -103,60 +83,33 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
   }
 
   // 最近添加的好友数据
-  List<RecentFriendModel> _recentFriends = [
-    RecentFriendModel(
-      userName: 'friend001',
-      nickName: '孙七',
-      addTime: DateTime.now()
-          .subtract(Duration(hours: 1))
-          .millisecondsSinceEpoch,
-      remarks: '大学同学',
-    ),
-    RecentFriendModel(
-      userName: 'friend002',
-      nickName: '周八',
-      addTime: DateTime.now()
-          .subtract(Duration(days: 1, hours: 3))
-          .millisecondsSinceEpoch,
-      remarks: '同事',
-    ),
-    RecentFriendModel(
-      userName: 'friend003',
-      nickName: '吴九',
-      addTime: DateTime.now()
-          .subtract(Duration(days: 2, hours: 5))
-          .millisecondsSinceEpoch,
-    ),
-    RecentFriendModel(
-      userName: 'friend004',
-      nickName: '郑十',
-      addTime: DateTime.now()
-          .subtract(Duration(days: 3, hours: 2))
-          .millisecondsSinceEpoch,
-    ),
-  ];
+  List<RecentFriendModel> _recentFriends = [];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
-        title: Text('好友验证', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 1,
-        leading: const AppBackButton(),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.more_vert, color: Colors.black),
-            onPressed: () {},
+        title: const Text(
+          '新的朋友',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
-        ],
+        ),
+        centerTitle: true,
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: const AppBackButton(),
       ),
-      body: Column(
+      body: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
         children: [
-          // 验证申请部分
           _buildVerificationSection(),
-
-          // 最近添加的好友部分
+          const SizedBox(height: 24),
           _buildRecentFriendsSection(),
         ],
       ),
@@ -164,74 +117,135 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
   }
 
   Widget _buildVerificationSection() {
-    return Container(
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              '验证申请',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            children: [
+              const TextSpan(
+                text: '待处理',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              TextSpan(
+                text: '  ${_pendingRequests.length}',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ],
           ),
-          if (_pendingRequests.isEmpty)
-            Container(
-              height: 100,
-              alignment: Alignment.center,
-              child: Text('暂无验证申请', style: TextStyle(color: Colors.grey)),
-            )
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              itemCount: _pendingRequests.length,
-              itemBuilder: (context, index) {
-                return _buildRequestItem(_pendingRequests[index]);
-              },
-            ),
-          Divider(height: 1, color: Colors.grey[200]),
-        ],
-      ),
+        ),
+        const SizedBox(height: 11),
+        Container(
+          key: const ValueKey('friend_request_card'),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x08000000),
+                blurRadius: 14,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: _pendingRequests.isEmpty
+              ? const SizedBox(
+                  height: 100,
+                  child: Center(
+                    child: Text(
+                      '暂无待处理的好友申请',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                )
+              : Column(
+                  children: List.generate(_pendingRequests.length, (index) {
+                    return Column(
+                      children: [
+                        _buildRequestItem(_pendingRequests[index]),
+                        if (index < _pendingRequests.length - 1)
+                          const Divider(
+                            height: 1,
+                            indent: 78,
+                            endIndent: 14,
+                            color: AppColors.divider,
+                          ),
+                      ],
+                    );
+                  }),
+                ),
+        ),
+      ],
     );
   }
 
   Widget _buildRecentFriendsSection() {
-    return Expanded(
-      child: Container(
-        color: Colors.white,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                '最近添加',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-            if (_recentFriends.isEmpty)
-              Expanded(
-                child: Center(
-                  child: Text(
-                    '最近没有添加新好友',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _recentFriends.length,
-                  itemBuilder: (context, index) {
-                    return _buildFriendItem(_recentFriends[index]);
-                  },
-                ),
-              ),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '最近添加',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-      ),
+        const SizedBox(height: 11),
+        Container(
+          key: const ValueKey('recent_friends_card'),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x08000000),
+                blurRadius: 14,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: _recentFriends.isEmpty
+              ? const SizedBox(
+                  height: 100,
+                  child: Center(
+                    child: Text(
+                      '最近没有添加新好友',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                )
+              : Column(
+                  children: List.generate(_recentFriends.length, (index) {
+                    return Column(
+                      children: [
+                        _buildFriendItem(_recentFriends[index]),
+                        if (index < _recentFriends.length - 1)
+                          const Divider(
+                            height: 1,
+                            indent: 76,
+                            endIndent: 14,
+                            color: AppColors.divider,
+                          ),
+                      ],
+                    );
+                  }),
+                ),
+        ),
+      ],
     );
   }
 
@@ -250,13 +264,13 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     final isNetworkImage = avatarUrl.startsWith('http');
 
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(14, 15, 14, 15),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 头像
           CircleAvatar(
-            radius: 30,
+            radius: 25,
+            backgroundColor: const Color(0xFFF0F1F3),
             backgroundImage: isNetworkImage
                 ? AppImageCache.provider(avatarUrl)
                 : null,
@@ -264,69 +278,95 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                 ? null
                 : Text(
                     isNetworkImage ? '' : avatarUrl,
-                    style: TextStyle(fontSize: 24),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-            backgroundColor: Colors.grey[200],
           ),
-          SizedBox(width: 12),
-
-          // 信息和按钮区域
+          const SizedBox(width: 13),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      request.nickName ?? '',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Text(
-                      _formatTime(request.requestTime ?? DateTime.now()),
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 4),
                 Text(
-                  request.verificationMessage ?? '',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  request.nickName ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  request.verificationMessage?.trim().isNotEmpty == true
+                      ? request.verificationMessage!
+                      : '申请添加你为好友',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    height: 1.3,
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                SizedBox(height: 12),
-
-                // 同意和拒绝按钮
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _handleAccept(request),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                        ),
-                        child: Text('同意'),
+                const SizedBox(height: 6),
+                Text(
+                  _formatTime(request.requestTime ?? DateTime.now()),
+                  style: const TextStyle(
+                    color: Color(0xFFA0A3A8),
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 68,
+            child: Column(
+              children: [
+                SizedBox(
+                  width: 68,
+                  height: 34,
+                  child: ElevatedButton(
+                    onPressed: () => _handleAccept(request),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _handleReject(request),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[300],
-                          foregroundColor: Colors.black,
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                        ),
-                        child: Text('拒绝'),
+                    child: const Text(
+                      '同意',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: 68,
+                  height: 34,
+                  child: OutlinedButton(
+                    onPressed: () => _handleReject(request),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      padding: EdgeInsets.zero,
+                      side: const BorderSide(color: Color(0xFFD4D6DA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('忽略', style: TextStyle(fontSize: 13)),
+                  ),
                 ),
               ],
             ),
@@ -350,43 +390,70 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     final avatarUrl = getAvatarUrl();
     final isNetworkImage = avatarUrl.startsWith('http');
 
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 25,
-        backgroundImage: isNetworkImage
-            ? AppImageCache.provider(avatarUrl)
-            : null,
-        child: isNetworkImage
-            ? null
-            : Text(avatarUrl, style: TextStyle(fontSize: 20)),
-        backgroundColor: Colors.grey[200],
-      ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              friend.nickName ?? '',
-              style: TextStyle(fontWeight: FontWeight.w500),
+    return Material(
+      color: AppColors.surface,
+      child: InkWell(
+        onTap: () => _showFriendDetail(friend),
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          height: 72,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: const Color(0xFFF0F1F3),
+                  backgroundImage: isNetworkImage
+                      ? AppImageCache.provider(avatarUrl)
+                      : null,
+                  child: isNetworkImage
+                      ? null
+                      : Text(
+                          avatarUrl,
+                          style: const TextStyle(
+                            fontSize: 19,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        friend.nickName ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        '已添加 · ${_formatTime(friend.addTime != null ? DateTime.fromMillisecondsSinceEpoch(friend.addTime!) : DateTime.now())}',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFFB1B3B7),
+                  size: 21,
+                ),
+              ],
             ),
           ),
-          Text(
-            _formatTime(
-              friend.addTime != null
-                  ? DateTime.fromMillisecondsSinceEpoch(friend.addTime!)
-                  : DateTime.now(),
-            ),
-            style: TextStyle(color: Colors.grey, fontSize: 12),
-          ),
-        ],
+        ),
       ),
-      subtitle: Text(
-        friend.remarks ?? '',
-        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-      ),
-      onTap: () {
-        // 点击进入好友详情
-        _showFriendDetail(friend);
-      },
     );
   }
 

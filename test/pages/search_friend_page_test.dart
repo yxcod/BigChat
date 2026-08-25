@@ -6,7 +6,7 @@ import 'package:flutter_base/utils/gloabl.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('search result card wraps only its account content', (
+  testWidgets('search result uses a compact public profile card', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -29,8 +29,9 @@ void main() {
 
     final card = find.byKey(const Key('search_friend_result_card'));
     expect(card, findsOneWidget);
-    expect(tester.getSize(card).height, lessThan(100));
-    expect(tester.getSize(card).height, greaterThanOrEqualTo(60));
+    expect(tester.getSize(card).height, lessThan(220));
+    expect(tester.getSize(card).height, greaterThanOrEqualTo(140));
+    expect(find.text('仅会展示对方公开的基本资料'), findsOneWidget);
   });
 
   testWidgets('existing friend is marked as added and cannot be added again', (
