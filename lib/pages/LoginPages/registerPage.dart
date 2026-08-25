@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
+import '../../shared/widgets/user_agreement_dialog.dart';
 import '../../utils/http.dart';
 
 typedef RegisterHandler =
@@ -243,27 +244,34 @@ class _RegisterPageState extends State<RegisterPage> {
                           ],
                         ),
                         const SizedBox(height: 26),
-                        Text.rich(
-                          TextSpan(
-                            style: TextStyle(
-                              color: context.appTextSecondary,
-                              fontSize: 12,
-                              height: 1.5,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '注册即表示你同意',
+                              style: TextStyle(
+                                color: context.appTextSecondary,
+                                fontSize: 12,
+                              ),
                             ),
-                            children: const [
-                              TextSpan(text: '注册即表示你同意 '),
-                              TextSpan(
-                                text: '《用户协议》',
-                                style: TextStyle(color: AppColors.primary),
+                            TextButton(
+                              key: const Key('register_user_agreement_link'),
+                              onPressed: () => showUserAgreementDialog(context),
+                              style: TextButton.styleFrom(
+                                minimumSize: const Size(0, 40),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                ),
                               ),
-                              TextSpan(text: ' 和 '),
-                              TextSpan(
-                                text: '《隐私政策》',
-                                style: TextStyle(color: AppColors.primary),
+                              child: const Text(
+                                '《用户协议》',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ],
-                          ),
-                          textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
                       ],
                     ),

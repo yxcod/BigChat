@@ -17,8 +17,26 @@ void main() {
     expect(find.text('确认密码'), findsOneWidget);
     expect(find.text('立即登录'), findsOneWidget);
     expect(find.textContaining('用户协议'), findsOneWidget);
-    expect(find.textContaining('隐私政策'), findsOneWidget);
+    expect(find.textContaining('隐私政策'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('注册页用户协议可点击并显示内部使用说明', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: const RegisterPage()),
+    );
+
+    final agreementLink = find.byKey(const Key('register_user_agreement_link'));
+    await tester.ensureVisible(agreementLink);
+    await tester.tap(agreementLink);
+    await tester.pumpAndSettle();
+
+    expect(find.text('用户协议'), findsOneWidget);
+    expect(
+      find.text('此软件只供内部学习交流使用，不用于任何商业用途，若出了任何问题请去未个几找几个姓王和姓张的兄弟，他们会替我解释一切。'),
+      findsOneWidget,
+    );
+    expect(find.text('隐私政策'), findsNothing);
   });
 
   testWidgets('注册表单校验后只提交账号和密码', (tester) async {
