@@ -14,7 +14,6 @@ class ChatComposerToolbar extends StatelessWidget {
     required this.isComposing,
     required this.isUploadingAudio,
     required this.isUploadingMedia,
-    required this.onVoiceHint,
     required this.onMedia,
     required this.onMore,
     required this.onSend,
@@ -26,7 +25,6 @@ class ChatComposerToolbar extends StatelessWidget {
   final bool isUploadingAudio;
   final bool isUploadingMedia;
   final double? mediaProgress;
-  final VoidCallback onVoiceHint;
   final VoidCallback onMedia;
   final VoidCallback onMore;
   final VoidCallback onSend;
@@ -35,13 +33,6 @@ class ChatComposerToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _ComposerActionButton(
-          key: const ValueKey('chat_voice_hint_button'),
-          tooltip: '语音输入',
-          icon: Icons.mic_none_rounded,
-          onPressed: onVoiceHint,
-        ),
-        const SizedBox(width: 2),
         Expanded(child: editor),
         if (isUploadingAudio)
           const Padding(

@@ -1519,7 +1519,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   Widget _buildTextComposer() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(6, 7, 6, 7),
+      margin: const EdgeInsets.fromLTRB(12, 7, 6, 7),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1548,7 +1548,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             mediaProgress: _isUploadingVideo && _videoUploadProgress > 0
                 ? _videoUploadProgress
                 : null,
-            onVoiceHint: () => _showUnavailableAction('语音输入'),
             onMedia: () => _showMediaTypePicker(ImageSource.gallery),
             onMore: _toggleMoreActions,
             onSend: () => _handleSubmitted(_textController.text),

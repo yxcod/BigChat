@@ -3,12 +3,11 @@ import 'package:flutter_base/shared/widgets/chat_composer_toolbar.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('聊天输入栏空闲时显示语音、媒体和更多入口', (tester) async {
+  testWidgets('聊天输入栏移除左侧麦克风并扩大编辑区域', (tester) async {
     tester.view.physicalSize = const Size(390, 120);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    var voiceTapped = false;
     var mediaTapped = false;
     var moreTapped = false;
 
@@ -24,7 +23,6 @@ void main() {
             isComposing: false,
             isUploadingAudio: false,
             isUploadingMedia: false,
-            onVoiceHint: () => voiceTapped = true,
             onMedia: () => mediaTapped = true,
             onMore: () => moreTapped = true,
             onSend: () {},
@@ -33,14 +31,16 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const Key('chat_voice_hint_button')), findsOneWidget);
+    expect(find.byKey(const Key('chat_voice_hint_button')), findsNothing);
     expect(find.byKey(const Key('chat_media_button')), findsOneWidget);
     expect(find.byKey(const Key('chat_more_button')), findsOneWidget);
     expect(find.byKey(const Key('chat_send_button')), findsNothing);
-    await tester.tap(find.byKey(const Key('chat_voice_hint_button')));
+    expect(
+      tester.getSize(find.byKey(const Key('editor'))).width,
+      greaterThan(280),
+    );
     await tester.tap(find.byKey(const Key('chat_media_button')));
     await tester.tap(find.byKey(const Key('chat_more_button')));
-    expect(voiceTapped, isTrue);
     expect(mediaTapped, isTrue);
     expect(moreTapped, isTrue);
     expect(tester.takeException(), isNull);
@@ -56,7 +56,6 @@ void main() {
             isComposing: true,
             isUploadingAudio: false,
             isUploadingMedia: false,
-            onVoiceHint: () {},
             onMedia: () {},
             onMore: () {},
             onSend: () => sent = true,
