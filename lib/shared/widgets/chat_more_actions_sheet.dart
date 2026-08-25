@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-const chatChromeBackgroundColor = Color(0xFFF5F5F5);
-const chatChromeDividerColor = Color(0xFFE0E0E0);
+const chatChromeBackgroundColor = Colors.white;
+const chatChromeDividerColor = Color(0xFFE8E8E8);
 
 class ChatMoreActionsSheet extends StatelessWidget {
   const ChatMoreActionsSheet({super.key, this.onSelected});
@@ -50,7 +50,7 @@ class ChatMoreActionsSheet extends StatelessWidget {
     ];
 
     return Material(
-      color: chatChromeBackgroundColor,
+      color: const Color(0xFFF5F5F7),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

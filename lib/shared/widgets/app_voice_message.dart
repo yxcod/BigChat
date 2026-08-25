@@ -9,6 +9,7 @@ import 'package:just_audio/just_audio.dart';
 import '../../core/media/voice_media.dart';
 import '../../core/media/voice_message.dart';
 import '../../utils/http.dart';
+import '../../app/theme/app_colors.dart';
 import 'message_action_menu.dart';
 
 typedef VoiceTranscriber =
@@ -371,9 +372,7 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   Widget build(BuildContext context) {
     final seconds = widget.payload.durationSeconds;
     final width = voiceBubbleWidth(seconds);
-    final foregroundColor = widget.isMe
-        ? const Color(0xFF1769AA)
-        : const Color(0xFF333333);
+    final foregroundColor = widget.isMe ? Colors.white : AppColors.textPrimary;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onLongPressStart: (details) => _showVoiceActions(
@@ -387,7 +386,7 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Material(
-            color: widget.isMe ? Colors.blue[100] : Colors.white,
+            color: widget.isMe ? AppColors.primary : Colors.white,
             borderRadius: BorderRadius.circular(16),
             child: SizedBox(
               width: width,

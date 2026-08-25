@@ -19,6 +19,8 @@ import '../core/cache/app_image_cache.dart';
 import '../shared/widgets/app_back_button.dart';
 import '../shared/widgets/chat_more_actions_sheet.dart';
 import '../shared/widgets/chat_composer_panel.dart';
+import '../shared/widgets/chat_composer_toolbar.dart';
+import '../shared/widgets/chat_time_separator.dart';
 import '../shared/widgets/fullscreen_image_viewer.dart';
 import '../shared/utils/chat_scroll_util.dart';
 import '../shared/widgets/chat_background.dart';
@@ -34,6 +36,7 @@ import '../core/media/chat_media_saver.dart';
 import '../core/media/voice_message.dart';
 import '../core/media/voice_media.dart';
 import 'videoCallPage.dart';
+import '../app/theme/app_colors.dart';
 
 class ChatDialogPage extends StatefulWidget {
   ChatDialogPage({Key? key}) : super(key: key);
@@ -999,83 +1002,100 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     });
   }
 
+  String get _privateChatStatus {
+    if (friendInfo?.isOnline != true) return '';
+    if (_distanceLoading) return '在线 · 距离计算中';
+    if (_distanceMeters != null) {
+      return '在线 · 距你 ${formatDistance(_distanceMeters!)}';
+    }
+    final status = _distanceStatus?.trim() ?? '';
+    return status.isEmpty ? '在线' : '在线 · $status';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
+        centerTitle: true,
+        titleSpacing: 0,
+        leadingWidth: 56,
         leading: AppBackButton(
           onPressed: () {
             Navigator.pop(context);
           },
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              friendInfo?.remarks ??
-                  friendInfo?.nickName ??
-                  friendInfo?.userName ??
-                  "未知用户",
-              style: TextStyle(color: Colors.black, fontSize: 16),
-            ),
-            if (friendInfo?.isOnline == true) ...[
-              const SizedBox(height: 2),
-              const Text(
-                '在线',
-                key: Key('private_chat_online_status'),
-                style: TextStyle(color: Colors.green, fontSize: 12),
+        title: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: friendInfo?.isOnline == true && !_distanceLoading
+              ? _refreshDistance
+              : null,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                friendInfo?.remarks ??
+                    friendInfo?.nickName ??
+                    friendInfo?.userName ??
+                    '未知用户',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.1,
+                ),
               ),
+              if (_privateChatStatus.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Row(
+                  key: const Key('private_chat_online_status'),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox.square(
+                      dimension: 7,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        _privateChatStatus,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
-          ],
+          ),
         ),
         backgroundColor: chatChromeBackgroundColor,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
           child: Divider(height: 1, color: chatChromeDividerColor),
         ),
         actions: [
-          TextButton.icon(
-            onPressed: _distanceLoading || friendInfo?.isOnline != true
-                ? null
-                : _refreshDistance,
-            style: TextButton.styleFrom(
-              foregroundColor: _distanceMeters != null
-                  ? Colors.blue
-                  : Colors.grey,
-            ),
-            icon: _distanceLoading
-                ? const SizedBox.square(
-                    dimension: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.near_me_outlined, size: 17),
-            label: SizedBox(
-              width: 52,
-              child: Text(
-                _distanceMeters != null
-                    ? formatDistance(_distanceMeters!)
-                    : (_distanceStatus ?? '距离'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11),
-              ),
-            ),
-          ),
           IconButton(
-            icon: Icon(Icons.phone, color: Colors.black),
-            onPressed: () {
-              // 发起语音通话功能（可以在后续实现）
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('语音通话功能即将上线'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.videocam, color: Colors.black),
+            key: const ValueKey('private_video_call_button'),
+            tooltip: '视频通话',
+            icon: const Icon(
+              Icons.videocam_outlined,
+              color: AppColors.textPrimary,
+              size: 25,
+            ),
             onPressed: () {
               // 发起视频通话
               if (id != null) {
@@ -1122,7 +1142,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
             children: [
               Expanded(
                 child: ListView.builder(
-                  padding: EdgeInsets.all(8.0),
+                  padding: const EdgeInsets.fromLTRB(4, 12, 4, 16),
                   reverse: true,
                   controller: _scrollController,
                   // 使用当前聊天好友的全局消息列表，如果不存在则使用空列表
@@ -1131,22 +1151,35 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
                     // 获取当前聊天好友的全局消息列表
                     final globalUtil = GlobalUtil();
                     final friendMessages = globalUtil.getChatRecords(id ?? '');
-                    final message =
-                        friendMessages[friendMessages.length - 1 - index];
-                    return MessageBubble(
-                      message: message,
-                      friendInfo: friendInfo,
-                      currentUserAvatar: globalUtil.userInfoModel.avatar,
-                      onProfileUpdated: () {
-                        if (mounted) _fetchFriendInfo();
-                      },
-                      localVideoPath: _localVideoPaths[message.msgId],
-                      videoUploadProgress: _videoMessageProgress[message.msgId],
-                      videoUploadFailed: _failedVideoMessageIds.contains(
-                        message.msgId,
-                      ),
-                      onDelete: () => _deleteLocalMessage(message),
-                      onQuote: () => _quoteMessage(message),
+                    final sourceIndex = friendMessages.length - 1 - index;
+                    final message = friendMessages[sourceIndex];
+                    final previous = sourceIndex > 0
+                        ? friendMessages[sourceIndex - 1]
+                        : null;
+                    return Column(
+                      children: [
+                        if (shouldShowChatTimeSeparator(
+                          current: message,
+                          previous: previous,
+                        ))
+                          ChatTimeSeparator(label: message.time),
+                        MessageBubble(
+                          message: message,
+                          friendInfo: friendInfo,
+                          currentUserAvatar: globalUtil.userInfoModel.avatar,
+                          onProfileUpdated: () {
+                            if (mounted) _fetchFriendInfo();
+                          },
+                          localVideoPath: _localVideoPaths[message.msgId],
+                          videoUploadProgress:
+                              _videoMessageProgress[message.msgId],
+                          videoUploadFailed: _failedVideoMessageIds.contains(
+                            message.msgId,
+                          ),
+                          onDelete: () => _deleteLocalMessage(message),
+                          onQuote: () => _quoteMessage(message),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -1169,73 +1202,42 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   Widget _buildTextComposer() {
-    return IconTheme(
-      data: IconThemeData(color: Theme.of(context).colorScheme.secondary),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_pendingQuote != null)
-              QuoteComposerPreview(
+    return Container(
+      margin: const EdgeInsets.fromLTRB(6, 7, 6, 7),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_pendingQuote != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: QuoteComposerPreview(
                 quote: _pendingQuote!,
                 onClose: () => setState(() => _pendingQuote = null),
               ),
-            Row(
-              children: [
-                Expanded(
-                  child: HoldToRecordField(
-                    controller: _textController,
-                    focusNode: _textFieldFocusNode,
-                    enabled: !_isUploadingAudio,
-                    onChanged: (text) =>
-                        setState(() => _isComposing = text.trim().isNotEmpty),
-                    onSubmitted: _handleSubmitted,
-                    onRecorded: _handleVoiceRecorded,
-                    onError: _showVoiceError,
-                  ),
-                ),
-                if (_isUploadingAudio)
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox.square(
-                      dimension: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                IconButton(
-                  tooltip: '发送图片或视频',
-                  icon: _isUploadingVideo || _isUploadingImage
-                      ? SizedBox.square(
-                          dimension: 24,
-                          child: CircularProgressIndicator(
-                            value: _isUploadingVideo && _videoUploadProgress > 0
-                                ? _videoUploadProgress
-                                : null,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.camera_alt_outlined),
-                  onPressed: _isUploadingVideo || _isUploadingImage
-                      ? null
-                      : () => _showMediaTypePicker(ImageSource.gallery),
-                ),
-                IconButton(
-                  tooltip: '更多',
-                  icon: const Icon(Icons.add_circle_outline, size: 28),
-                  onPressed: _toggleMoreActions,
-                ),
-                IconButton(
-                  icon: Icon(Icons.send),
-                  //_isComposing为true时候表示输入框内容不为空才能发送出去
-                  onPressed: _isComposing
-                      ? () => _handleSubmitted(_textController.text)
-                      : null,
-                ),
-              ],
             ),
-          ],
-        ),
+          ChatComposerToolbar(
+            editor: HoldToRecordField(
+              controller: _textController,
+              focusNode: _textFieldFocusNode,
+              enabled: !_isUploadingAudio,
+              onChanged: (text) =>
+                  setState(() => _isComposing = text.trim().isNotEmpty),
+              onSubmitted: _handleSubmitted,
+              onRecorded: _handleVoiceRecorded,
+              onError: _showVoiceError,
+            ),
+            isComposing: _isComposing,
+            isUploadingAudio: _isUploadingAudio,
+            isUploadingMedia: _isUploadingVideo || _isUploadingImage,
+            mediaProgress: _isUploadingVideo && _videoUploadProgress > 0
+                ? _videoUploadProgress
+                : null,
+            onVoiceHint: () => _showUnavailableAction('语音输入'),
+            onMedia: () => _showMediaTypePicker(ImageSource.gallery),
+            onMore: _toggleMoreActions,
+            onSend: () => _handleSubmitted(_textController.text),
+          ),
+        ],
       ),
     );
   }
@@ -1941,7 +1943,7 @@ class MessageBubble extends StatelessWidget {
         child: CircleAvatar(
           backgroundImage: AppImageCache.provider(avatarUrl),
           backgroundColor: Colors.grey[200],
-          radius: 24,
+          radius: 20,
         ),
       ),
     );
@@ -1974,7 +1976,7 @@ class MessageBubble extends StatelessWidget {
     return CircleAvatar(
       backgroundImage: AppImageCache.provider(avatarUrl),
       backgroundColor: Colors.grey[200],
-      radius: 24,
+      radius: 20,
     );
   }
 
@@ -2057,17 +2059,17 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = message.isMe ? Colors.green[300] : Colors.white;
-    final textColor = message.isMe ? Colors.white : Colors.black;
+    final bubbleColor = message.isMe ? AppColors.primary : Colors.white;
+    final textColor = message.isMe ? Colors.white : AppColors.textPrimary;
     final borderRadius = BorderRadius.only(
-      topLeft: Radius.circular(16),
-      topRight: Radius.circular(16),
-      bottomLeft: message.isMe ? Radius.circular(16) : Radius.circular(0),
-      bottomRight: message.isMe ? Radius.circular(0) : Radius.circular(16),
+      topLeft: const Radius.circular(16),
+      topRight: const Radius.circular(16),
+      bottomLeft: Radius.circular(message.isMe ? 16 : 5),
+      bottomRight: Radius.circular(message.isMe ? 5 : 16),
     );
 
     return Container(
-      margin: EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisAlignment: message.isMe
@@ -2087,30 +2089,6 @@ class MessageBubble extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                // 状态显示：已读/未读 或 发送失败
-                if (message.isMe)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      if (message.status == MessageStatus.failed)
-                        Icon(Icons.error_outline, size: 12, color: Colors.red),
-                      if (message.status == MessageStatus.failed)
-                        SizedBox(width: 2),
-                      Text(
-                        message.status == MessageStatus.failed
-                            ? '发送失败'
-                            : (message.isRead ? '已读' : '未读'),
-                        style: TextStyle(
-                          color: message.status == MessageStatus.failed
-                              ? Colors.red
-                              : (message.isRead ? Colors.grey : Colors.blue),
-                          fontSize: 10,
-                        ),
-                      ),
-                      SizedBox(width: 4),
-                    ],
-                  ),
-
                 // 消息气泡
                 GestureDetector(
                   behavior: HitTestBehavior.translucent,
@@ -2149,12 +2127,11 @@ class MessageBubble extends StatelessWidget {
                             ),
                           ),
                           child: Container(
-                            margin: EdgeInsets.symmetric(vertical: 2.0),
-                            padding: EdgeInsets.all(0.0),
+                            margin: const EdgeInsets.symmetric(vertical: 2),
                             decoration: BoxDecoration(
-                              // 图片消息不使用背景色
                               borderRadius: borderRadius,
                             ),
+                            clipBehavior: Clip.antiAlias,
                             child: _buildImageMessage(),
                           ),
                         )
@@ -2162,43 +2139,69 @@ class MessageBubble extends StatelessWidget {
                       ? QuotedTextMessageBubble(
                           quote: message.quote!,
                           text: message.content,
-                          bubbleColor: bubbleColor!,
+                          bubbleColor: bubbleColor,
                           textColor: textColor,
                           borderRadius: borderRadius,
                         )
                       : Container(
-                          margin: EdgeInsets.symmetric(vertical: 2.0),
-                          padding: EdgeInsets.all(12.0),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.68,
+                          ),
+                          margin: const EdgeInsets.symmetric(vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 13,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: bubbleColor,
                             borderRadius: borderRadius,
-                            boxShadow: [
+                            boxShadow: const [
                               BoxShadow(
-                                color: Colors.grey.withValues(alpha: 0.3),
-                                blurRadius: 2,
-                                offset: Offset(0, 1),
+                                color: Color(0x10000000),
+                                blurRadius: 5,
+                                offset: Offset(0, 2),
                               ),
                             ],
                           ),
                           child: Text(
                             message.content,
-                            style: TextStyle(color: textColor, fontSize: 16),
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 15.5,
+                              height: 1.35,
+                            ),
                           ),
                         ),
                 ),
 
-                // 时间
-                Row(
-                  mainAxisAlignment: message.isMe
-                      ? MainAxisAlignment.end
-                      : MainAxisAlignment.start,
-                  children: [
-                    Text(
-                      message.time,
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                  ],
-                ),
+                if (message.isMe) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (message.status == MessageStatus.failed)
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          size: 12,
+                          color: AppColors.danger,
+                        ),
+                      if (message.status == MessageStatus.failed)
+                        const SizedBox(width: 2),
+                      Text(
+                        message.status == MessageStatus.failed
+                            ? '发送失败'
+                            : (message.isRead ? '已读' : '未读'),
+                        style: TextStyle(
+                          color: message.status == MessageStatus.failed
+                              ? AppColors.danger
+                              : AppColors.textSecondary,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

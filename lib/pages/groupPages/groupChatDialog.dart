@@ -19,6 +19,8 @@ import '../../api/getGroupInfoAPI.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../shared/widgets/chat_more_actions_sheet.dart';
 import '../../shared/widgets/chat_composer_panel.dart';
+import '../../shared/widgets/chat_composer_toolbar.dart';
+import '../../shared/widgets/chat_time_separator.dart';
 import '../../api/getGroupMemberAPI.dart';
 import '../../api/groupChatRecordAPI.dart';
 import '../../utils/user_profile_navigator.dart';
@@ -40,6 +42,7 @@ import '../../core/media/voice_media.dart';
 import '../../shared/widgets/message_action_menu.dart';
 import '../../shared/widgets/quoted_message_view.dart';
 import '../../core/media/chat_media_saver.dart';
+import '../../app/theme/app_colors.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -1311,13 +1314,21 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
         centerTitle: true,
         titleSpacing: 0,
-        leading: AppBackButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
+        leadingWidth: 96,
+        leading: Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: 56,
+            child: AppBackButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+          ),
         ),
         title: Text.rich(
           TextSpan(
@@ -1325,10 +1336,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             children: [
               if (_currentMemberCount != null)
                 TextSpan(
-                  text: '(${_currentMemberCount!})',
+                  text: ' (${_currentMemberCount!})',
                   style: const TextStyle(
-                    color: Color(0xFF60646B),
-                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1337,13 +1348,14 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            color: Color(0xFF17191C),
-            fontSize: 17,
+            color: AppColors.textPrimary,
+            fontSize: 18,
             fontWeight: FontWeight.w600,
-            letterSpacing: 0.1,
+            letterSpacing: 0.2,
           ),
         ),
         backgroundColor: chatChromeBackgroundColor,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -1351,7 +1363,13 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.videocam, color: Colors.black),
+            key: const ValueKey('group_video_call_button'),
+            tooltip: '群视频通话',
+            icon: const Icon(
+              Icons.videocam_outlined,
+              color: AppColors.textPrimary,
+              size: 25,
+            ),
             onPressed: () {
               // 发起群视频通话
               const token = ''; // 可以使用Agora控制台生成的临时token
@@ -1381,7 +1399,13 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             },
           ),
           IconButton(
-            icon: Icon(Icons.more_vert, color: Colors.black),
+            key: const ValueKey('group_settings_button'),
+            tooltip: '群聊设置',
+            icon: const Icon(
+              Icons.more_vert_rounded,
+              color: AppColors.textPrimary,
+              size: 25,
+            ),
             onPressed: () async {
               // 进入群聊设置页面
               final deleted = await Navigator.pushNamed(
@@ -1416,7 +1440,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             children: [
               Expanded(
                 child: TopAlignedReversedList(
-                  padding: EdgeInsets.all(8.0),
+                  padding: const EdgeInsets.fromLTRB(4, 12, 4, 16),
                   controller: _scrollController,
                   // 使用当前聊天群的全局消息列表，如果不存在则使用空列表
                   itemCount: GlobalUtil()
@@ -1428,8 +1452,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                     final groupMessages = globalUtil.getChatRecords(
                       _conversationKey,
                     );
-                    final message =
-                        groupMessages[groupMessages.length - 1 - index];
+                    final sourceIndex = groupMessages.length - 1 - index;
+                    final message = groupMessages[sourceIndex];
+                    final previous = sourceIndex > 0
+                        ? groupMessages[sourceIndex - 1]
+                        : null;
                     // 获取消息的未读人数
                     int unreadCount = 0; // 默认值
                     final msgStatusIndex = _messageReadStatus.indexWhere(
@@ -1441,21 +1468,33 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
                           unreadCount;
                     }
 
-                    return GroupMessageBubble(
-                      message: message,
-                      currentUserAvatar: globalUtil.userInfoModel.avatar,
-                      onReadStatusTap: () {
-                        _showReadStatusList(message.msgId);
-                      },
-                      unreadCount: unreadCount,
-                      groupMembers: globalUtil.getGroupMembers(widget.groupId),
-                      localVideoPath: _localVideoPaths[message.msgId],
-                      videoUploadProgress: _videoMessageProgress[message.msgId],
-                      videoUploadFailed: _failedVideoMessageIds.contains(
-                        message.msgId,
-                      ),
-                      onDelete: () => _deleteLocalMessage(message),
-                      onQuote: () => _quoteMessage(message),
+                    return Column(
+                      children: [
+                        if (shouldShowChatTimeSeparator(
+                          current: message,
+                          previous: previous,
+                        ))
+                          ChatTimeSeparator(label: message.time),
+                        GroupMessageBubble(
+                          message: message,
+                          currentUserAvatar: globalUtil.userInfoModel.avatar,
+                          onReadStatusTap: () {
+                            _showReadStatusList(message.msgId);
+                          },
+                          unreadCount: unreadCount,
+                          groupMembers: globalUtil.getGroupMembers(
+                            widget.groupId,
+                          ),
+                          localVideoPath: _localVideoPaths[message.msgId],
+                          videoUploadProgress:
+                              _videoMessageProgress[message.msgId],
+                          videoUploadFailed: _failedVideoMessageIds.contains(
+                            message.msgId,
+                          ),
+                          onDelete: () => _deleteLocalMessage(message),
+                          onQuote: () => _quoteMessage(message),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -1478,73 +1517,42 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   Widget _buildTextComposer() {
-    return IconTheme(
-      data: IconThemeData(color: Theme.of(context).colorScheme.secondary),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_pendingQuote != null)
-              QuoteComposerPreview(
+    return Container(
+      margin: const EdgeInsets.fromLTRB(6, 7, 6, 7),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_pendingQuote != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: QuoteComposerPreview(
                 quote: _pendingQuote!,
                 onClose: () => setState(() => _pendingQuote = null),
               ),
-            Row(
-              children: [
-                Expanded(
-                  child: HoldToRecordField(
-                    controller: _textController,
-                    focusNode: _textFieldFocusNode,
-                    enabled: !_isUploadingAudio,
-                    onChanged: (text) =>
-                        setState(() => _isComposing = text.trim().isNotEmpty),
-                    onSubmitted: _handleSubmitted,
-                    onRecorded: _handleVoiceRecorded,
-                    onError: _showVoiceError,
-                  ),
-                ),
-                if (_isUploadingAudio)
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox.square(
-                      dimension: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                IconButton(
-                  tooltip: '发送图片或视频',
-                  icon: _isUploadingVideo || _isUploadingImage
-                      ? SizedBox.square(
-                          dimension: 24,
-                          child: CircularProgressIndicator(
-                            value: _isUploadingVideo && _videoUploadProgress > 0
-                                ? _videoUploadProgress
-                                : null,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.camera_alt_outlined),
-                  onPressed: _isUploadingVideo || _isUploadingImage
-                      ? null
-                      : () => _showMediaTypePicker(ImageSource.gallery),
-                ),
-                IconButton(
-                  tooltip: '更多',
-                  icon: const Icon(Icons.add_circle_outline, size: 28),
-                  onPressed: _toggleMoreActions,
-                ),
-                IconButton(
-                  icon: Icon(Icons.send),
-                  //_isComposing为true时候表示输入框内容不为空才能发送出去
-                  onPressed: _isComposing
-                      ? () => _handleSubmitted(_textController.text)
-                      : null,
-                ),
-              ],
             ),
-          ],
-        ),
+          ChatComposerToolbar(
+            editor: HoldToRecordField(
+              controller: _textController,
+              focusNode: _textFieldFocusNode,
+              enabled: !_isUploadingAudio,
+              onChanged: (text) =>
+                  setState(() => _isComposing = text.trim().isNotEmpty),
+              onSubmitted: _handleSubmitted,
+              onRecorded: _handleVoiceRecorded,
+              onError: _showVoiceError,
+            ),
+            isComposing: _isComposing,
+            isUploadingAudio: _isUploadingAudio,
+            isUploadingMedia: _isUploadingVideo || _isUploadingImage,
+            mediaProgress: _isUploadingVideo && _videoUploadProgress > 0
+                ? _videoUploadProgress
+                : null,
+            onVoiceHint: () => _showUnavailableAction('语音输入'),
+            onMedia: () => _showMediaTypePicker(ImageSource.gallery),
+            onMore: _toggleMoreActions,
+            onSend: () => _handleSubmitted(_textController.text),
+          ),
+        ],
       ),
     );
   }
@@ -2019,6 +2027,14 @@ class GroupMessageBubble extends StatelessWidget {
     return unreadCount;
   }
 
+  int _getReadCount() {
+    final recipientCount = groupMembers.isEmpty
+        ? unreadCount
+        : groupMembers.length - 1;
+    final readCount = recipientCount - unreadCount;
+    return readCount < 0 ? 0 : readCount;
+  }
+
   // 旧版图片菜单，保留用于兼容历史页面结构。
   // ignore: unused_element
   void _showImageActions(BuildContext context) {
@@ -2168,7 +2184,7 @@ class GroupMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: EdgeInsets.symmetric(vertical: 10.0),
+      margin: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
       child: Column(
         crossAxisAlignment: message.isMe
             ? CrossAxisAlignment.end
@@ -2177,10 +2193,13 @@ class GroupMessageBubble extends StatelessWidget {
           // 消息发送者昵称
           if (!message.isMe) ...[
             Padding(
-              padding: EdgeInsets.only(left: 48.0, bottom: 4.0),
+              padding: const EdgeInsets.only(left: 48, bottom: 4),
               child: Text(
                 _getSenderName(),
-                style: TextStyle(fontSize: 12, color: Colors.black),
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           ],
@@ -2287,41 +2306,23 @@ class GroupMessageBubble extends StatelessWidget {
               ],
             ],
           ),
-          // 消息时间和状态
-          Padding(
-            padding: EdgeInsets.only(
-              top: 4.0,
-              right: message.isMe ? 50.0 : 0,
-              left: message.isMe ? 0 : 50.0,
+          if (message.isMe)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, right: 50),
+              child: _buildMessageStatus(),
             ),
-            child: Row(
-              mainAxisAlignment: message.isMe
-                  ? MainAxisAlignment.end
-                  : MainAxisAlignment.start,
-              children: [
-                Text(
-                  message.time,
-                  style: TextStyle(fontSize: 10, color: Colors.grey),
-                ),
-                if (message.isMe) ...[
-                  SizedBox(width: 4.0),
-                  _buildMessageStatus(),
-                ],
-              ],
-            ),
-          ),
           // 未读消息提示
           if (message.isMe) ...[
             GestureDetector(
               onTap: onReadStatusTap,
               child: Padding(
-                padding: EdgeInsets.only(top: 4.0, right: 50.0),
+                padding: const EdgeInsets.only(top: 4, right: 50),
                 child: Text(
-                  '${_getUnreadCount()}人未读', // 显示实际的未读人数
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.blue,
-                    decoration: TextDecoration.underline,
+                  '${_getReadCount()}人已读 · ${_getUnreadCount()}人未读',
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -2334,7 +2335,8 @@ class GroupMessageBubble extends StatelessWidget {
 
   // 构建文本气泡
   Widget _buildTextBubble(BuildContext context) {
-    final bubbleColor = message.isMe ? Colors.blue[100]! : Colors.white;
+    final bubbleColor = message.isMe ? AppColors.primary : Colors.white;
+    final textColor = message.isMe ? Colors.white : AppColors.textPrimary;
     final borderRadius = BorderRadius.only(
       topLeft: Radius.circular(16),
       topRight: Radius.circular(16),
@@ -2346,7 +2348,7 @@ class GroupMessageBubble extends StatelessWidget {
         quote: message.quote!,
         text: message.content,
         bubbleColor: bubbleColor,
-        textColor: Colors.black,
+        textColor: textColor,
         borderRadius: borderRadius,
         maxWidth: MediaQuery.of(context).size.width * 0.6,
       );
@@ -2355,22 +2357,21 @@ class GroupMessageBubble extends StatelessWidget {
       constraints: BoxConstraints(
         maxWidth: MediaQuery.of(context).size.width * 0.6,
       ),
-      padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
       decoration: BoxDecoration(
         color: bubbleColor,
         borderRadius: borderRadius,
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            spreadRadius: 1,
-            blurRadius: 2,
-            offset: Offset(0, 1),
+            color: Color(0x10000000),
+            blurRadius: 5,
+            offset: Offset(0, 2),
           ),
         ],
       ),
       child: Text(
         message.content,
-        style: TextStyle(color: message.isMe ? Colors.black : Colors.black),
+        style: TextStyle(color: textColor, fontSize: 15.5, height: 1.35),
       ),
     );
   }
@@ -2389,7 +2390,7 @@ class GroupMessageBubble extends StatelessWidget {
           maxHeight: 200,
         ),
         decoration: BoxDecoration(
-          color: message.isMe ? Colors.blue[100] : Colors.white,
+          color: message.isMe ? AppColors.primary : Colors.white,
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(16),
             topRight: Radius.circular(16),
@@ -2398,15 +2399,15 @@ class GroupMessageBubble extends StatelessWidget {
                 ? Radius.circular(4)
                 : Radius.circular(16),
           ),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              spreadRadius: 1,
-              blurRadius: 2,
-              offset: Offset(0, 1),
+              color: Color(0x10000000),
+              blurRadius: 5,
+              offset: Offset(0, 2),
             ),
           ],
         ),
+        clipBehavior: Clip.antiAlias,
         child: CachedNetworkImage(
           cacheManager: AppImageCache.manager,
           imageUrl: imageUrl,
