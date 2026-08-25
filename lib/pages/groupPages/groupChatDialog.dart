@@ -88,13 +88,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   int? _currentMemberCount; // 当前群成员人数，未加载完成前不显示
   bool _isHandlingHistoryDeletion = false;
 
-  String get _currentGroupTitle {
-    final memberCount = _currentMemberCount;
-    return memberCount == null
-        ? _currentGroupName
-        : '$_currentGroupName($memberCount)';
-  }
-
   @override
   void initState() {
     super.initState();
@@ -1319,15 +1312,35 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
+        titleSpacing: 0,
         leading: AppBackButton(
           onPressed: () {
             Navigator.pop(context);
           },
         ),
-        title: Center(
-          child: Text(
-            _currentGroupTitle,
-            style: TextStyle(color: Colors.black, fontSize: 16),
+        title: Text.rich(
+          TextSpan(
+            text: _currentGroupName,
+            children: [
+              if (_currentMemberCount != null)
+                TextSpan(
+                  text: '(${_currentMemberCount!})',
+                  style: const TextStyle(
+                    color: Color(0xFF60646B),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF17191C),
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.1,
           ),
         ),
         backgroundColor: chatChromeBackgroundColor,
@@ -1913,7 +1926,11 @@ class GroupMessageBubble extends StatelessWidget {
     required this.onQuote,
   });
 
-  Future<void> _showMessageActions(BuildContext context, Offset anchor) async {
+  Future<void> _showMessageActions(
+    BuildContext context,
+    Offset anchor, {
+    Rect? targetRect,
+  }) async {
     final actions = <MessageActionItem>[
       if (message.messageType == MessageType.text)
         const MessageActionItem(
@@ -1942,6 +1959,7 @@ class GroupMessageBubble extends StatelessWidget {
     final action = await showMessageActionMenu(
       context: context,
       anchor: anchor,
+      targetRect: targetRect,
       actions: actions,
     );
     if (!context.mounted || action == null) return;
@@ -2210,6 +2228,7 @@ class GroupMessageBubble extends StatelessWidget {
                         : (details) => _showMessageActions(
                             context,
                             details.globalPosition,
+                            targetRect: messageActionTargetRect(context),
                           ),
                     child: switch (message.messageType) {
                       MessageType.text => _buildTextBubble(context),

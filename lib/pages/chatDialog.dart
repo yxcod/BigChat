@@ -1479,7 +1479,11 @@ class MessageBubble extends StatelessWidget {
     required this.onQuote,
   });
 
-  Future<void> _showMessageActions(BuildContext context, Offset anchor) async {
+  Future<void> _showMessageActions(
+    BuildContext context,
+    Offset anchor, {
+    Rect? targetRect,
+  }) async {
     final actions = <MessageActionItem>[
       if (message.messageType == MessageType.text)
         const MessageActionItem(
@@ -1508,6 +1512,7 @@ class MessageBubble extends StatelessWidget {
     final action = await showMessageActionMenu(
       context: context,
       anchor: anchor,
+      targetRect: targetRect,
       actions: actions,
     );
     if (!context.mounted || action == null) return;
@@ -2114,6 +2119,7 @@ class MessageBubble extends StatelessWidget {
                       : (details) => _showMessageActions(
                           context,
                           details.globalPosition,
+                          targetRect: messageActionTargetRect(context),
                         ),
                   child: message.messageType == MessageType.video
                       ? Padding(

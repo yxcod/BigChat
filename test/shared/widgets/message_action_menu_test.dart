@@ -16,7 +16,8 @@ void main() {
                 onPressed: () async {
                   selected = await showMessageActionMenu(
                     context: context,
-                    anchor: const Offset(180, 400),
+                    anchor: const Offset(180, 385),
+                    targetRect: const Rect.fromLTWH(120, 360, 120, 50),
                     actions: const [
                       MessageActionItem(
                         type: MessageActionType.delete,
@@ -43,6 +44,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('删除'), findsOneWidget);
     expect(find.text('引用'), findsOneWidget);
+    final menuFinder = find.byKey(const ValueKey('message_action_menu'));
+    expect(tester.getSize(menuFinder).width, lessThan(200));
+    expect(tester.getBottomLeft(menuFinder).dy, lessThanOrEqualTo(360));
 
     await tester.tap(find.byKey(const ValueKey('message_action_quote')));
     await tester.pumpAndSettle();

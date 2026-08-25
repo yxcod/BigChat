@@ -292,10 +292,11 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
     }
   }
 
-  Future<void> _showVoiceActions(Offset anchor) async {
+  Future<void> _showVoiceActions(Offset anchor, {Rect? targetRect}) async {
     final action = await showMessageActionMenu(
       context: context,
       anchor: anchor,
+      targetRect: targetRect,
       actions: [
         const MessageActionItem(
           type: MessageActionType.speaker,
@@ -375,7 +376,10 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
         : const Color(0xFF333333);
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onLongPressStart: (details) => _showVoiceActions(details.globalPosition),
+      onLongPressStart: (details) => _showVoiceActions(
+        details.globalPosition,
+        targetRect: messageActionTargetRect(context),
+      ),
       child: Column(
         crossAxisAlignment: widget.isMe
             ? CrossAxisAlignment.end
@@ -475,29 +479,6 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
                     ),
                   ],
                 ),
-              ),
-            ),
-          ),
-          SizedBox(
-            height: 28,
-            child: TextButton.icon(
-              key: const ValueKey('voice_transcription_button'),
-              onPressed: _transcribing ? null : _toggleTranscription,
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor: const Color(0xFF3483C5),
-              ),
-              icon: _transcribing
-                  ? const SizedBox.square(
-                      dimension: 12,
-                      child: CircularProgressIndicator(strokeWidth: 1.5),
-                    )
-                  : const Icon(Icons.text_snippet_outlined, size: 14),
-              label: Text(
-                _transcribing ? '转换中' : (_transcriptVisible ? '收起文字' : '转文字'),
-                style: const TextStyle(fontSize: 12),
               ),
             ),
           ),
