@@ -62,6 +62,19 @@ void main() {
     expect(find.text(userAgreementContent), findsOneWidget);
     expect(find.text('隐私政策'), findsNothing);
   });
+
+  testWidgets('点击左侧忘记密码按钮直接进入找回密码页面', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: const BigchatLoginPage()),
+    );
+
+    await tester.tap(find.byKey(const Key('login_forgot_password_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('找回密码'), findsOneWidget);
+    expect(find.byKey(const Key('forgot_password_form_card')), findsOneWidget);
+    expect(find.text('确认修改'), findsOneWidget);
+  });
 }
 
 Finder _fieldInside(Key key) {

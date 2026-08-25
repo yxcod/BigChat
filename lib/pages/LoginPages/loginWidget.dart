@@ -9,6 +9,7 @@ import '../../utils/WebSocketManager.dart';
 import '../../utils/gloabl.dart';
 import '../../utils/http.dart';
 import '../../utils/storageUtil.dart';
+import 'forgot_password_page.dart';
 
 typedef LoginHandler =
     Future<dynamic> Function(String userName, String password);
@@ -217,10 +218,13 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
                           TextButton(
                             key: const Key('login_forgot_password_button'),
                             onPressed: () async {
-                              final changed = await Navigator.pushNamed<bool>(
-                                context,
-                                '/forgotPasswordPage',
-                              );
+                              final changed = await Navigator.of(context)
+                                  .push<bool>(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const ForgotPasswordPage(),
+                                    ),
+                                  );
                               if (!context.mounted || changed != true) return;
                               _showMessage('密码修改成功，请使用新密码登录');
                             },
