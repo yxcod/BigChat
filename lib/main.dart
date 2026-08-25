@@ -80,9 +80,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _connectRestoredSession();
     _locationSyncTimer = Timer.periodic(
       const Duration(minutes: 5),
-      (_) => _syncLocationIfPermitted(),
+      (_) => _reconcileLocationPreference(),
     );
-    _syncLocationIfPermitted();
+    _reconcileLocationPreference();
   }
 
   void _connectRestoredSession() {
@@ -259,7 +259,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         _isAppForeground = true;
         _connectionMonitor.setAppActive(true);
         WebSocketManager().reconnectNow();
-        _syncLocationIfPermitted();
+        _reconcileLocationPreference();
         break;
     }
   }
@@ -275,9 +275,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  void _syncLocationIfPermitted() {
+  void _reconcileLocationPreference() {
     if ((GlobalUtil().userName ?? '').isEmpty) return;
-    unawaited(AppLocationService().syncIfPermitted().catchError((_) {}));
+    unawaited(
+      AppLocationService().reconcileServerPreference().catchError((_) {}),
+    );
   }
 
   void _handleConnectionStatusChanged() {

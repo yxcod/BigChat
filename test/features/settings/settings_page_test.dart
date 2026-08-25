@@ -23,6 +23,7 @@ void main() {
       importFile: (ownerId, sourcePath) async => '/app/background.jpg',
     );
     var storedDark = false;
+    final locationPreferenceChanges = <bool>[];
     final themeController = AppThemeController(
       read: () => storedDark,
       write: (value) async {
@@ -37,6 +38,9 @@ void main() {
           repository: repository,
           themeController: themeController,
           pickChatBackground: () async => '/gallery/background.jpg',
+          locationPreferenceHandler: (enabled) async {
+            locationPreferenceChanges.add(enabled);
+          },
         ),
       ),
     );
@@ -50,6 +54,16 @@ void main() {
     expect(find.text('浅色'), findsOneWidget);
     expect(find.text('退出登录'), findsOneWidget);
     expect(find.text('默认'), findsOneWidget);
+    final locationSwitchTile = find.descendant(
+      of: find.byKey(const Key('location_enabled_switch')),
+      matching: find.byType(SwitchListTile),
+    );
+    expect(tester.widget<SwitchListTile>(locationSwitchTile).value, isTrue);
+
+    await tester.tap(find.byKey(const Key('location_enabled_switch')));
+    await tester.pump();
+    expect((await repository.load()).locationEnabled, isFalse);
+    expect(locationPreferenceChanges, [false]);
 
     await tester.tap(find.byKey(const Key('chat_background_settings_entry')));
     await tester.pumpAndSettle();

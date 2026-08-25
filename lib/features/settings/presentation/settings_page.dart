@@ -14,6 +14,7 @@ import 'notification_settings_page.dart';
 import 'theme_settings_page.dart';
 
 typedef ChatBackgroundPicker = Future<String?> Function();
+typedef LocationPreferenceHandler = Future<void> Function(bool enabled);
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -22,12 +23,14 @@ class SettingsPage extends StatefulWidget {
     this.pickChatBackground,
     this.themeController,
     this.logoutHandler,
+    this.locationPreferenceHandler,
   });
 
   final AppSettingsRepository? repository;
   final ChatBackgroundPicker? pickChatBackground;
   final AppThemeController? themeController;
   final Future<void> Function()? logoutHandler;
+  final LocationPreferenceHandler? locationPreferenceHandler;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -78,10 +81,15 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _setLocationEnabled(bool value) async {
     setState(() => _settings = _settings.copyWith(locationEnabled: value));
     await _repository.setLocationEnabled(value);
-    if (!value) {
-      try {
-        await AppLocationService().clearServerLocation();
-      } catch (_) {}
+    try {
+      if (widget.locationPreferenceHandler != null) {
+        await widget.locationPreferenceHandler!(value);
+      } else {
+        await AppLocationService().reconcileServerPreference();
+      }
+    } catch (_) {
+      // The app-level five-minute reconciliation and foreground resume hook
+      // retry this operation when the network becomes available again.
     }
   }
 

@@ -25,15 +25,30 @@ class CurrentPlace {
 }
 
 class AppLocationService {
-  AppLocationService({HttpUtil? httpUtil}) : _http = httpUtil ?? HttpUtil();
+  AppLocationService({
+    HttpUtil? httpUtil,
+    Future<bool> Function()? locationEnabledReader,
+  }) : _http = httpUtil ?? HttpUtil(),
+       _locationEnabledReader = locationEnabledReader;
+
   final HttpUtil _http;
+  final Future<bool> Function()? _locationEnabledReader;
 
   String get _userName => GlobalUtil().userName ?? '';
 
   Future<bool> isEnabledInSettings() async {
+    if (_locationEnabledReader != null) {
+      return _locationEnabledReader();
+    }
     return (await AppSettingsRepository(
       ownerId: _userName,
     ).load()).locationEnabled;
+  }
+
+  Future<void> _requireEnabled() async {
+    if (!await isEnabledInSettings()) {
+      throw const LocationSharingDisabledException();
+    }
   }
 
   /// 静默同步仅在用户已经授予权限时运行，避免应用启动时突然弹出权限请求。
@@ -48,14 +63,25 @@ class AppLocationService {
     await locate(upload: true);
   }
 
+  /// 让服务器保存的坐标与本地总开关保持一致。
+  ///
+  /// 开关关闭时不会读取系统位置，只会清除服务端残留坐标；开启时仍遵循
+  /// 系统定位权限，仅在权限已授予的情况下静默同步。
+  Future<void> reconcileServerPreference() async {
+    if (_userName.isEmpty) return;
+    if (!await isEnabledInSettings()) {
+      await clearServerLocation();
+      return;
+    }
+    await syncIfPermitted();
+  }
+
   Future<CurrentPlace> locate({
     bool upload = true,
     bool resolveAddress = true,
     Duration timeout = const Duration(seconds: 15),
   }) async {
-    if (!await isEnabledInSettings()) {
-      throw Exception('请先在设置中开启位置信息');
-    }
+    await _requireEnabled();
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw Exception('请先开启系统定位服务');
     }
@@ -127,6 +153,10 @@ class AppLocationService {
     CancelToken? cancelToken,
     Duration? timeout,
   }) async {
+    // The switch may be turned off while a GPS lookup is in progress. Check
+    // again at the network boundary so coordinates can never be uploaded
+    // after the user disables location sharing.
+    await _requireEnabled();
     final response = await _http.post(
       '/api/location/update',
       data: {
@@ -160,6 +190,9 @@ class AppLocationService {
       );
       if (cancelToken.isCancelled) throw TimeoutException('距离获取超时');
       await updateServer(place, cancelToken: cancelToken, timeout: timeout);
+      // Guard the distance API separately in case the preference changes
+      // after the coordinate update completes.
+      await _requireEnabled();
       final response = await _http.post(
         '/api/location/distance',
         data: {'userName': _userName, 'peerUserName': peerUserName},
@@ -196,6 +229,13 @@ class AppLocationService {
     if (_userName.isEmpty) return;
     await _http.post('/api/location/clear', data: {'userName': _userName});
   }
+}
+
+class LocationSharingDisabledException implements Exception {
+  const LocationSharingDisabledException();
+
+  @override
+  String toString() => '请先在设置中开启位置信息';
 }
 
 String formatCityRegion(Placemark value) {

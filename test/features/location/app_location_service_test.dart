@@ -3,6 +3,46 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:geocoding/geocoding.dart';
 
 void main() {
+  test('location sharing is enabled by default through app settings', () async {
+    final service = AppLocationService(locationEnabledReader: () async => true);
+
+    expect(await service.isEnabledInSettings(), isTrue);
+  });
+
+  test(
+    'disabled sharing blocks coordinate uploads before network use',
+    () async {
+      final service = AppLocationService(
+        locationEnabledReader: () async => false,
+      );
+      const place = CurrentPlace(
+        latitude: 39.9042,
+        longitude: 116.4074,
+        accuracy: 5,
+        address: '北京市',
+      );
+
+      await expectLater(
+        service.updateServer(place),
+        throwsA(isA<LocationSharingDisabledException>()),
+      );
+    },
+  );
+
+  test(
+    'disabled sharing blocks distance lookup before requesting GPS',
+    () async {
+      final service = AppLocationService(
+        locationEnabledReader: () async => false,
+      );
+
+      await expectLater(
+        service.refreshDistance('bob'),
+        throwsA(isA<LocationSharingDisabledException>()),
+      );
+    },
+  );
+
   test('distance is displayed in exact meters below one kilometer', () {
     expect(formatDistance(0), '0米');
     expect(formatDistance(328), '328米');
