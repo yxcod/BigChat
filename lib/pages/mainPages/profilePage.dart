@@ -1,249 +1,576 @@
-import 'package:flutter/material.dart';
-import '../../utils/gloabl.dart';
-import '../../api/getInfoAPI.dart';
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+
+import '../../api/getInfoAPI.dart';
+import '../../app/theme/app_colors.dart';
 import '../../core/cache/app_image_cache.dart';
+import '../../core/media/video_media.dart';
+import '../../features/moments/data/moments_repository.dart';
+import '../../features/moments/data/server_moments_repository.dart';
+import '../../features/moments/domain/moment.dart';
 import '../../model/userInfoModel.dart';
+import '../../utils/gloabl.dart';
 
 class ProfilePage extends StatefulWidget {
-  ProfilePage({Key? key}) : super(key: key);
+  const ProfilePage({
+    super.key,
+    this.profileLoader = getUserInfoApi,
+    this.momentsRepository,
+    this.initialProfile,
+    this.initialMoments = const [],
+    this.autoLoad = true,
+  });
+
+  final Future<UserInfoModel> Function(String userName) profileLoader;
+  final MomentsRepository? momentsRepository;
+  final UserInfoModel? initialProfile;
+  final List<Moment> initialMoments;
+  final bool autoLoad;
 
   @override
-  _ProfilePageState createState() => _ProfilePageState();
+  State<ProfilePage> createState() => _ProfilePageState();
 }
 
-// 我的页面
 class _ProfilePageState extends State<ProfilePage>
     with AutomaticKeepAliveClientMixin {
-  String signature = "有个性,不签名";
-  String nickName = "默认昵称";
+  late final MomentsRepository _momentsRepository;
+  String signature = '有个性，不签名';
+  String nickName = '默认昵称';
   int gender = 0;
   String region = '';
   Map<String, dynamic> _profileEditInfo = {};
   String _currentAvatarUrl = '';
+  List<Moment> _moments = const [];
+  bool _isLoadingMoments = false;
 
   @override
   bool get wantKeepAlive => true;
 
-  Future<void> _fetchProfileInfo() async {
-    try {
-      final userInfo = await getUserInfoApi(GlobalUtil().userName ?? "");
-      if (mounted) {
-        nickName = userInfo.nickName ?? "默认昵称";
-        signature = userInfo.signature ?? "有个性,不签名";
-        gender = userInfo.gender;
-        region = userInfo.region;
-        _profileEditInfo["nickName"] = nickName;
-        _profileEditInfo["signature"] = signature;
-        _profileEditInfo["gender"] = gender;
-        _profileEditInfo["region"] = region;
-        GlobalUtil().userInfoModel = userInfo;
-        // 更新头像 URL，使用缓存机制
-        String avatarName = userInfo.avatar ?? "head.jpg";
-        String newAvatarUrl = GlobalUtil().getImageURL(
-          GlobalUtil().userName ?? "",
-          avatarName,
-        );
-
-        // 只有当 URL 发生变化时才更新
-        if (newAvatarUrl != _currentAvatarUrl) {
-          _currentAvatarUrl = newAvatarUrl;
-        }
-
-        setState(() {});
-      }
-    } catch (e) {
-      debugPrint('获取个性信息失败: $e');
-    }
-  }
-
   @override
   void initState() {
     super.initState();
-    _fetchProfileInfo();
+    _momentsRepository =
+        widget.momentsRepository ?? ServerMomentsRepository.instance;
+    _moments = List<Moment>.from(widget.initialMoments);
+    _applyProfile(widget.initialProfile ?? GlobalUtil().userInfoModel);
+    if (widget.autoLoad) {
+      _fetchProfileInfo();
+      _fetchMoments();
+    }
+  }
+
+  void _applyProfile(UserInfoModel userInfo) {
+    nickName = userInfo.nickName?.trim().isNotEmpty == true
+        ? userInfo.nickName!.trim()
+        : '默认昵称';
+    signature = userInfo.signature?.trim().isNotEmpty == true
+        ? userInfo.signature!.trim()
+        : '有个性，不签名';
+    gender = userInfo.gender;
+    region = userInfo.region.trim();
+    _profileEditInfo = {
+      'nickName': nickName,
+      'signature': signature,
+      'gender': gender,
+      'region': region,
+    };
+
+    final userName = GlobalUtil().userName ?? userInfo.userName ?? '';
+    final avatarName = userInfo.avatar ?? '';
+    if (userName.isEmpty || avatarName.isEmpty) {
+      _currentAvatarUrl = '';
+      return;
+    }
+    try {
+      _currentAvatarUrl = GlobalUtil().getImageURL(userName, avatarName);
+    } catch (_) {
+      _currentAvatarUrl = '';
+    }
+  }
+
+  Future<void> _fetchProfileInfo() async {
+    final userName = GlobalUtil().userName ?? '';
+    if (userName.isEmpty) return;
+    try {
+      final userInfo = await widget.profileLoader(userName);
+      if (!mounted) return;
+      GlobalUtil().userInfoModel = userInfo;
+      setState(() => _applyProfile(userInfo));
+    } catch (error) {
+      debugPrint('获取个性信息失败: $error');
+    }
+  }
+
+  Future<void> _fetchMoments() async {
+    final userName = GlobalUtil().userName ?? '';
+    if (userName.isEmpty) return;
+    if (mounted) setState(() => _isLoadingMoments = true);
+    try {
+      final moments = await _momentsRepository.fetchOwnMoments(userName);
+      if (!mounted) return;
+      setState(() {
+        _moments = moments;
+        _isLoadingMoments = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoadingMoments = false);
+      debugPrint('加载个人动态预览失败: $error');
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([_fetchProfileInfo(), _fetchMoments()]);
+  }
+
+  Future<void> _editProfile() async {
+    await Navigator.pushNamed(
+      context,
+      '/ProfileEditPage',
+      arguments: _profileEditInfo,
+    );
+    if (!mounted) return;
+    await _fetchProfileInfo();
+  }
+
+  Future<void> _openMySpace() async {
+    await Navigator.pushNamed(context, '/myMoments');
+    if (!mounted) return;
+    await _fetchMoments();
+  }
+
+  List<String> get _previewImages => _moments
+      .expand((moment) => moment.mediaPaths)
+      .where((path) => path.trim().isNotEmpty && !isVideoPath(path))
+      .take(3)
+      .toList(growable: false);
+
+  int get _totalLikes =>
+      _moments.fold<int>(0, (total, moment) => total + moment.likeCount);
+
+  String get _account =>
+      GlobalUtil().userName ?? widget.initialProfile?.userName ?? '';
+
+  String get _profileMeta {
+    final values = <String>[];
+    if (gender != 0) values.add(userGenderLabel(gender));
+    if (region.isNotEmpty) values.add(region);
+    return values.isEmpty ? '资料待完善' : values.join(' · ');
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      // appBar: AppBar(
-      //   title: Text('我的', style: TextStyle(color: Colors.black)),
-      //   backgroundColor: Colors.white,
-      //   elevation: 1,
-      //   actions: [
-      //     IconButton(
-      //       icon: Icon(Icons.settings, color: Colors.black),
-      //       onPressed: () {},
-      //     ),
-      //   ],
-      // ),
-      body: ListView(
+      backgroundColor: AppColors.pageBackground,
+      appBar: AppBar(
+        centerTitle: true,
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          '我的',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: _refreshAll,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+          children: [
+            _buildProfileCard(),
+            const SizedBox(height: 16),
+            _buildMomentsCard(),
+            const SizedBox(height: 16),
+            _buildSettingsCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileCard() {
+    return Container(
+      key: const ValueKey('profile_summary_card'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 个人信息卡片
-          Container(
-            padding: EdgeInsets.all(20),
-            color: Colors.white,
+          _buildAvatar(),
+          const SizedBox(width: 14),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    SizedBox(
-                      width: 80,
-                      height: 80,
-                      child: CircleAvatar(
-                        radius: 40,
-                        backgroundColor: Colors.grey[200],
-                        child: ClipOval(
-                          child: CachedNetworkImage(
-                            cacheManager: AppImageCache.manager,
-                            imageUrl: _currentAvatarUrl.isNotEmpty
-                                ? _currentAvatarUrl
-                                : GlobalUtil().getImageURL(
-                                    GlobalUtil().userName ?? "",
-                                    "head.jpg",
-                                  ),
-                            cacheKey: AppImageCache.cacheKey(
-                              _currentAvatarUrl.isNotEmpty
-                                  ? _currentAvatarUrl
-                                  : GlobalUtil().getImageURL(
-                                      GlobalUtil().userName ?? "",
-                                      "head.jpg",
-                                    ),
-                            ),
-                            fit: BoxFit.cover,
-                            width: 80,
-                            height: 80,
-                            progressIndicatorBuilder:
-                                (context, url, progress) => Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    value: progress.progress,
-                                  ),
-                                ),
-                            errorWidget: (context, url, error) {
-                              debugPrint('头像加载失败：$error');
-                              return Icon(
-                                Icons.person,
-                                color: Colors.grey[400],
-                                size: 40,
-                              );
-                            },
-                          ),
+                    Expanded(
+                      child: Text(
+                        nickName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                    SizedBox(width: 20),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          nickName,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                    const SizedBox(width: 8),
+                    OutlinedButton(
+                      key: const ValueKey('edit_profile_button'),
+                      onPressed: _editProfile,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        padding: const EdgeInsets.symmetric(horizontal: 11),
+                        minimumSize: const Size(0, 34),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(17),
                         ),
-                        SizedBox(height: 5),
-                        Text(
-                          GlobalUtil().userName ?? "123",
-                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                      child: const Text(
+                        '编辑资料',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
                         ),
-                        if (gender != 0 || region.isNotEmpty) ...[
-                          SizedBox(height: 5),
-                          Text(
-                            [
-                              if (gender != 0) userGenderLabel(gender),
-                              if (region.isNotEmpty) region,
-                            ].join(' · '),
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
-                    Spacer(),
                   ],
                 ),
-              ],
-            ),
-          ),
-          SizedBox(height: 10),
-
-          // 功能列表
-          Container(
-            color: Colors.white,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(Icons.edit, color: Colors.green),
-                  title: Text('资料编辑'),
-                  trailing: Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.grey,
-                    size: 16,
+                const SizedBox(height: 6),
+                Text(
+                  '账号：${_account.isEmpty ? '未设置' : _account}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12.5,
                   ),
-                  onTap: () async {
-                    // 导航到编辑页面并等待返回
-                    await Navigator.pushNamed(
-                      context,
-                      '/ProfileEditPage',
-                      arguments: _profileEditInfo,
-                    );
-                    // 返回后重新获取个人信息
-                    _fetchProfileInfo();
-                  },
                 ),
-                const Divider(height: 1, indent: 56, color: Color(0xFFE5E5E5)),
-                ListTile(
-                  leading: Icon(Icons.album, color: Colors.green),
-                  title: Text('我的空间'),
-                  trailing: Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.grey,
-                    size: 16,
+                const SizedBox(height: 6),
+                Text(
+                  _profileMeta,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12.5,
                   ),
-                  onTap: () => Navigator.pushNamed(context, '/myMoments'),
                 ),
-                const Divider(height: 1, indent: 56, color: Color(0xFFE5E5E5)),
-                // ListTile(
-                //   leading: Icon(Icons.card_giftcard, color: Colors.green),
-                //   title: Text('卡包'),
-                //   trailing: Icon(
-                //     Icons.arrow_forward_ios,
-                //     color: Colors.grey,
-                //     size: 16,
-                //   ),
-                //   onTap: () {},
-                // ),
-                ListTile(
-                  leading: Icon(Icons.settings, color: Colors.green),
-                  title: Text('设置'),
-                  trailing: Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.grey,
-                    size: 16,
+                const SizedBox(height: 6),
+                Text(
+                  signature,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12.5,
                   ),
-                  onTap: () => Navigator.pushNamed(context, '/settings'),
-                ),
-                const Divider(height: 1, indent: 56, color: Color(0xFFE5E5E5)),
-                ListTile(
-                  leading: Icon(Icons.help_outline, color: Colors.green),
-                  title: Text('其它'),
-                  trailing: Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.grey,
-                    size: 16,
-                  ),
-                  onTap: () {},
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAvatar() {
+    final fallback = Container(
+      color: const Color(0xFFEAF8F0),
+      alignment: Alignment.center,
+      child: Text(
+        nickName.isEmpty ? '我' : nickName.substring(0, 1),
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontSize: 26,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+    return ClipOval(
+      child: SizedBox(
+        width: 74,
+        height: 74,
+        child: _currentAvatarUrl.isEmpty
+            ? fallback
+            : CachedNetworkImage(
+                cacheManager: AppImageCache.manager,
+                imageUrl: _currentAvatarUrl,
+                cacheKey: AppImageCache.cacheKey(_currentAvatarUrl),
+                fit: BoxFit.cover,
+                placeholder: (_, _) => fallback,
+                errorWidget: (_, _, _) => fallback,
+              ),
+      ),
+    );
+  }
+
+  Widget _buildMomentsCard() {
+    return Material(
+      key: const ValueKey('my_space_card'),
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: _openMySpace,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Color(0xFFEAF8F0),
+                        borderRadius: BorderRadius.all(Radius.circular(11)),
+                      ),
+                      child: Icon(
+                        Icons.auto_awesome_rounded,
+                        color: AppColors.primary,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '我的空间',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          '记录生活中的每个瞬间',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: Color(0xFFA3A6AB),
+                    size: 22,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+              _buildMomentPreview(),
+              const SizedBox(height: 12),
+              Text(
+                '动态 ${_moments.length} · 获赞 $_totalLikes',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMomentPreview() {
+    if (_isLoadingMoments && _moments.isEmpty) {
+      return const SizedBox(
+        height: 88,
+        child: Center(
+          child: CircularProgressIndicator(
+            color: AppColors.primary,
+            strokeWidth: 2,
+          ),
+        ),
+      );
+    }
+    final images = _previewImages;
+    if (images.isEmpty) {
+      return Container(
+        height: 82,
+        decoration: BoxDecoration(
+          color: AppColors.searchBackground,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.photo_outlined, color: Color(0xFFB3B6BA), size: 22),
+            SizedBox(width: 8),
+            Text(
+              '还没有带图片的动态',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+            ),
+          ],
+        ),
+      );
+    }
+    return SizedBox(
+      height: 92,
+      child: Row(
+        children: List.generate(images.length, (index) {
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: index == images.length - 1 ? 0 : 7,
+              ),
+              child: _buildPreviewImage(images[index]),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildPreviewImage(String path) {
+    final fallback = const ColoredBox(
+      color: AppColors.searchBackground,
+      child: Icon(Icons.broken_image_outlined, color: AppColors.textSecondary),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(11),
+      child: path.startsWith('http://') || path.startsWith('https://')
+          ? CachedNetworkImage(
+              cacheManager: AppImageCache.manager,
+              imageUrl: path,
+              cacheKey: AppImageCache.cacheKey(path),
+              fit: BoxFit.cover,
+              errorWidget: (_, _, _) => fallback,
+            )
+          : Image.file(
+              File(path),
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => fallback,
+            ),
+    );
+  }
+
+  Widget _buildSettingsCard() {
+    return Container(
+      key: const ValueKey('profile_settings_card'),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          _buildMenuRow(
+            icon: Icons.settings_outlined,
+            title: '设置',
+            subtitle: '偏好设置与更多',
+            onTap: () => Navigator.pushNamed(context, '/settings'),
+          ),
+          const Divider(
+            height: 1,
+            indent: 66,
+            endIndent: 14,
+            color: AppColors.divider,
+          ),
+          _buildMenuRow(
+            icon: Icons.more_horiz_rounded,
+            title: '其它',
+            subtitle: '帮助与关于',
+            onTap: () {},
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: AppColors.surface,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 66,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF8F0),
+                    borderRadius: BorderRadius.circular(19),
+                  ),
+                  child: Icon(icon, color: AppColors.primary, size: 21),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFFA3A6AB),
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
