@@ -7,6 +7,7 @@ import '../../app/theme/app_theme_context.dart';
 import '../../shared/widgets/user_agreement_dialog.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../utils/gloabl.dart';
+import '../../features/privacy/application/privacy_settings_service.dart';
 import '../../utils/http.dart';
 import '../../utils/storageUtil.dart';
 import 'forgot_password_page.dart';
@@ -106,6 +107,7 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
           userName: phone,
           token: token,
         );
+        await PrivacySettingsService.instance.load(ownerId: phone);
         if (!mounted) return;
         _initializeWebSocket();
         Navigator.pushNamedAndRemoveUntil(

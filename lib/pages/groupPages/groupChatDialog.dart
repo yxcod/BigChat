@@ -49,6 +49,7 @@ import '../../shared/widgets/quoted_message_view.dart';
 import '../../core/media/chat_media_saver.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
+import '../../features/privacy/application/privacy_settings_service.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -65,6 +66,7 @@ class GroupChatDialogPage extends StatefulWidget {
 }
 
 class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
+  PrivacySettingsService get _privacy => PrivacySettingsService.instance;
   String get _conversationKey =>
       GlobalUtil.groupConversationKey(widget.groupId);
   WebSocketManager _wsManager = WebSocketManager();
@@ -106,6 +108,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   @override
   void initState() {
     super.initState();
+    GlobalUtil().privacyMessagesRevision.addListener(_refreshPrivacyMessages);
     _textFieldFocusNode.addListener(_handleComposerFocusChanged);
     GroupRouteRegistry.enter(widget.groupId);
     final globalUtil = GlobalUtil();
@@ -149,6 +152,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       RefreshIntervals.groupFallback,
       (timer) => _checkGroupMembership(),
     );
+  }
+
+  void _refreshPrivacyMessages() {
+    if (mounted) setState(() {});
   }
 
   void _handleComposerFocusChanged() {
@@ -331,6 +338,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   void _initializeOutgoingReadStatus(int msgId) {
+    final privacyMessage = GlobalUtil()
+        .getChatRecords(_conversationKey)
+        .any((message) => message.msgId == msgId && message.isPrivacy);
+    if (privacyMessage) return;
     final currentUserId = GlobalUtil().userName;
     final unreadUserIds = GlobalUtil()
         .getGroupMembers(widget.groupId)
@@ -507,6 +518,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         messageType: MessageType.image,
         status: MessageStatus.sending,
         senderId: globalUtil.userName,
+        isPrivacy: _privacy.enabled,
+        privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
+        privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
       );
 
       // 添加消息到全局聊天记录
@@ -553,6 +567,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       await HttpUtil().uploadImageFile(
         imageName,
         imageFile.path,
+        queryParameters: _privacy.enabled ? {'privacy': '1'} : null,
         cancelToken: cancelToken,
       );
 
@@ -616,6 +631,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         messageType: MessageType.video,
         status: MessageStatus.sending,
         senderId: global.userName,
+        isPrivacy: _privacy.enabled,
+        privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
+        privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
       );
       global.addMessage(_conversationKey, pendingMessage);
       _initializeOutgoingReadStatus(msgId);
@@ -636,6 +654,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       await HttpUtil().uploadVideoFile(
         videoName,
         video.path,
+        privacy: _privacy.enabled,
         cancelToken: cancelToken,
         onSendProgress: (sent, total) {
           if (mounted && total > 0) {
@@ -729,6 +748,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         messageType: MessageType.file,
         status: MessageStatus.sending,
         senderId: owner,
+        isPrivacy: _privacy.enabled,
+        privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
+        privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
       );
       global.addMessage(_conversationKey, pendingMessage);
       _initializeOutgoingReadStatus(msgId);
@@ -748,6 +770,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         storedName,
         path,
         userName: owner,
+        privacy: _privacy.enabled,
         cancelToken: cancelToken,
         onSendProgress: (sent, total) {
           if (!mounted || total <= 0) return;
@@ -836,6 +859,23 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           break;
         case 'groupChatHistoryDeleted':
           unawaited(_handleGroupHistoryDeleted(parsedMessage));
+          break;
+        case 'privacyMessageRead':
+          final msgId = _parseInt(parsedMessage['msgId']);
+          final reader = parsedMessage['reader']?.toString() ?? '';
+          if (msgId > 0 && reader.isNotEmpty) {
+            _updateMessageReadStatus(
+              msgId,
+              reader,
+              DateTime.now().millisecondsSinceEpoch,
+            );
+          }
+          if (mounted) setState(() {});
+          break;
+        case 'privacyMessageDestroy':
+          final msgId = _parseInt(parsedMessage['msgId']);
+          if (msgId > 0) GlobalUtil().destroyPrivacyMessage(msgId);
+          if (mounted) setState(() {});
           break;
         case 'videoCallInvite':
           _handleVideoCallInvite(parsedMessage);
@@ -980,6 +1020,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           senderId: sender,
           timestamp: normalizedTimestamp,
           quote: MessageQuote.fromExtendInfo(messageData['extendInfo']),
+          isPrivacy: messageData['privacyMode'] == true,
+          privacyReadDelaySeconds: _parseInt(
+            messageData['privacyReadDelaySeconds'],
+            fallback: 10,
+          ),
+          privacyUnreadDelaySeconds: _parseInt(
+            messageData['privacyUnreadDelaySeconds'],
+            fallback: 180,
+          ),
         );
 
         debugPrint(
@@ -1178,6 +1227,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   // 发送已读确认
   void _sendReadAck(int msgId, String receiveId, {int clientMsgId = 0}) {
+    final isPrivacy = GlobalUtil()
+        .getChatRecords(_conversationKey)
+        .any((message) => message.msgId == msgId && message.isPrivacy);
     if (_wsManager.isConnected) {
       _wsManager.send({
         'type': 'groupChatCallback',
@@ -1188,6 +1240,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         'sessionId': widget.groupId,
         'status': 'read',
         if (clientMsgId > 0) 'clientMsgId': clientMsgId,
+        if (isPrivacy) 'privacyMode': true,
       });
     }
   }
@@ -1289,6 +1342,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   @override
   void dispose() {
+    GlobalUtil().privacyMessagesRevision.removeListener(
+      _refreshPrivacyMessages,
+    );
     GroupRouteRegistry.leave(widget.groupId);
     _imageUploadCancelToken?.cancel('群聊页面已关闭');
     _videoUploadCancelToken?.cancel('群聊页面已关闭');
@@ -1718,6 +1774,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         audioName,
         recording.path,
         userName: sender,
+        privacy: _privacy.enabled,
         cancelToken: cancelToken,
       );
       final payload = VoiceMessagePayload(
@@ -1725,10 +1782,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         durationMs: recording.durationMs,
         ownerId: sender,
       ).encode();
-      await cacheUploadedVoice(
-        recording.path,
-        global.getAudioURL(sender, audioName),
-      );
+      if (!_privacy.enabled) {
+        await cacheUploadedVoice(
+          recording.path,
+          global.getAudioURL(sender, audioName),
+        );
+      }
       final message = Message(
         msgId: msgId,
         content: payload,
@@ -1739,6 +1798,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         messageType: MessageType.audio,
         status: MessageStatus.sending,
         senderId: sender,
+        isPrivacy: _privacy.enabled,
+        privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
+        privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
       );
       global.addMessage(_conversationKey, message);
       _initializeOutgoingReadStatus(msgId);
@@ -1794,6 +1856,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       status: MessageStatus.sending,
       senderId: globalUtil.userName,
       quote: quote,
+      isPrivacy: _privacy.enabled,
+      privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
+      privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
     );
 
     // 添加消息到全局聊天记录
@@ -1862,6 +1927,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       "receiveType": 2, // 2表示群聊
       'extendInfo': extendInfo ?? '{}',
       'msgStatus': 1, //1 发送成功  3 已读
+      if (_privacy.enabled) ...{
+        'privacyMode': true,
+        'privacyReadDelaySeconds': _privacy.settings.readDestroySeconds,
+        'privacyUnreadDelaySeconds': _privacy.settings.unreadDestroySeconds,
+      },
     };
 
     // 添加调试日志
@@ -2399,30 +2469,41 @@ class GroupMessageBubble extends StatelessWidget {
                       MessageType.video => AppVideoPreview(
                         source:
                             localVideoPath ??
-                            globalUtil.getVideoURL(
-                              videoOwnerFromName(
+                            privacyAwareMediaUrl(
+                              globalUtil.getVideoURL(
+                                videoOwnerFromName(
+                                  message.content,
+                                  fallbackOwner:
+                                      message.senderId ??
+                                      globalUtil.userName ??
+                                      '',
+                                ),
                                 message.content,
-                                fallbackOwner:
-                                    message.senderId ??
-                                    globalUtil.userName ??
-                                    '',
                               ),
-                              message.content,
+                              privacy: message.isPrivacy,
                             ),
                         isLocal: localVideoPath != null,
                         uploadProgress: videoUploadProgress,
                         uploadFailed: videoUploadFailed,
                       ),
                       MessageType.audio => AppVoiceMessage(
-                        source: globalUtil.getAudioURL(
-                          VoiceMessagePayload.parse(message.content).ownerId ??
-                              message.senderId ??
-                              globalUtil.userName ??
-                              '',
-                          VoiceMessagePayload.parse(message.content).audioName,
+                        source: privacyAwareMediaUrl(
+                          globalUtil.getAudioURL(
+                            VoiceMessagePayload.parse(
+                                  message.content,
+                                ).ownerId ??
+                                message.senderId ??
+                                globalUtil.userName ??
+                                '',
+                            VoiceMessagePayload.parse(
+                              message.content,
+                            ).audioName,
+                          ),
+                          privacy: message.isPrivacy,
                         ),
                         payload: VoiceMessagePayload.parse(message.content),
                         isMe: message.isMe,
+                        cacheEnabled: !message.isPrivacy,
                         onDelete: onDelete,
                         onQuote: onQuote,
                       ),
@@ -2434,6 +2515,27 @@ class GroupMessageBubble extends StatelessWidget {
                       _ => _buildImageBubble(context),
                     },
                   ),
+                  if (message.isPrivacy) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.shield_moon_outlined,
+                          size: 12,
+                          color: context.appTextSecondary,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '隐私消息 · 阅后销毁',
+                          style: TextStyle(
+                            color: context.appTextSecondary,
+                            fontSize: 10.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
               // 自己的头像
@@ -2462,7 +2564,7 @@ class GroupMessageBubble extends StatelessWidget {
               child: _buildMessageStatus(),
             ),
           // 未读消息提示
-          if (message.isMe) ...[
+          if (message.isMe && !message.isPrivacy) ...[
             GestureDetector(
               onTap: onReadStatusTap,
               child: Padding(
@@ -2478,6 +2580,17 @@ class GroupMessageBubble extends StatelessWidget {
               ),
             ),
           ],
+          if (message.isMe && message.isPrivacy)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, right: 50),
+              child: Text(
+                '仅投递给当前在线成员',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: context.appTextSecondary,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -2485,7 +2598,15 @@ class GroupMessageBubble extends StatelessWidget {
 
   // 构建文本气泡
   Widget _buildTextBubble(BuildContext context) {
-    final bubbleColor = message.isMe ? AppColors.primary : context.appSurface;
+    final normalBubbleColor = message.isMe
+        ? AppColors.primary
+        : context.appSurface;
+    final bubbleColor = message.isPrivacy
+        ? Color.alphaBlend(
+            Colors.black.withValues(alpha: message.isMe ? .28 : .14),
+            normalBubbleColor,
+          )
+        : normalBubbleColor;
     final textColor = message.isMe ? Colors.white : context.appTextPrimary;
     final borderRadius = BorderRadius.only(
       topLeft: Radius.circular(16),
@@ -2532,7 +2653,9 @@ class GroupMessageBubble extends StatelessWidget {
     return GestureDetector(
       onTap: () => showFullscreenImage(
         context,
-        imageProvider: AppImageCache.provider(imageUrl),
+        imageProvider: message.isPrivacy
+            ? NetworkImage(imageUrl)
+            : AppImageCache.provider(imageUrl),
       ),
       child: Container(
         constraints: BoxConstraints(
@@ -2558,33 +2681,46 @@ class GroupMessageBubble extends StatelessWidget {
           ],
         ),
         clipBehavior: Clip.antiAlias,
-        child: CachedNetworkImage(
-          cacheManager: AppImageCache.manager,
-          imageUrl: imageUrl,
-          cacheKey: AppImageCache.cacheKey(imageUrl),
-          fit: BoxFit.cover,
-          placeholder: (context, url) => Container(
-            width: 150,
-            height: 150,
-            child: Center(child: CircularProgressIndicator()),
-          ),
-          errorWidget: (context, url, error) => Container(
-            width: 150,
-            height: 150,
-            child: Center(child: Icon(Icons.error)),
-          ),
-        ),
+        child: message.isPrivacy
+            ? Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const SizedBox(
+                  width: 150,
+                  height: 150,
+                  child: Center(child: Icon(Icons.error_outline)),
+                ),
+              )
+            : CachedNetworkImage(
+                cacheManager: AppImageCache.manager,
+                imageUrl: imageUrl,
+                cacheKey: AppImageCache.cacheKey(imageUrl),
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  width: 150,
+                  height: 150,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  width: 150,
+                  height: 150,
+                  child: Center(child: Icon(Icons.error)),
+                ),
+              ),
       ),
     );
   }
 
   String _resolveImageUrl() {
-    return AppMediaUrl.resolveMessageImage(
-      content: message.content,
-      senderId: message.senderId,
-      currentUserId: globalUtil.userName ?? '',
-      isMine: message.isMe,
-      buildServerUrl: globalUtil.getImageURL,
+    return privacyAwareMediaUrl(
+      AppMediaUrl.resolveMessageImage(
+        content: message.content,
+        senderId: message.senderId,
+        currentUserId: globalUtil.userName ?? '',
+        isMine: message.isMe,
+        buildServerUrl: globalUtil.getImageURL,
+      ),
+      privacy: message.isPrivacy,
     );
   }
 

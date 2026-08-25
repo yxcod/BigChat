@@ -308,6 +308,7 @@ class HttpUtil {
     String? userName,
     CancelToken? cancelToken,
     ProgressCallback? onSendProgress,
+    bool privacy = false,
   }) async {
     final finalUserName = userName ?? (_globalUtil.userName ?? '');
     if (finalUserName.isEmpty) throw Exception('无法获取当前用户信息');
@@ -319,7 +320,11 @@ class HttpUtil {
     final response = await _dio.post(
       '/api/video/upload',
       data: FormData.fromMap({'file': file}),
-      queryParameters: {'userName': finalUserName, 'videoName': videoName},
+      queryParameters: {
+        'userName': finalUserName,
+        'videoName': videoName,
+        if (privacy) 'privacy': '1',
+      },
       options: Options(
         sendTimeout: const Duration(minutes: 20),
         receiveTimeout: const Duration(minutes: 2),
@@ -338,6 +343,7 @@ class HttpUtil {
     String? userName,
     CancelToken? cancelToken,
     ProgressCallback? onSendProgress,
+    bool privacy = false,
   }) async {
     final finalUserName = userName ?? (_globalUtil.userName ?? '');
     if (finalUserName.isEmpty) throw Exception('无法获取当前用户信息');
@@ -345,7 +351,11 @@ class HttpUtil {
     final response = await _dio.post(
       '/api/file/upload',
       data: FormData.fromMap({'file': file}),
-      queryParameters: {'userName': finalUserName, 'fileName': fileName},
+      queryParameters: {
+        'userName': finalUserName,
+        'fileName': fileName,
+        if (privacy) 'privacy': '1',
+      },
       options: Options(
         sendTimeout: const Duration(minutes: 20),
         receiveTimeout: const Duration(minutes: 2),
@@ -364,6 +374,7 @@ class HttpUtil {
     String? userName,
     CancelToken? cancelToken,
     ProgressCallback? onSendProgress,
+    bool privacy = false,
   }) async {
     final finalUserName = userName ?? (_globalUtil.userName ?? '');
     if (finalUserName.isEmpty) throw Exception('无法获取当前用户信息');
@@ -375,7 +386,11 @@ class HttpUtil {
     final response = await _dio.post(
       '/api/audio/upload',
       data: FormData.fromMap({'file': file}),
-      queryParameters: {'userName': finalUserName, 'audioName': audioName},
+      queryParameters: {
+        'userName': finalUserName,
+        'audioName': audioName,
+        if (privacy) 'privacy': '1',
+      },
       options: Options(
         sendTimeout: const Duration(minutes: 2),
         receiveTimeout: const Duration(minutes: 1),

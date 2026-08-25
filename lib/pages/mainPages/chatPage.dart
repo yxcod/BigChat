@@ -62,6 +62,7 @@ class _ChatpageState extends State<Chatpage> {
   @override
   void initState() {
     super.initState();
+    globalUtil.privacyMessagesRevision.addListener(_refreshPrivacyMessages);
     _chats.addAll(sortChatsByLatest(widget.chatList));
     if (!widget.autoRefresh) return;
     // 延迟到构建完成后执行需要setState的操作
@@ -85,8 +86,13 @@ class _ChatpageState extends State<Chatpage> {
     };
   }
 
+  void _refreshPrivacyMessages() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    globalUtil.privacyMessagesRevision.removeListener(_refreshPrivacyMessages);
     _fallbackRefreshTimer?.cancel();
     _refreshDebounceTimer?.cancel();
     _messageSubscription?.cancel();
@@ -109,6 +115,15 @@ class _ChatpageState extends State<Chatpage> {
 
   void _handleWebSocketMessage(dynamic message) {
     if (message is! Map<String, dynamic>) {
+      return;
+    }
+    if (message['type'] == 'privacyMessageDestroy') {
+      final rawId = message['msgId'];
+      final msgId = rawId is num
+          ? rawId.toInt()
+          : int.tryParse(rawId?.toString() ?? '');
+      if (msgId != null) globalUtil.destroyPrivacyMessage(msgId);
+      if (mounted) setState(() {});
       return;
     }
     final presence = PresenceEvent.tryParse(message);
@@ -268,6 +283,17 @@ class _ChatpageState extends State<Chatpage> {
         status: MessageStatus.sent,
         senderId: event.senderId,
         timestamp: event.timestamp,
+        isPrivacy: event.data['privacyMode'] == true,
+        privacyReadDelaySeconds:
+            int.tryParse(
+              event.data['privacyReadDelaySeconds']?.toString() ?? '',
+            ) ??
+            10,
+        privacyUnreadDelaySeconds:
+            int.tryParse(
+              event.data['privacyUnreadDelaySeconds']?.toString() ?? '',
+            ) ??
+            180,
       ),
     );
     globalUtil.addUnreadMessage(event.senderId, event.messageId);
@@ -305,6 +331,17 @@ class _ChatpageState extends State<Chatpage> {
         status: MessageStatus.sent,
         senderId: event.senderId,
         timestamp: event.timestamp,
+        isPrivacy: event.data['privacyMode'] == true,
+        privacyReadDelaySeconds:
+            int.tryParse(
+              event.data['privacyReadDelaySeconds']?.toString() ?? '',
+            ) ??
+            10,
+        privacyUnreadDelaySeconds:
+            int.tryParse(
+              event.data['privacyUnreadDelaySeconds']?.toString() ?? '',
+            ) ??
+            180,
       ),
     );
     globalUtil.addUnreadMessage(conversationKey, event.messageId);

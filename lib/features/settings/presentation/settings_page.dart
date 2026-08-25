@@ -12,6 +12,8 @@ import '../data/app_settings_repository.dart';
 import '../domain/app_settings.dart';
 import 'notification_settings_page.dart';
 import 'theme_settings_page.dart';
+import '../../privacy/application/privacy_settings_service.dart';
+import '../../privacy/presentation/privacy_settings_page.dart';
 
 typedef ChatBackgroundPicker = Future<String?> Function();
 typedef LocationPreferenceHandler = Future<void> Function(bool enabled);
@@ -74,8 +76,20 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _setPrivacyMode(bool value) async {
+    if (widget.repository == null &&
+        value &&
+        !PrivacySettingsService.instance.settings.hasGesturePassword) {
+      final configured = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(builder: (_) => const SetGesturePasswordPage()),
+      );
+      if (configured != true) return;
+    }
     setState(() => _settings = _settings.copyWith(privacyMode: value));
     await _repository.setPrivacyMode(value);
+    if (widget.repository == null) {
+      await PrivacySettingsService.instance.setEnabled(value);
+    }
   }
 
   Future<void> _setLocationEnabled(bool value) async {
@@ -181,6 +195,22 @@ class _SettingsPageState extends State<SettingsPage> {
                         title: '隐私模式',
                         value: _settings.privacyMode,
                         onChanged: _setPrivacyMode,
+                      ),
+                      Divider(height: 1, indent: 16, color: context.appDivider),
+                      ListTile(
+                        key: const Key('privacy_settings_entry'),
+                        title: const Text('隐私参数设置'),
+                        subtitle: const Text('消息销毁时间与手势密码'),
+                        trailing: Icon(
+                          Icons.chevron_right,
+                          color: context.appTextSecondary,
+                        ),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PrivacySettingsPage(),
+                          ),
+                        ),
                       ),
                       Divider(height: 1, indent: 16, color: context.appDivider),
                       _SettingsSwitchTile(

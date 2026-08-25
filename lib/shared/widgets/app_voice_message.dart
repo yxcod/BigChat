@@ -28,6 +28,7 @@ class AppVoiceMessage extends StatefulWidget {
     this.transcriber,
     this.onDelete,
     this.onQuote,
+    this.cacheEnabled = true,
   });
 
   final String source;
@@ -36,6 +37,7 @@ class AppVoiceMessage extends StatefulWidget {
   final VoiceTranscriber? transcriber;
   final VoidCallback? onDelete;
   final VoidCallback? onQuote;
+  final bool cacheEnabled;
 
   @override
   State<AppVoiceMessage> createState() => _AppVoiceMessageState();
@@ -104,6 +106,7 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   }
 
   Future<void> _preloadCachedSource(String source) async {
+    if (!widget.cacheEnabled) return;
     final cachedPath = await cachedVoicePath(source);
     if (cachedPath == null || !mounted || widget.source != source) return;
     try {
@@ -199,6 +202,11 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   }
 
   Future<void> _loadSource() async {
+    if (!widget.cacheEnabled) {
+      await _player.setUrl(widget.source);
+      _loadedSource = widget.source;
+      return;
+    }
     final cachedPath = await cachedVoicePath(widget.source);
     if (cachedPath != null) {
       await _player.setFilePath(cachedPath);

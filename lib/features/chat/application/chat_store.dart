@@ -24,6 +24,13 @@ class ChatStore {
     _unreadMessages.remove(conversationId);
   }
 
+  void removeUnreadMessage(String conversationId, int messageId) {
+    final ids = _unreadMessages[conversationId];
+    if (ids == null) return;
+    ids.remove(messageId);
+    if (ids.isEmpty) _unreadMessages.remove(conversationId);
+  }
+
   void clearAllUnreadMessages() {
     _unreadMessages.clear();
   }

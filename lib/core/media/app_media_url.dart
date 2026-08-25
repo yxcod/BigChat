@@ -21,3 +21,11 @@ class AppMediaUrl {
     return buildServerUrl(ownerId, content);
   }
 }
+
+String privacyAwareMediaUrl(String url, {required bool privacy}) {
+  if (!privacy || url.isEmpty) return url;
+  final uri = Uri.parse(url);
+  return uri
+      .replace(queryParameters: {...uri.queryParameters, 'privacy': '1'})
+      .toString();
+}

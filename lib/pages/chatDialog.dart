@@ -30,6 +30,7 @@ import '../features/location/domain/distance_retry.dart';
 import '../features/location/presentation/chat_location_draft.dart';
 import '../core/media/video_media.dart';
 import '../core/media/chat_file.dart';
+import '../core/media/app_media_url.dart';
 import '../shared/widgets/app_video_player.dart';
 import '../shared/widgets/chat_file_message.dart';
 import '../shared/widgets/app_voice_message.dart';
@@ -42,6 +43,7 @@ import '../core/media/voice_media.dart';
 import 'videoCallPage.dart';
 import '../app/theme/app_colors.dart';
 import '../app/theme/app_theme_context.dart';
+import '../features/privacy/application/privacy_settings_service.dart';
 
 class ChatDialogPage extends StatefulWidget {
   ChatDialogPage({Key? key}) : super(key: key);
@@ -50,6 +52,18 @@ class ChatDialogPage extends StatefulWidget {
 }
 
 class _ChatDialogPageState extends State<ChatDialogPage> {
+  PrivacySettingsService get _privacy => PrivacySettingsService.instance;
+
+  bool _canSendInCurrentMode() {
+    if (!_privacy.enabled || friendInfo?.isOnline == true) return true;
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('隐私模式下无法向离线用户发送消息')));
+    }
+    return false;
+  }
+
   String? id;
   FriendInfoModel? friendInfo;
   WebSocketManager _wsManager = WebSocketManager();
@@ -89,6 +103,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   @override
   void initState() {
     super.initState();
+    GlobalUtil().privacyMessagesRevision.addListener(_refreshPrivacyMessages);
     _textFieldFocusNode.addListener(_handleComposerFocusChanged);
 
     // 为滚动控制器添加监听器，实现向上滑动加载更多
@@ -108,6 +123,10 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         _loadMoreChatRecords();
       }
     });
+  }
+
+  void _refreshPrivacyMessages() {
+    if (mounted) setState(() {});
   }
 
   void _handleComposerFocusChanged() {
@@ -164,6 +183,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     XFile imageFile,
     CancelToken cancelToken,
   ) async {
+    if (!_canSendInCurrentMode()) return;
     try {
       final globalUtil = GlobalUtil();
       String receiver = friendInfo?.userName ?? '';
@@ -197,6 +217,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         conversationId: conversationId,
         messageType: MessageType.image,
         status: MessageStatus.sending,
+        isPrivacy: _privacy.enabled,
+        privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
+        privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
       );
 
       // 添加消息到全局聊天记录
@@ -252,6 +275,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       await HttpUtil().uploadImageFile(
         imageName,
         imageFile.path,
+        queryParameters: _privacy.enabled ? {'privacy': '1'} : null,
         cancelToken: cancelToken,
       );
 
@@ -294,6 +318,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   Future<void> _pickVideo({ImageSource source = ImageSource.gallery}) async {
+    if (!_canSendInCurrentMode()) return;
     if (_isUploadingVideo || _isUploadingImage) return;
     Message? pendingMessage;
     int? pendingMessageId;
@@ -318,6 +343,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         messageType: MessageType.video,
         status: MessageStatus.sending,
         senderId: global.userName,
+        isPrivacy: _privacy.enabled,
+        privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
+        privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
       );
       global.addMessage(receiver, pendingMessage);
       if (mounted) {
@@ -337,6 +365,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       await HttpUtil().uploadVideoFile(
         videoName,
         video.path,
+        privacy: _privacy.enabled,
         cancelToken: cancelToken,
         onSendProgress: (sent, total) {
           if (mounted && total > 0) {
@@ -390,6 +419,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   Future<void> _pickFile() async {
+    if (!_canSendInCurrentMode()) return;
     if (_isUploadingFile || _isUploadingVideo || _isUploadingImage) return;
     Message? pendingMessage;
     int? pendingMessageId;
@@ -432,6 +462,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         messageType: MessageType.file,
         status: MessageStatus.sending,
         senderId: owner,
+        isPrivacy: _privacy.enabled,
+        privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
+        privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
       );
       global.addMessage(receiver, pendingMessage);
       if (mounted) {
@@ -450,6 +483,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         storedName,
         path,
         userName: owner,
+        privacy: _privacy.enabled,
         cancelToken: cancelToken,
         onSendProgress: (sent, total) {
           if (!mounted || total <= 0) return;
@@ -574,6 +608,17 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
           debugPrint('处理送达确认');
           _handleDeliveryAck(message);
           break;
+        case 'privacyMessageRead':
+          _handleReadAck(message);
+          break;
+        case 'privacyMessageDestroy':
+          final rawId = message['msgId'];
+          final msgId = rawId is num
+              ? rawId.toInt()
+              : int.tryParse(rawId?.toString() ?? '');
+          if (msgId != null) GlobalUtil().destroyPrivacyMessage(msgId);
+          if (mounted) setState(() {});
+          break;
         case 'videoCallAccept':
           // 视频通话接受
           debugPrint('处理视频通话接受');
@@ -654,6 +699,17 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       status: MessageStatus.sent,
       senderId: sender,
       quote: MessageQuote.fromExtendInfo(messageData['extendInfo']),
+      isPrivacy: messageData['privacyMode'] == true,
+      privacyReadDelaySeconds:
+          int.tryParse(
+            messageData['privacyReadDelaySeconds']?.toString() ?? '',
+          ) ??
+          10,
+      privacyUnreadDelaySeconds:
+          int.tryParse(
+            messageData['privacyUnreadDelaySeconds']?.toString() ?? '',
+          ) ??
+          180,
     );
 
     // 无论是否在当前聊天界面，都将消息添加到全局聊天记录中
@@ -765,6 +821,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
   // 发送已读确认
   void _sendReadAck(int msgId) {
+    final isPrivacy = GlobalUtil()
+        .getChatRecords(id ?? '')
+        .any((message) => message.msgId == msgId && message.isPrivacy);
     if (_wsManager.isConnected) {
       _wsManager.send({
         'type': 'chatCallback',
@@ -772,6 +831,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         'receiveId': friendInfo?.userName,
         'sender': GlobalUtil().userName,
         'sessionId': _generateConversationId(),
+        if (isPrivacy) 'privacyMode': true,
       });
     }
   }
@@ -1389,6 +1449,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   Future<void> _handleVoiceRecorded(VoiceRecordingResult recording) async {
+    if (!_canSendInCurrentMode()) return;
     final receiver = friendInfo?.userName ?? id ?? '';
     final sender = GlobalUtil().userName ?? '';
     if (receiver.isEmpty || sender.isEmpty || _isUploadingAudio) return;
@@ -1402,6 +1463,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         audioName,
         recording.path,
         userName: sender,
+        privacy: _privacy.enabled,
         cancelToken: cancelToken,
       );
       final payload = VoiceMessagePayload(
@@ -1409,10 +1471,12 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         durationMs: recording.durationMs,
         ownerId: sender,
       ).encode();
-      await cacheUploadedVoice(
-        recording.path,
-        GlobalUtil().getAudioURL(sender, audioName),
-      );
+      if (!_privacy.enabled) {
+        await cacheUploadedVoice(
+          recording.path,
+          GlobalUtil().getAudioURL(sender, audioName),
+        );
+      }
       final conversationId = _generateConversationId();
       final message = Message(
         msgId: msgId,
@@ -1424,6 +1488,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
         messageType: MessageType.audio,
         status: MessageStatus.sending,
         senderId: sender,
+        isPrivacy: _privacy.enabled,
+        privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
+        privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
       );
       GlobalUtil().addMessage(receiver, message);
       final queued = _sendWebSocketMessage(
@@ -1451,6 +1518,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   }
 
   void _handleSubmitted(String text) {
+    if (text.trim().isEmpty || !_canSendInCurrentMode()) return;
     final quote = _pendingQuote;
     _textController.clear();
 
@@ -1484,6 +1552,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       status: MessageStatus.sending,
       senderId: globalUtil.userName,
       quote: quote,
+      isPrivacy: _privacy.enabled,
+      privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
+      privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
     );
 
     // 添加消息到全局聊天记录
@@ -1526,6 +1597,14 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     required MessageType messageType,
     String? extendInfo,
   }) {
+    if (_privacy.enabled && friendInfo?.isOnline != true) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('隐私模式下无法向离线用户发送消息')));
+      }
+      return false;
+    }
     // 根据消息类型设置msgType
     final msgType = switch (messageType) {
       MessageType.image => 2,
@@ -1549,6 +1628,11 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       "receiveType": 1,
       'extendInfo': extendInfo ?? '{}',
       'msgStatus': 1, //1 发送成功  3 已读
+      if (_privacy.enabled) ...{
+        'privacyMode': true,
+        'privacyReadDelaySeconds': _privacy.settings.readDestroySeconds,
+        'privacyUnreadDelaySeconds': _privacy.settings.unreadDestroySeconds,
+      },
     };
 
     // 发送WebSocket消息
@@ -1576,6 +1660,9 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
   @override
   void dispose() {
+    GlobalUtil().privacyMessagesRevision.removeListener(
+      _refreshPrivacyMessages,
+    );
     _imageUploadCancelToken?.cancel('聊天页面已关闭');
     _videoUploadCancelToken?.cancel('聊天页面已关闭');
     _audioUploadCancelToken?.cancel('聊天页面已关闭');
@@ -2127,10 +2214,13 @@ class MessageBubble extends StatelessWidget {
 
   // 构建图片消息
   String _resolveImageUrl() {
+    late final String url;
     if (message.isMe) {
-      return globalUtil.getImageURL(globalUtil.userName ?? "", message.content);
+      url = globalUtil.getImageURL(globalUtil.userName ?? "", message.content);
+    } else {
+      url = globalUtil.getImageURL(friendInfo?.userName ?? "", message.content);
     }
-    return globalUtil.getImageURL(friendInfo?.userName ?? "", message.content);
+    return privacyAwareMediaUrl(url, privacy: message.isPrivacy);
   }
 
   String _resolveVideoUrl() {
@@ -2141,7 +2231,10 @@ class MessageBubble extends StatelessWidget {
       message.content,
       fallbackOwner: fallbackOwner,
     );
-    return globalUtil.getVideoURL(owner, message.content);
+    return privacyAwareMediaUrl(
+      globalUtil.getVideoURL(owner, message.content),
+      privacy: message.isPrivacy,
+    );
   }
 
   String _resolveAudioUrl() {
@@ -2151,7 +2244,10 @@ class MessageBubble extends StatelessWidget {
         (message.isMe
             ? (globalUtil.userName ?? '')
             : (message.senderId ?? friendInfo?.userName ?? ''));
-    return globalUtil.getAudioURL(owner, payload.audioName);
+    return privacyAwareMediaUrl(
+      globalUtil.getAudioURL(owner, payload.audioName),
+      privacy: message.isPrivacy,
+    );
   }
 
   Widget _buildImageMessage() {
@@ -2167,44 +2263,70 @@ class MessageBubble extends StatelessWidget {
         width: 200.0,
         height: 200.0,
         alignment: Alignment.center,
-        child: CachedNetworkImage(
-          cacheManager: AppImageCache.manager,
-          imageUrl: imageURL,
-          cacheKey: AppImageCache.cacheKey(imageURL),
-          fit: BoxFit.cover,
-          width: 200.0,
-          height: 200.0,
-          progressIndicatorBuilder:
-              (BuildContext context, String url, DownloadProgress? progress) {
-                if (progress == null) {
-                  return SizedBox(width: 200.0, height: 200.0);
-                } else {
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: progress.totalSize != null
-                          ? progress.downloaded / (progress.totalSize ?? 1)
-                          : null,
+        child: message.isPrivacy
+            ? Image.network(
+                imageURL,
+                fit: BoxFit.cover,
+                width: 200,
+                height: 200,
+                errorBuilder: (_, _, _) =>
+                    const Icon(Icons.broken_image_outlined, size: 40),
+              )
+            : CachedNetworkImage(
+                cacheManager: AppImageCache.manager,
+                imageUrl: imageURL,
+                cacheKey: AppImageCache.cacheKey(imageURL),
+                fit: BoxFit.cover,
+                width: 200.0,
+                height: 200.0,
+                progressIndicatorBuilder:
+                    (
+                      BuildContext context,
+                      String url,
+                      DownloadProgress? progress,
+                    ) {
+                      if (progress == null) {
+                        return SizedBox(width: 200.0, height: 200.0);
+                      } else {
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: progress.totalSize != null
+                                ? progress.downloaded /
+                                      (progress.totalSize ?? 1)
+                                : null,
+                          ),
+                        );
+                      }
+                    },
+                errorWidget: (BuildContext context, String url, dynamic error) {
+                  return Container(
+                    width: 200.0,
+                    height: 200.0,
+                    color: Colors.grey[200],
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.broken_image,
+                      color: Colors.grey,
+                      size: 40,
                     ),
                   );
-                }
-              },
-          errorWidget: (BuildContext context, String url, dynamic error) {
-            return Container(
-              width: 200.0,
-              height: 200.0,
-              color: Colors.grey[200],
-              alignment: Alignment.center,
-              child: Icon(Icons.broken_image, color: Colors.grey, size: 40),
-            );
-          },
-        ),
+                },
+              ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = message.isMe ? AppColors.primary : context.appSurface;
+    final normalBubbleColor = message.isMe
+        ? AppColors.primary
+        : context.appSurface;
+    final bubbleColor = message.isPrivacy
+        ? Color.alphaBlend(
+            Colors.black.withValues(alpha: message.isMe ? .28 : .14),
+            normalBubbleColor,
+          )
+        : normalBubbleColor;
     final textColor = message.isMe ? Colors.white : context.appTextPrimary;
     final borderRadius = BorderRadius.only(
       topLeft: const Radius.circular(16),
@@ -2259,6 +2381,7 @@ class MessageBubble extends StatelessWidget {
                           source: _resolveAudioUrl(),
                           payload: VoiceMessagePayload.parse(message.content),
                           isMe: message.isMe,
+                          cacheEnabled: !message.isPrivacy,
                           onDelete: onDelete,
                           onQuote: onQuote,
                         )
@@ -2273,9 +2396,9 @@ class MessageBubble extends StatelessWidget {
                         GestureDetector(
                           onTap: () => showFullscreenImage(
                             context,
-                            imageProvider: AppImageCache.provider(
-                              _resolveImageUrl(),
-                            ),
+                            imageProvider: message.isPrivacy
+                                ? NetworkImage(_resolveImageUrl())
+                                : AppImageCache.provider(_resolveImageUrl()),
                           ),
                           child: Container(
                             margin: const EdgeInsets.symmetric(vertical: 2),
@@ -2324,6 +2447,28 @@ class MessageBubble extends StatelessWidget {
                           ),
                         ),
                 ),
+
+                if (message.isPrivacy) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.shield_moon_outlined,
+                        size: 12,
+                        color: context.appTextSecondary,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        '隐私消息 · 阅后销毁',
+                        style: TextStyle(
+                          color: context.appTextSecondary,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
 
                 if (message.isMe) ...[
                   const SizedBox(height: 4),

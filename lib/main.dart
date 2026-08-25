@@ -14,6 +14,8 @@ import './features/chat/domain/chat_realtime_event.dart';
 import './features/groups/presentation/group_route_registry.dart';
 import './features/location/data/app_location_service.dart';
 import './features/settings/application/app_notification_feedback_service.dart';
+import './features/privacy/application/privacy_settings_service.dart';
+import './features/privacy/presentation/privacy_unlock_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +24,7 @@ Future<void> main() async {
   await AppThemeController.instance.load();
   final hasAuthenticatedSession =
       await StorageUtil.restoreAuthenticatedSession();
+  await PrivacySettingsService.instance.load();
 
   runApp(MyApp(initialRoute: appInitialRoute(hasAuthenticatedSession)));
 }
@@ -61,6 +64,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _isAppForeground = true;
   bool _disconnectionNoticePresented = false;
   final Set<int> _handlingRemovedGroups = {};
+  bool _privacyLockPending = false;
+  bool _privacyLockPresented = false;
 
   @override
   void initState() {
@@ -112,6 +117,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   void _handleGlobalGroupEvent(dynamic rawMessage) {
     if (rawMessage is! Map<String, dynamic>) return;
+    if (rawMessage['type'] == 'privacyMessageDestroy') {
+      final rawId = rawMessage['msgId'];
+      final msgId = rawId is num
+          ? rawId.toInt()
+          : int.tryParse(rawId?.toString() ?? '');
+      if (msgId != null) GlobalUtil().destroyPrivacyMessage(msgId);
+      return;
+    }
+    if (rawMessage['type'] == 'privacyMessageRead') {
+      final rawId = rawMessage['msgId'];
+      final msgId = rawId is num
+          ? rawId.toInt()
+          : int.tryParse(rawId?.toString() ?? '');
+      final rawSeconds = rawMessage['destroyAfterSeconds'];
+      final seconds = rawSeconds is num
+          ? rawSeconds.toInt()
+          : int.tryParse(rawSeconds?.toString() ?? '') ?? 10;
+      if (msgId != null) {
+        GlobalUtil().schedulePrivacyReadDestroy(msgId, seconds);
+      }
+      return;
+    }
     final event = ChatRealtimeEvent.parse(rawMessage);
     unawaited(_handleIncomingMessageNotification(event));
     if (event.type != ChatRealtimeEventType.groupMemberRemoved ||
@@ -260,6 +287,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         _connectionMonitor.setAppActive(true);
         WebSocketManager().reconnectNow();
         _reconcileLocationPreference();
+        if (_privacyLockPending) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            unawaited(_presentPrivacyLock());
+          });
+        }
         break;
     }
   }
@@ -270,8 +302,40 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _connectionNoticeTimer?.cancel();
     _connectionNoticeTimer = null;
     _disconnectionNoticePresented = false;
+    final privacy = PrivacySettingsService.instance.settings;
+    if (privacy.enabled &&
+        privacy.hasGesturePassword &&
+        (GlobalUtil().userName ?? '').isNotEmpty) {
+      _privacyLockPending = true;
+    }
     if (_connectionNoticeStatus != null && mounted) {
       setState(() => _connectionNoticeStatus = null);
+    }
+  }
+
+  Future<void> _presentPrivacyLock() async {
+    if (!_privacyLockPending || _privacyLockPresented || !mounted) return;
+    final navigator = GlobalNavigatorKey.navigatorState;
+    if (navigator == null) return;
+    _privacyLockPresented = true;
+    await navigator.push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => PrivacyUnlockPage(onForceLogout: _forcePrivacyLogout),
+      ),
+    );
+    _privacyLockPending = false;
+    _privacyLockPresented = false;
+  }
+
+  Future<void> _forcePrivacyLogout() async {
+    _privacyLockPending = false;
+    WebSocketManager().disconnect();
+    GlobalUtil().resetSessionState();
+    await StorageUtil.logout();
+    final navigator = GlobalNavigatorKey.navigatorState;
+    if (navigator != null) {
+      navigator.pushNamedAndRemoveUntil('/login', (_) => false);
     }
   }
 

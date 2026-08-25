@@ -158,6 +158,9 @@ class Message {
   final String? senderId;
   final int timestamp;
   final MessageQuote? quote;
+  final bool isPrivacy;
+  final int privacyReadDelaySeconds;
+  final int privacyUnreadDelaySeconds;
 
   Message({
     required this.msgId,
@@ -171,6 +174,9 @@ class Message {
     this.senderId,
     int? timestamp,
     this.quote,
+    this.isPrivacy = false,
+    this.privacyReadDelaySeconds = 10,
+    this.privacyUnreadDelaySeconds = 180,
   }) : timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch;
 
   Message withQuote(MessageQuote value) {
@@ -186,6 +192,9 @@ class Message {
       senderId: senderId,
       timestamp: timestamp,
       quote: value,
+      isPrivacy: isPrivacy,
+      privacyReadDelaySeconds: privacyReadDelaySeconds,
+      privacyUnreadDelaySeconds: privacyUnreadDelaySeconds,
     );
   }
 
@@ -203,6 +212,9 @@ class Message {
       'senderId': senderId,
       'timestamp': timestamp,
       'quote': quote?.toJson(),
+      'isPrivacy': isPrivacy,
+      'privacyReadDelaySeconds': privacyReadDelaySeconds,
+      'privacyUnreadDelaySeconds': privacyUnreadDelaySeconds,
     };
   }
 
@@ -232,6 +244,15 @@ class Message {
       quote: json['quote'] is Map
           ? MessageQuote.fromJson(Map<String, dynamic>.from(json['quote']))
           : null,
+      isPrivacy: JsonValueParser.boolValue(json['isPrivacy']),
+      privacyReadDelaySeconds: JsonValueParser.intValue(
+        json['privacyReadDelaySeconds'],
+        fallback: 10,
+      ),
+      privacyUnreadDelaySeconds: JsonValueParser.intValue(
+        json['privacyUnreadDelaySeconds'],
+        fallback: 180,
+      ),
     );
   }
 }

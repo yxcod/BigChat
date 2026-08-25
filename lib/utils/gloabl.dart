@@ -32,6 +32,8 @@ class GlobalUtil {
   final HiddenMessagesStore _hiddenMessagesStore = HiddenMessagesStore();
   final GroupMemberCache _groupMemberCache = GroupMemberCache();
   final Map<String, Timer> _chatCacheWriteTimers = {};
+  final Map<int, Timer> _privacyMessageTimers = {};
+  final ValueNotifier<int> privacyMessagesRevision = ValueNotifier<int>(0);
 
   static final GlobalUtil _instance = GlobalUtil._internal();
   factory GlobalUtil() {
@@ -78,6 +80,10 @@ class GlobalUtil {
       timer.cancel();
     }
     _chatCacheWriteTimers.clear();
+    for (final timer in _privacyMessageTimers.values) {
+      timer.cancel();
+    }
+    _privacyMessageTimers.clear();
     _chatStore.clearAllMessages();
     _chatStore.clearAllUnreadMessages();
     _groupMemberCache.clear();
@@ -146,7 +152,14 @@ class GlobalUtil {
   void addMessage(String userName, Message message) {
     if (_isMessageHidden(userName, message.msgId)) return;
     if (_chatStore.addMessage(userName, message)) {
-      _scheduleChatCacheWrite(userName);
+      if (message.isPrivacy) {
+        _schedulePrivacyDestroy(
+          message.msgId,
+          Duration(seconds: message.privacyUnreadDelaySeconds),
+        );
+      } else {
+        _scheduleChatCacheWrite(userName);
+      }
     }
   }
 
@@ -214,7 +227,10 @@ class GlobalUtil {
     await _chatLocalCache.save(
       ownerId,
       conversationId,
-      _chatStore.messageSnapshot(conversationId),
+      _chatStore
+          .messageSnapshot(conversationId)
+          .where((message) => !message.isPrivacy)
+          .toList(),
     );
   }
 
@@ -373,7 +389,11 @@ class GlobalUtil {
   // 标记特定消息为已读
   void markMessageAsRead(String userName, int msgId) {
     _chatStore.markMessageAsRead(userName, msgId);
-    _scheduleChatCacheWrite(userName);
+    final message = _chatStore
+        .messages(userName)
+        .where((item) => item.msgId == msgId)
+        .firstOrNull;
+    if (message?.isPrivacy != true) _scheduleChatCacheWrite(userName);
   }
 
   // 标记所有消息为已读
@@ -384,12 +404,48 @@ class GlobalUtil {
 
   // 删除指定消息
   void deleteMessage(String userName, int msgId) {
+    final message = _chatStore
+        .messages(userName)
+        .where((item) => item.msgId == msgId)
+        .firstOrNull;
+    if (message?.isPrivacy == true) {
+      _chatStore.deleteMessage(userName, msgId);
+      return;
+    }
     final ownerId = this.userName ?? '';
     if (ownerId.isNotEmpty) {
       unawaited(_hiddenMessagesStore.hide(ownerId, userName, msgId));
     }
     _chatStore.deleteMessage(userName, msgId);
     _scheduleChatCacheWrite(userName);
+  }
+
+  /// 服务器销毁隐私消息时只改内存，绝不写隐藏记录或聊天缓存。
+  String? destroyPrivacyMessage(int msgId) {
+    _privacyMessageTimers.remove(msgId)?.cancel();
+    final conversationId = _chatStore.conversationIdForMessage(msgId);
+    if (conversationId == null) return null;
+    _chatStore.deleteMessage(conversationId, msgId);
+    _chatStore.removeUnreadMessage(conversationId, msgId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      onUnreadCountChanged?.call(
+        conversationId,
+        _chatStore.unreadCount(conversationId),
+      );
+    });
+    privacyMessagesRevision.value++;
+    return conversationId;
+  }
+
+  void schedulePrivacyReadDestroy(int msgId, int seconds) {
+    _schedulePrivacyDestroy(msgId, Duration(seconds: seconds.clamp(5, 60)));
+  }
+
+  void _schedulePrivacyDestroy(int msgId, Duration delay) {
+    _privacyMessageTimers.remove(msgId)?.cancel();
+    _privacyMessageTimers[msgId] = Timer(delay, () {
+      destroyPrivacyMessage(msgId);
+    });
   }
 
   bool _isMessageHidden(String conversationId, int messageId) {
