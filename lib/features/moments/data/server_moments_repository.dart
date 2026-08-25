@@ -143,6 +143,28 @@ class ServerMomentsRepository implements MomentsRepository {
     return moment;
   }
 
+  @override
+  Future<void> deleteMoment({
+    required String momentId,
+    required String userId,
+  }) async {
+    final envelope = await _apiClient.post('/api/moment/delete', {
+      'momentId': momentId,
+    });
+    final code = _readInt(envelope['code']);
+    if (code != 100) {
+      throw MomentsApiException(
+        envelope['message']?.toString() ?? '删除动态失败',
+        code: code,
+      );
+    }
+    final moments = await _cache.load();
+    moments.removeWhere(
+      (moment) => moment.id == momentId && moment.authorId == userId,
+    );
+    await _cache.save(moments);
+  }
+
   Map<String, dynamic> _requireMapData(Map<String, dynamic> envelope) {
     final code = _readInt(envelope['code']);
     if (code != 100) {

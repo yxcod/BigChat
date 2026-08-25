@@ -143,6 +143,26 @@ void main() {
 
     expect(moments.single.content, '离线动态');
   });
+
+  test('deletes a moment from the server and local cache', () async {
+    final cache = InMemoryMomentsStorage();
+    await cache.save([Moment.fromJson(_momentJson(id: 8, content: '待删除'))]);
+    final repository = ServerMomentsRepository(
+      apiClient: _FakeMomentsApi((path, data) async {
+        expect(path, '/api/moment/delete');
+        expect(data['momentId'], '8');
+        return {
+          'code': 100,
+          'data': {'momentId': 8},
+        };
+      }),
+      cache: cache,
+    );
+
+    await repository.deleteMoment(momentId: '8', userId: 'me');
+
+    expect(await cache.load(), isEmpty);
+  });
 }
 
 Map<String, dynamic> _momentJson({required int id, required String content}) {

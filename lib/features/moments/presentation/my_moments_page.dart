@@ -46,6 +46,7 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
   late final String _displayName;
   late final String _avatarUrl;
   List<Moment> _moments = const [];
+  final Set<String> _deletingMomentIds = {};
   bool _isLoading = true;
 
   @override
@@ -199,6 +200,50 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
     });
   }
 
+  Future<void> _deleteMoment(Moment moment) async {
+    if (_deletingMomentIds.contains(moment.id)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除这条动态？'),
+        content: const Text('动态、点赞、评论和媒体记录都会被删除，此操作无法撤销。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            key: const Key('confirm_delete_moment_button'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _deletingMomentIds.add(moment.id));
+    try {
+      await _repository.deleteMoment(momentId: moment.id, userId: _userId);
+      if (!mounted) return;
+      setState(() {
+        _moments = _moments
+            .where((item) => item.id != moment.id)
+            .toList(growable: false);
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('动态已删除')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('删除动态失败：$error')));
+    } finally {
+      if (mounted) setState(() => _deletingMomentIds.remove(moment.id));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -256,6 +301,10 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
                       moment: moment,
                       onLike: () => _toggleLike(moment),
                       onComment: () => _openCommentComposer(moment),
+                      onDelete: widget.allowPublishing
+                          ? () => _deleteMoment(moment)
+                          : null,
+                      isDeleting: _deletingMomentIds.contains(moment.id),
                     );
                   },
                 ),
@@ -389,11 +438,15 @@ class _MomentCard extends StatelessWidget {
     required this.moment,
     required this.onLike,
     required this.onComment,
+    this.onDelete,
+    this.isDeleting = false,
   });
 
   final Moment moment;
   final VoidCallback onLike;
   final VoidCallback onComment;
+  final VoidCallback? onDelete;
+  final bool isDeleting;
 
   @override
   Widget build(BuildContext context) {
@@ -434,6 +487,36 @@ class _MomentCard extends StatelessWidget {
                   ),
                 ),
                 _VisibilityBadge(visibility: moment.visibility),
+                if (onDelete != null)
+                  PopupMenuButton<String>(
+                    key: ValueKey('moment-menu-${moment.id}'),
+                    enabled: !isDeleting,
+                    tooltip: '动态操作',
+                    icon: isDeleting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.more_horiz, size: 21),
+                    onSelected: (value) {
+                      if (value == 'delete') onDelete?.call();
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline, color: Colors.redAccent),
+                            SizedBox(width: 10),
+                            Text(
+                              '删除动态',
+                              style: TextStyle(color: Colors.redAccent),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
             if (moment.content.isNotEmpty) ...[

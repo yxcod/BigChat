@@ -16,6 +16,8 @@ abstract class MomentsRepository {
     required String displayName,
     required String content,
   });
+
+  Future<void> deleteMoment({required String momentId, required String userId});
 }
 
 /// Frontend-only implementation. Replace this registration with an API-backed
@@ -128,6 +130,21 @@ class LocalMomentsRepository implements MomentsRepository {
     );
     await _storage.save(_moments);
     return updated;
+  }
+
+  @override
+  Future<void> deleteMoment({
+    required String momentId,
+    required String userId,
+  }) async {
+    await _ensureLoaded();
+    final index = _moments.indexWhere((moment) => moment.id == momentId);
+    if (index == -1) throw StateError('动态不存在: $momentId');
+    if (_moments[index].authorId != userId) {
+      throw StateError('只能删除自己发布的动态');
+    }
+    _moments.removeAt(index);
+    await _storage.save(_moments);
   }
 
   Moment _update(String momentId, Moment Function(Moment) transform) {

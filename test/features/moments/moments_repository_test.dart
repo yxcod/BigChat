@@ -36,6 +36,19 @@ void main() {
     expect(liked.likeCount, 1);
     expect(commented.comments.single.content, '记录一下');
   });
+
+  test('repository permanently removes only the author own moment', () async {
+    final repository = LocalMomentsRepository();
+    final moment = await repository.publish(_draft('me', '准备删除'));
+
+    await expectLater(
+      repository.deleteMoment(momentId: moment.id, userId: 'friend'),
+      throwsStateError,
+    );
+    await repository.deleteMoment(momentId: moment.id, userId: 'me');
+
+    expect(await repository.fetchOwnMoments('me'), isEmpty);
+  });
 }
 
 MomentDraft _draft(String authorId, String content) {

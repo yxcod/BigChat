@@ -120,6 +120,34 @@ void main() {
     expect(find.text('朋友的公开记录'), findsOneWidget);
     expect(find.byKey(const Key('moment_publish_fab')), findsNothing);
   });
+
+  testWidgets('owner can confirm and permanently remove a moment', (
+    tester,
+  ) async {
+    final repository = LocalMomentsRepository();
+    final moment = await repository.publish(_draft('me', '需要删除的动态'));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MyMomentsPage(
+          repository: repository,
+          userId: 'me',
+          displayName: '小明',
+          avatarUrl: '',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('moment-menu-${moment.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除动态'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm_delete_moment_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('需要删除的动态'), findsNothing);
+    expect(await repository.fetchOwnMoments('me'), isEmpty);
+  });
 }
 
 MomentDraft _draft(String authorId, String content) {
