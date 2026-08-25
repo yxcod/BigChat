@@ -5,9 +5,14 @@ import 'calculator_decoy_page.dart';
 import 'gesture_pattern_pad.dart';
 
 class PrivacyUnlockPage extends StatefulWidget {
-  const PrivacyUnlockPage({super.key, required this.onForceLogout});
+  const PrivacyUnlockPage({
+    super.key,
+    required this.onForceLogout,
+    this.onUnlocked,
+  });
 
   final Future<void> Function() onForceLogout;
+  final Future<void> Function()? onUnlocked;
 
   @override
   State<PrivacyUnlockPage> createState() => _PrivacyUnlockPageState();
@@ -22,7 +27,11 @@ class _PrivacyUnlockPageState extends State<PrivacyUnlockPage> {
     if (_checking) return;
     _checking = true;
     if (PrivacySettingsService.instance.verifyGesture(pattern)) {
-      if (mounted) Navigator.pop(context, true);
+      if (widget.onUnlocked != null) {
+        await widget.onUnlocked!();
+      } else if (mounted) {
+        Navigator.pop(context, true);
+      }
       return;
     }
     _attempts++;
@@ -37,7 +46,11 @@ class _PrivacyUnlockPageState extends State<PrivacyUnlockPage> {
         MaterialPageRoute(builder: (_) => const CalculatorDecoyPage()),
       );
     }
-    _checking = false;
+    if (mounted) {
+      setState(() => _checking = false);
+    } else {
+      _checking = false;
+    }
   }
 
   @override

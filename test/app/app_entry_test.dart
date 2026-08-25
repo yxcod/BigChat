@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_base/main.dart';
 import 'package:flutter_base/core/network/app_connection_monitor.dart';
+import 'package:flutter_base/features/privacy/presentation/privacy_unlock_page.dart';
 
 void main() {
   testWidgets('应用只创建一个 MaterialApp 并显示登录页', (tester) async {
@@ -15,6 +16,45 @@ void main() {
   test('已恢复的登录会话选择主界面作为启动路由', () {
     expect(appInitialRoute(true), '/mainWidget');
     expect(appInitialRoute(false), '/login');
+  });
+
+  test('冷启动仅在已登录、隐私模式开启且已设置手势时强制锁定', () {
+    expect(
+      appRequiresPrivacyUnlock(
+        hasAuthenticatedSession: true,
+        privacyEnabled: true,
+        hasGesturePassword: true,
+      ),
+      isTrue,
+    );
+    expect(
+      appRequiresPrivacyUnlock(
+        hasAuthenticatedSession: false,
+        privacyEnabled: true,
+        hasGesturePassword: true,
+      ),
+      isFalse,
+    );
+    expect(
+      appRequiresPrivacyUnlock(
+        hasAuthenticatedSession: true,
+        privacyEnabled: false,
+        hasGesturePassword: true,
+      ),
+      isFalse,
+    );
+  });
+
+  testWidgets('冷启动隐私锁在首帧覆盖应用内容', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      const MyApp(initialRoute: '/login', initiallyPrivacyLocked: true),
+    );
+    await tester.pump();
+
+    expect(find.byType(PrivacyUnlockPage), findsOneWidget);
+    expect(find.text('隐私模式已锁定'), findsOneWidget);
   });
 
   testWidgets('断线和恢复时分别显示一次全局提示弹窗', (tester) async {

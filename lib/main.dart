@@ -25,12 +25,28 @@ Future<void> main() async {
   final hasAuthenticatedSession =
       await StorageUtil.restoreAuthenticatedSession();
   await PrivacySettingsService.instance.load();
+  final privacySettings = PrivacySettingsService.instance.settings;
 
-  runApp(MyApp(initialRoute: appInitialRoute(hasAuthenticatedSession)));
+  runApp(
+    MyApp(
+      initialRoute: appInitialRoute(hasAuthenticatedSession),
+      initiallyPrivacyLocked: appRequiresPrivacyUnlock(
+        hasAuthenticatedSession: hasAuthenticatedSession,
+        privacyEnabled: privacySettings.enabled,
+        hasGesturePassword: privacySettings.hasGesturePassword,
+      ),
+    ),
+  );
 }
 
 String appInitialRoute(bool hasAuthenticatedSession) =>
     hasAuthenticatedSession ? '/mainWidget' : '/login';
+
+bool appRequiresPrivacyUnlock({
+  required bool hasAuthenticatedSession,
+  required bool privacyEnabled,
+  required bool hasGesturePassword,
+}) => hasAuthenticatedSession && privacyEnabled && hasGesturePassword;
 
 class MyApp extends StatefulWidget {
   const MyApp({
@@ -40,6 +56,7 @@ class MyApp extends StatefulWidget {
     this.connectionNoticeDelay = const Duration(seconds: 2),
     this.themeController,
     this.notificationFeedbackService,
+    this.initiallyPrivacyLocked = false,
   });
 
   final AppConnectionMonitor? connectionMonitor;
@@ -47,6 +64,7 @@ class MyApp extends StatefulWidget {
   final Duration connectionNoticeDelay;
   final AppThemeController? themeController;
   final AppNotificationFeedbackService? notificationFeedbackService;
+  final bool initiallyPrivacyLocked;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -64,12 +82,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _isAppForeground = true;
   bool _disconnectionNoticePresented = false;
   final Set<int> _handlingRemovedGroups = {};
-  bool _privacyLockPending = false;
-  bool _privacyLockPresented = false;
+  late bool _privacyLockPending;
 
   @override
   void initState() {
     super.initState();
+    _privacyLockPending = widget.initiallyPrivacyLocked;
     _connectionMonitor =
         widget.connectionMonitor ?? AppConnectionMonitor.instance;
     _themeController = widget.themeController ?? AppThemeController.instance;
@@ -287,10 +305,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         _connectionMonitor.setAppActive(true);
         WebSocketManager().reconnectNow();
         _reconcileLocationPreference();
-        if (_privacyLockPending) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            unawaited(_presentPrivacyLock());
-          });
+        if (_privacyLockPending && mounted) {
+          // 根节点锁屏必须参与当前帧构建，不能先展示主界面再跳转锁屏页。
+          setState(() {});
         }
         break;
     }
@@ -313,23 +330,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _presentPrivacyLock() async {
-    if (!_privacyLockPending || _privacyLockPresented || !mounted) return;
-    final navigator = GlobalNavigatorKey.navigatorState;
-    if (navigator == null) return;
-    _privacyLockPresented = true;
-    await navigator.push<bool>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => PrivacyUnlockPage(onForceLogout: _forcePrivacyLogout),
-      ),
-    );
-    _privacyLockPending = false;
-    _privacyLockPresented = false;
+  Future<void> _completePrivacyUnlock() async {
+    if (!mounted) return;
+    setState(() => _privacyLockPending = false);
   }
 
   Future<void> _forcePrivacyLogout() async {
-    _privacyLockPending = false;
+    if (mounted) {
+      setState(() => _privacyLockPending = false);
+    } else {
+      _privacyLockPending = false;
+    }
     WebSocketManager().disconnect();
     GlobalUtil().resetSessionState();
     await StorageUtil.logout();
@@ -443,6 +454,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           children: [
             if (child != null) child,
             if (_connectionNoticeStatus != null) _buildConnectionNotice(),
+            if (_privacyLockPending)
+              Positioned.fill(
+                child: PrivacyUnlockPage(
+                  onUnlocked: _completePrivacyUnlock,
+                  onForceLogout: _forcePrivacyLogout,
+                ),
+              ),
           ],
         ),
       ),
