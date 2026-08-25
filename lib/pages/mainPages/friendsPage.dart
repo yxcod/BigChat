@@ -12,10 +12,18 @@ import '../../core/config/refresh_intervals.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../utils/presence_event.dart';
 import '../../utils/friend_sort_util.dart';
+import '../../app/theme/app_colors.dart';
 
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
-  Friendspage({Key? key, required this.friendListDate}) : super(key: key);
+  final bool autoRefresh;
+
+  const Friendspage({
+    super.key,
+    required this.friendListDate,
+    this.autoRefresh = true,
+  });
+
   @override
   _FriendsPage createState() => _FriendsPage();
 }
@@ -32,8 +40,40 @@ class _FriendsPage extends State<Friendspage>
   int _friendRequestCount = 0;
   List<FriendRequestModel> _pendingRequests = [];
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _friendScrollController = ScrollController();
   String _searchQuery = '';
   bool _isRefreshing = false;
+
+  static const _alphabetIndex = <String>[
+    '↑',
+    '#',
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F',
+    'G',
+    'H',
+    'I',
+    'J',
+    'K',
+    'L',
+    'M',
+    'N',
+    'O',
+    'P',
+    'Q',
+    'R',
+    'S',
+    'T',
+    'U',
+    'V',
+    'W',
+    'X',
+    'Y',
+    'Z',
+  ];
 
   @override
   bool get wantKeepAlive => true;
@@ -41,6 +81,8 @@ class _FriendsPage extends State<Friendspage>
   @override
   void initState() {
     super.initState();
+    friends = List<Friend>.from(widget.friendListDate);
+    if (!widget.autoRefresh) return;
     final webSocketManager = WebSocketManager();
     _presenceSubscription = webSocketManager.addMessageListener(
       _handlePresenceMessage,
@@ -60,6 +102,7 @@ class _FriendsPage extends State<Friendspage>
     _presenceSubscription?.cancel();
     _webSocketStatusSubscription?.cancel();
     _searchController.dispose();
+    _friendScrollController.dispose();
     super.dispose();
   }
 
@@ -283,259 +326,507 @@ class _FriendsPage extends State<Friendspage>
     final hasDistinctNickname =
         friend.nickName.isNotEmpty &&
         friend.nickName.trim() != friend.name.trim();
-    return ListTile(
-      leading: Stack(
-        children: [
-          CircleAvatar(
-            backgroundColor: Colors.grey[200],
-            radius: 20,
-            child: ClipOval(
-              child: friend.avatar != '👤'
-                  ? CachedNetworkImage(
-                      cacheManager: AppImageCache.manager,
-                      imageUrl: friend.avatar,
-                      cacheKey: AppImageCache.cacheKey(friend.avatar),
-                      fit: BoxFit.cover,
-                      width: 40,
-                      height: 40,
-                      errorWidget: (context, url, error) {
-                        return Icon(Icons.person, color: Colors.grey);
-                      },
-                    )
-                  : Icon(Icons.person, color: Colors.grey),
-            ),
-          ),
-          if (friend.isOnline)
-            Positioned(
-              bottom: 0,
-              right: 0,
-              child: Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-              ),
-            ),
-        ],
-      ),
-      title: isSearching
-          ? _buildHighlightedText(
-              friend.name,
-              normalStyle: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.black,
-              ),
-            )
-          : Text(
-              friend.name,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-      subtitle: isSearching && hasDistinctNickname
-          ? Row(
+    return Material(
+      color: AppColors.surface,
+      child: InkWell(
+        onTap: () => _openFriendDetail(friend),
+        child: SizedBox(
+          height: 72,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 16, right: 30),
+            child: Row(
               children: [
-                Text(
-                  '昵称：',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                ),
-                Expanded(
-                  child: _buildHighlightedText(
-                    friend.nickName,
-                    normalStyle: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: const Color(0xFFF0F1F3),
+                      radius: 23,
+                      child: ClipOval(
+                        child: friend.avatar != '👤'
+                            ? CachedNetworkImage(
+                                cacheManager: AppImageCache.manager,
+                                imageUrl: friend.avatar,
+                                cacheKey: AppImageCache.cacheKey(friend.avatar),
+                                fit: BoxFit.cover,
+                                width: 46,
+                                height: 46,
+                                errorWidget: (context, url, error) =>
+                                    const Icon(
+                                      Icons.person_rounded,
+                                      color: AppColors.textSecondary,
+                                    ),
+                              )
+                            : const Icon(
+                                Icons.person_rounded,
+                                color: AppColors.textSecondary,
+                              ),
+                      ),
                     ),
+                    if (friend.isOnline)
+                      Positioned(
+                        bottom: 0,
+                        right: -1,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.surface,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      isSearching
+                          ? _buildHighlightedText(
+                              friend.name,
+                              normalStyle: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
+                          : Text(
+                              friend.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                      const SizedBox(height: 5),
+                      if (isSearching && hasDistinctNickname)
+                        Row(
+                          children: [
+                            const Text(
+                              '昵称：',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                            Expanded(
+                              child: _buildHighlightedText(
+                                friend.nickName,
+                                normalStyle: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Text(
+                          friend.signature.trim().isEmpty
+                              ? '这个人很安静，暂时没有个性签名'
+                              : friend.signature,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ],
-            )
-          : Text(
-              friend.signature,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.grey, fontSize: 12),
             ),
-      onTap: () => _openFriendDetail(friend),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShortcutAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    int badge = 0,
+  }) {
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: SizedBox(
+          height: 92,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(icon, color: AppColors.primary, size: 29),
+                  if (badge > 0)
+                    Positioned(
+                      top: -9,
+                      right: -14,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 20),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: Text(
+                          badge > 99 ? '99+' : '$badge',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShortcutCard() {
+    return Container(
+      key: const ValueKey('friends_shortcut_card'),
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _buildShortcutAction(
+            icon: Icons.person_add_alt_1_rounded,
+            label: '新的朋友',
+            badge: _friendRequestCount,
+            onTap: () {
+              Navigator.pushNamed(
+                context,
+                '/friendAddManagerPage',
+                arguments: _pendingRequests,
+              ).then((_) {
+                if (!mounted) return;
+                setState(() => _friendRequestCount = 0);
+              });
+            },
+          ),
+          const SizedBox(
+            height: 46,
+            child: VerticalDivider(width: 1, color: AppColors.divider),
+          ),
+          _buildShortcutAction(
+            icon: Icons.groups_rounded,
+            label: '我的群聊',
+            onTap: () => Navigator.pushNamed(context, '/groupChatListPage'),
+          ),
+          const SizedBox(
+            height: 46,
+            child: VerticalDivider(width: 1, color: AppColors.divider),
+          ),
+          _buildShortcutAction(
+            icon: Icons.person_add_rounded,
+            label: '添加好友',
+            onTap: _showFindFriend,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _jumpToInitial(String initial) {
+    if (!_friendScrollController.hasClients) return;
+    if (initial == '↑') {
+      _friendScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+      );
+      return;
+    }
+
+    final index = _filteredFriends.indexWhere((friend) {
+      return FriendSortUtil.initial(
+            displayName: friend.name,
+            userName: friend.userName,
+          ) ==
+          initial;
+    });
+    if (index < 0) return;
+    _friendScrollController.animateTo(
+      (index * 73)
+          .toDouble()
+          .clamp(0, _friendScrollController.position.maxScrollExtent)
+          .toDouble(),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Widget _buildAlphabetIndex() {
+    return Positioned(
+      key: const ValueKey('friends_alphabet_index'),
+      top: 8,
+      right: 2,
+      bottom: 8,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: _alphabetIndex.map((letter) {
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _jumpToInitial(letter),
+            child: SizedBox(
+              width: 25,
+              child: Text(
+                letter,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF73777D),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w500,
+                  height: 1,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState({required bool searching}) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: 300,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                searching ? Icons.person_search_rounded : Icons.people_outline,
+                size: 48,
+                color: const Color(0xFFD3D5D9),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                searching ? '没有找到匹配的好友' : '暂时还没有好友',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFriendList() {
+    final searching = _searchQuery.trim().isNotEmpty;
+    if (_filteredFriends.isEmpty) {
+      return RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: _refreshFriends,
+        child: _buildEmptyState(searching: searching),
+      );
+    }
+
+    return Stack(
+      children: [
+        RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: _refreshFriends,
+          child: ListView.separated(
+            controller: _friendScrollController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(right: searching ? 0 : 18),
+            itemCount: _filteredFriends.length,
+            separatorBuilder: (context, index) => const Divider(
+              height: 1,
+              thickness: 0.6,
+              indent: 76,
+              endIndent: 16,
+              color: AppColors.divider,
+            ),
+            itemBuilder: (context, index) => _buildFriendTile(
+              _filteredFriends[index],
+              isSearching: searching,
+            ),
+          ),
+        ),
+        if (!searching) _buildAlphabetIndex(),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final searching = _searchQuery.trim().isNotEmpty;
     return Scaffold(
+      backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        toolbarHeight: 64,
-        titleSpacing: 12,
-        title: AppSearchField(
-          controller: _searchController,
-          query: _searchQuery,
-          hintText: '搜索好友昵称或备注',
-          onChanged: (value) => setState(() => _searchQuery = value),
+        toolbarHeight: 56,
+        centerTitle: true,
+        title: const Text(
+          '好友',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
         ),
         actions: [
-          PopupMenuButton<String>(
-            //key: _popupButtonKey,
-            icon: Icon(Icons.add, color: Colors.black),
-            offset: Offset(0, 50),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: PopupMenuButton<String>(
+              tooltip: '更多操作',
+              offset: const Offset(0, 44),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              icon: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF34373C)),
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: AppColors.textPrimary,
+                  size: 22,
+                ),
+              ),
+              itemBuilder: (context) => const [
+                PopupMenuItem<String>(value: 'findFriend', child: Text('添加好友')),
+                PopupMenuItem<String>(value: 'findGroup', child: Text('创建群聊')),
+              ],
+              onSelected: (value) {
+                if (value == 'findFriend') {
+                  _showFindFriend();
+                } else if (value == 'findGroup') {
+                  _showFindGroup();
+                }
+              },
             ),
-            itemBuilder: (BuildContext context) => [
-              PopupMenuItem<String>(value: 'findFriend', child: Text('添加好友')),
-              PopupMenuItem<String>(value: 'findGroup', child: Text('添加群聊')),
-            ],
-            onSelected: (String value) {
-              if (value == 'findFriend') {
-                _showFindFriend();
-              } else if (value == 'findGroup') {
-                _showFindGroup();
-              }
-            },
           ),
         ],
       ),
       body: Column(
         children: [
-          // 顶部按钮
-          if (_searchQuery.trim().isEmpty)
-            Container(
-              color: Colors.white,
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+            child: AppSearchField(
+              controller: _searchController,
+              query: _searchQuery,
+              hintText: '搜索好友昵称或备注',
+              onChanged: (value) => setState(() => _searchQuery = value),
+              height: 44,
+            ),
+          ),
+          if (!searching) _buildShortcutCard(),
+          Expanded(
+            child: Container(
+              key: const ValueKey('friends_list_surface'),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+              ),
+              clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  ListTile(
-                    leading: Icon(Icons.person_add, color: Colors.green),
-                    title: Text('新的朋友'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 15, 16, 12),
+                    child: Row(
                       children: [
-                        if (_friendRequestCount > 0)
-                          Container(
-                            margin: EdgeInsets.only(right: 8),
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              '$_friendRequestCount',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                        const Text(
+                          '好友',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
                           ),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          color: Colors.grey,
-                          size: 16,
                         ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${_filteredFriends.length}',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (!searching)
+                          const Row(
+                            children: [
+                              Icon(
+                                Icons.circle,
+                                size: 7,
+                                color: AppColors.primary,
+                              ),
+                              SizedBox(width: 5),
+                              Text(
+                                '在线优先',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
                       ],
                     ),
-                    onTap: () {
-                      // 进入好友验证页面
-                      Navigator.pushNamed(
-                        context,
-                        '/friendAddManagerPage',
-                        arguments: _pendingRequests,
-                      ).then((_) {
-                        // 返回后只清除红点提示，不清除好友申请数据
-                        setState(() {
-                          _friendRequestCount = 0;
-                        });
-                      });
-                    },
                   ),
-                  Divider(height: 1, color: Colors.grey[200]),
-                  ListTile(
-                    leading: Icon(Icons.group, color: Colors.green),
-                    title: Text('我的群聊'),
-                    trailing: Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.grey,
-                      size: 16,
-                    ),
-                    onTap: () {
-                      Navigator.pushNamed(context, '/groupChatListPage');
-                    },
-                  ),
+                  const Divider(height: 1, color: AppColors.divider),
+                  Expanded(child: _buildFriendList()),
                 ],
               ),
             ),
-          if (_searchQuery.trim().isEmpty) SizedBox(height: 10),
-
-          // 好友列表
-          Expanded(
-            child: _filteredFriends.isEmpty && _searchQuery.trim().isNotEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.person_search,
-                          size: 52,
-                          color: Colors.grey[300],
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          '没有找到匹配的好友',
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      ],
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _refreshFriends,
-                    child: ListView.builder(
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      itemCount:
-                          _filteredFriends.length +
-                          (_searchQuery.trim().isNotEmpty ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (_searchQuery.trim().isNotEmpty && index == 0) {
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                            child: Text(
-                              '好友（${_filteredFriends.length}）',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
-                            ),
-                          );
-                        }
-                        final friendIndex =
-                            index - (_searchQuery.trim().isNotEmpty ? 1 : 0);
-                        final friend = _filteredFriends[friendIndex];
-                        final item = _buildFriendTile(
-                          friend,
-                          isSearching: _searchQuery.trim().isNotEmpty,
-                        );
-
-                        if (friendIndex < _filteredFriends.length - 1) {
-                          return Column(
-                            children: [
-                              item,
-                              Divider(
-                                height: 1,
-                                color: Colors.grey[300],
-                                indent: 70,
-                              ),
-                            ],
-                          );
-                        }
-                        return item;
-                      },
-                    ),
-                  ),
           ),
         ],
       ),

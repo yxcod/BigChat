@@ -43,4 +43,10 @@ void main() {
 
     expect(friends.map((friend) => friend.userName), ['alpha', 'beta']);
   });
+
+  test('好友索引兼容中文拼音、英文和无法识别的名称', () {
+    expect(FriendSortUtil.initial(displayName: '张三', userName: 'zhang'), 'Z');
+    expect(FriendSortUtil.initial(displayName: '', userName: 'alice'), 'A');
+    expect(FriendSortUtil.initial(displayName: '🙂', userName: 'emoji'), '#');
+  });
 }

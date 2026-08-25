@@ -3,6 +3,14 @@ import 'package:pinyin/pinyin.dart';
 class FriendSortUtil {
   const FriendSortUtil._();
 
+  static String initial({
+    required String displayName,
+    required String userName,
+  }) {
+    final initial = _sortKey(displayName, userName).initial;
+    return RegExp(r'[A-Z]').hasMatch(initial) ? initial : '#';
+  }
+
   static int compare({
     required bool leftOnline,
     required String leftDisplayName,
