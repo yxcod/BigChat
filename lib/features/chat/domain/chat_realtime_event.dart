@@ -9,6 +9,7 @@ enum ChatRealtimeEventType {
   groupHistoryDeleted,
   groupMemberRemoved,
   groupMemberRoleUpdated,
+  friendRequestUpdated,
   readReceipt,
   other,
 }
@@ -32,6 +33,7 @@ class ChatRealtimeEvent {
       'groupChatHistoryDeleted' => ChatRealtimeEventType.groupHistoryDeleted,
       'groupMemberRemoved' => ChatRealtimeEventType.groupMemberRemoved,
       'groupMemberRoleUpdated' => ChatRealtimeEventType.groupMemberRoleUpdated,
+      'friendRequestUpdated' => ChatRealtimeEventType.friendRequestUpdated,
       'read_ack' ||
       'chatCallback' ||
       'groupChatCallback' => ChatRealtimeEventType.readReceipt,
@@ -51,7 +53,8 @@ class ChatRealtimeEvent {
     data['groupId'] ?? data['sessionId'] ?? data['receiveId'],
   );
   int get code => JsonValueParser.intValue(data['code']);
-  String get senderId => JsonValueParser.stringValue(data['sendUserId']);
+  String get senderId =>
+      JsonValueParser.stringValue(data['sendUserId'] ?? data['fromUserId']);
   String get content => JsonValueParser.stringValue(data['msgContent']);
   String get conversationId => JsonValueParser.stringValue(data['sessionId']);
   String get deliveryStatus => JsonValueParser.stringValue(data['status']);

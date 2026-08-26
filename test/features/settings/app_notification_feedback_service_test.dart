@@ -1,9 +1,14 @@
 import 'package:flutter_base/features/chat/domain/chat_realtime_event.dart';
 import 'package:flutter_base/features/settings/application/app_notification_feedback_service.dart';
 import 'package:flutter_base/features/settings/domain/app_settings.dart';
+import 'package:flutter_base/utils/gloabl.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
+
   test(
     'incoming message follows vibration sound and banner settings',
     () async {
@@ -96,5 +101,35 @@ void main() {
     expect(notice, isNull);
     expect(vibrationCount, 0);
     expect(soundCount, 0);
+  });
+
+  test('incoming friend request follows notification settings', () async {
+    GlobalUtil().userName = 'receiver_100';
+    var vibrationCount = 0;
+    var soundCount = 0;
+    final service = AppNotificationFeedbackService(
+      loadSettings: () async => const AppSettings(
+        vibrationEnabled: true,
+        bannerEnabled: true,
+        messageSoundEnabled: true,
+      ),
+      vibrate: () async => vibrationCount++,
+      playSound: (_) async => soundCount++,
+    );
+    final event = ChatRealtimeEvent.parse({
+      'type': 'friendRequestUpdated',
+      'action': 'created',
+      'fromUserId': 'sender_200',
+      'toUserId': 'receiver_100',
+      'fromNickName': '测试用户',
+      'applyMsg': '我是新同学',
+    });
+
+    final notice = await service.handle(event, appIsForeground: true);
+
+    expect(notice?.title, '新的好友申请');
+    expect(notice?.body, '测试用户：我是新同学');
+    expect(vibrationCount, 1);
+    expect(soundCount, 1);
   });
 }

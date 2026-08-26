@@ -17,6 +17,7 @@ import './features/settings/application/app_notification_feedback_service.dart';
 import './features/privacy/application/privacy_settings_service.dart';
 import './features/privacy/presentation/privacy_unlock_page.dart';
 import './features/groups/application/group_notification_settings_service.dart';
+import './model/friendRequestModel.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -200,7 +201,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             behavior: HitTestBehavior.opaque,
             onTap: () {
               messenger.hideCurrentMaterialBanner();
-              if (notice.event.type == ChatRealtimeEventType.groupMessage) {
+              if (notice.event.type ==
+                  ChatRealtimeEventType.friendRequestUpdated) {
+                navigator.pushNamed(
+                  '/friendAddManagerPage',
+                  arguments: const <FriendRequestModel>[],
+                );
+              } else if (notice.event.type ==
+                  ChatRealtimeEventType.groupMessage) {
                 navigator.pushNamed(
                   '/groupChatDialog',
                   arguments: {

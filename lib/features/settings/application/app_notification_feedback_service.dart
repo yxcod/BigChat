@@ -53,8 +53,9 @@ class AppNotificationFeedbackService {
     bool conversationIsActive = false,
   }) async {
     if (!appIsForeground ||
-        conversationIsActive ||
-        !_isIncomingMessage(event)) {
+        (conversationIsActive &&
+            event.type != ChatRealtimeEventType.friendRequestUpdated) ||
+        !_isIncomingNotification(event)) {
       return null;
     }
     if (event.type == ChatRealtimeEventType.groupMessage &&
@@ -80,12 +81,17 @@ class AppNotificationFeedbackService {
     return AppSettingsRepository(ownerId: GlobalUtil().userName ?? '').load();
   }
 
-  bool _isIncomingMessage(ChatRealtimeEvent event) {
+  bool _isIncomingNotification(ChatRealtimeEvent event) {
+    final currentUser = GlobalUtil().userName?.trim() ?? '';
+    if (event.type == ChatRealtimeEventType.friendRequestUpdated) {
+      return event.data['action'] == 'created' &&
+          event.data['toUserId']?.toString() == currentUser &&
+          event.senderId.isNotEmpty;
+    }
     if (event.type != ChatRealtimeEventType.privateMessage &&
         event.type != ChatRealtimeEventType.groupMessage) {
       return false;
     }
-    final currentUser = GlobalUtil().userName?.trim() ?? '';
     return event.senderId.isNotEmpty && event.senderId != currentUser;
   }
 
@@ -94,12 +100,21 @@ class AppNotificationFeedbackService {
     final displayName = (friend.nickName ?? '').trim().isNotEmpty
         ? friend.nickName!.trim()
         : event.senderId;
+    if (event.type == ChatRealtimeEventType.friendRequestUpdated) {
+      return '新的好友申请';
+    }
     return event.type == ChatRealtimeEventType.groupMessage
         ? '群聊消息 · $displayName'
         : displayName;
   }
 
   String _previewFor(ChatRealtimeEvent event) {
+    if (event.type == ChatRealtimeEventType.friendRequestUpdated) {
+      final nickname = event.data['fromNickName']?.toString().trim() ?? '';
+      final message = event.data['applyMsg']?.toString().trim() ?? '';
+      final prefix = nickname.isEmpty ? event.senderId : nickname;
+      return message.isEmpty ? '$prefix 请求添加你为好友' : '$prefix：$message';
+    }
     final preview = switch (event.messageType) {
       2 => '[图片]',
       3 => '[语音]',

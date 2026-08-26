@@ -298,12 +298,14 @@ class _ChatpageState extends State<Chatpage> {
         break;
       case ChatRealtimeEventType.groupMemberRoleUpdated:
         break;
+      case ChatRealtimeEventType.friendRequestUpdated:
       case ChatRealtimeEventType.readReceipt:
       case ChatRealtimeEventType.other:
         break;
     }
 
     if (event.type == ChatRealtimeEventType.other ||
+        event.type == ChatRealtimeEventType.friendRequestUpdated ||
         event.type == ChatRealtimeEventType.groupHistoryDeleted ||
         event.type == ChatRealtimeEventType.groupMemberRemoved) {
       return;

@@ -14,6 +14,7 @@ import '../../utils/presence_event.dart';
 import '../../utils/friend_sort_util.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
@@ -40,6 +41,7 @@ class _FriendsPage extends State<Friendspage>
   final GlobalUtil _globalUtil = GlobalUtil();
   int _friendRequestCount = 0;
   List<FriendRequestModel> _pendingRequests = [];
+  Set<int> _seenIncomingRequestIds = <int>{};
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _friendScrollController = ScrollController();
   String _searchQuery = '';
@@ -94,7 +96,22 @@ class _FriendsPage extends State<Friendspage>
         _refreshFriends();
       }
     });
-    _startPolling();
+    unawaited(_initializeRequestNotices());
+  }
+
+  Future<void> _initializeRequestNotices() async {
+    final userName = _globalUtil.userName?.trim() ?? '';
+    if (userName.isNotEmpty) {
+      final preferences = await SharedPreferences.getInstance();
+      _seenIncomingRequestIds =
+          preferences
+              .getStringList('seen_friend_request_ids_$userName')
+              ?.map(int.tryParse)
+              .whereType<int>()
+              .toSet() ??
+          <int>{};
+    }
+    if (mounted) _startPolling();
   }
 
   @override
@@ -108,6 +125,17 @@ class _FriendsPage extends State<Friendspage>
   }
 
   void _handlePresenceMessage(dynamic message) {
+    if (message is Map<String, dynamic> &&
+        message['type'] == 'friendRequestUpdated') {
+      final action = message['action']?.toString();
+      final target = message['toUserId']?.toString();
+      if (action == 'created' && target == _globalUtil.userName) {
+        final requestId = int.tryParse(message['id']?.toString() ?? '');
+        if (requestId != null) _seenIncomingRequestIds.remove(requestId);
+      }
+      unawaited(_refreshFriends());
+      return;
+    }
     final event = PresenceEvent.tryParse(message);
     if (event == null || !mounted) return;
 
@@ -156,28 +184,38 @@ class _FriendsPage extends State<Friendspage>
       final requests = await getFriendRequestsApi(userName);
       if (mounted) {
         setState(() {
-          // 将新获取的申请添加到现有列表中，避免覆盖未处理的申请
-          if (requests.isNotEmpty) {
-            // 获取现有申请的ID集合
-            final existingIds = _pendingRequests
-                .map((r) => r.requestId)
-                .toSet();
-
-            // 添加新的、不重复的申请
-            for (var request in requests) {
-              if (!existingIds.contains(request.requestId)) {
-                _pendingRequests.add(request);
-              }
-            }
-          }
-
-          // 红点显示的数量按照最新的网络响应，用于提示未读的申请
-          _friendRequestCount = requests.length;
+          _pendingRequests = requests;
+          _friendRequestCount = requests.where((request) {
+            final id = request.requestId;
+            return request.isIncoming &&
+                request.status == RequestStatus.pending &&
+                id != null &&
+                !_seenIncomingRequestIds.contains(id);
+          }).length;
         });
       }
     } catch (e) {
       debugPrint('获取好友申请列表失败: $e');
     }
+  }
+
+  Future<void> _markIncomingRequestsSeen() async {
+    final ids = _pendingRequests
+        .where(
+          (request) =>
+              request.isIncoming && request.status == RequestStatus.pending,
+        )
+        .map((request) => request.requestId)
+        .whereType<int>();
+    _seenIncomingRequestIds.addAll(ids);
+    if (mounted) setState(() => _friendRequestCount = 0);
+    final userName = _globalUtil.userName?.trim() ?? '';
+    if (userName.isEmpty) return;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setStringList(
+      'seen_friend_request_ids_$userName',
+      _seenIncomingRequestIds.map((id) => id.toString()).toList(),
+    );
   }
 
   Future<void> _fetchFriendList() async {
@@ -536,15 +574,19 @@ class _FriendsPage extends State<Friendspage>
             icon: Icons.person_add_alt_1_rounded,
             label: '新的朋友',
             badge: _friendRequestCount,
-            onTap: () {
-              Navigator.pushNamed(
-                context,
-                '/friendAddManagerPage',
-                arguments: _pendingRequests,
-              ).then((_) {
-                if (!mounted) return;
-                setState(() => _friendRequestCount = 0);
-              });
+            onTap: () async {
+              final navigator = Navigator.of(context);
+              await _markIncomingRequestsSeen();
+              if (!mounted) return;
+              navigator
+                  .pushNamed(
+                    '/friendAddManagerPage',
+                    arguments: _pendingRequests,
+                  )
+                  .then((_) {
+                    if (!mounted) return;
+                    unawaited(_refreshFriends());
+                  });
             },
           ),
           SizedBox(

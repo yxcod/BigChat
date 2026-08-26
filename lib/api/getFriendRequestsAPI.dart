@@ -15,7 +15,10 @@ Future<List<FriendRequestModel>> getFriendRequestsApi(String userName) async {
     final friendRequests = mapData['applyFriendList'] as List<dynamic>;
     return friendRequests
         .map(
-          (item) => FriendRequestModel.fromJSON(item as Map<String, dynamic>),
+          (item) => FriendRequestModel.fromJSON(
+            item as Map<String, dynamic>,
+            currentUserName: userName,
+          ),
         )
         .toList();
   } on DioException catch (e) {
@@ -30,11 +33,16 @@ Future<List<FriendRequestModel>> getFriendRequestsApi(String userName) async {
 Future<Map<String, dynamic>> handleFriendRequestApi(
   int requestId,
   int requestResult,
+  String userName,
 ) async {
   try {
     Response response = await HttpUtil().post(
       '/api/friend/handleRequest',
-      data: {'requestId': requestId, 'requestResult': requestResult},
+      data: {
+        'requestId': requestId,
+        'requestResult': requestResult,
+        'userName': userName,
+      },
     );
     debugPrint('处理好友申请成功：${response.data}');
     return response.data as Map<String, dynamic>;
@@ -113,7 +121,7 @@ Future<List<RecentFriendModel>> getRecentFriendsApi(String userName) async {
 /// currentUserName: 当前用户的userName
 /// targetUserName: 要申请好友的userName
 /// requestMessage: 申请信息
-Future<bool> sendFriendRequestApi(
+Future<FriendRequestModel> sendFriendRequestApi(
   String currentUserName,
   String targetUserName,
   String requestMessage,
@@ -133,7 +141,16 @@ Future<bool> sendFriendRequestApi(
         ? JsonValueParser.intValue(mapData['code'], fallback: -1)
         : null;
     if (code == 100) {
-      return true;
+      final request = mapData['request'];
+      if (request is! Map) {
+        throw Exception('好友申请响应缺少申请信息');
+      }
+      return FriendRequestModel.fromJSON(
+        Map<String, dynamic>.from(request),
+        currentUserName: currentUserName,
+      );
+    } else if (code == 103) {
+      throw Exception('对方已经是你的好友');
     } else if (code == 101) {
       debugPrint('发送好友申请失败：code=101');
       throw Exception('发送好友申请失败');

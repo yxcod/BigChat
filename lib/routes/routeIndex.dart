@@ -58,7 +58,9 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
         builder: (context) => AddFriendRequestPage(targetUser: addUserData),
       );
     case '/friendAddManagerPage':
-      final friendReuqestData = settings.arguments as List<FriendRequestModel>;
+      final friendReuqestData = settings.arguments is List<FriendRequestModel>
+          ? settings.arguments as List<FriendRequestModel>
+          : const <FriendRequestModel>[];
       return MaterialPageRoute(
         builder: (context) =>
             FriendAddManagerPage(initialRequests: friendReuqestData),

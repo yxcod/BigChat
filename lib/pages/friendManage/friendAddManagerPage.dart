@@ -6,6 +6,7 @@ import '../../core/cache/app_image_cache.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
+import '../../utils/WebSocketManager.dart';
 
 class FriendAddManagerPage extends StatefulWidget {
   final List<FriendRequestModel>? initialRequests;
@@ -26,6 +27,8 @@ class FriendAddManagerPage extends StatefulWidget {
 class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
   // 验证申请数据
   List<FriendRequestModel> _pendingRequests = [];
+  WebSocketMessageSubscription? _friendRequestSubscription;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -35,52 +38,48 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     );
     if (widget.initialRequests != null && widget.initialRequests!.isNotEmpty) {
       _pendingRequests = List<FriendRequestModel>.from(widget.initialRequests!);
-
-      if (widget.autoLoad) _sendAllRequestsSeen();
     }
-    if (widget.autoLoad) _loadRecentFriends();
-  }
-
-  // 加载最近好友列表
-  void _loadRecentFriends() {
-    final currentUserName = GlobalUtil().userName;
-    if (currentUserName == null || currentUserName.isEmpty) {
-      debugPrint('获取当前用户信息失败');
-      return;
-    }
-
-    // 调用API获取最近好友列表
-    getRecentFriendsApi(currentUserName)
-        .then((friends) {
-          if (!mounted) return;
-          setState(() {
-            _recentFriends = friends;
-          });
-          debugPrint('成功获取最近好友列表，共${friends.length}位好友');
-        })
-        .catchError((error) {
-          debugPrint('获取最近好友列表失败: $error');
-        });
-  }
-
-  // 当进入页面时，为所有好友申请发送已查看的请求(requestResult=4)
-  void _sendAllRequestsSeen() {
-    for (var request in _pendingRequests) {
-      if (request.requestId != null) {
-        _sendHandleRequest(request.requestId!, 4);
-      }
+    if (widget.autoLoad) {
+      _friendRequestSubscription = WebSocketManager().addMessageListener(
+        _handleRealtimeEvent,
+      );
+      _reload();
     }
   }
 
-  // 封装发送请求的方法
-  void _sendHandleRequest(int requestId, int requestResult) {
-    handleFriendRequestApi(requestId, requestResult)
-        .then((response) {
-          debugPrint('发送处理请求成功: $response');
-        })
-        .catchError((error) {
-          debugPrint('发送处理请求失败: $error');
-        });
+  @override
+  void dispose() {
+    _friendRequestSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _handleRealtimeEvent(dynamic event) {
+    if (event is Map<String, dynamic> &&
+        event['type'] == 'friendRequestUpdated') {
+      _reload();
+    }
+  }
+
+  Future<void> _reload() async {
+    if (_isLoading) return;
+    final currentUserName = GlobalUtil().userName?.trim() ?? '';
+    if (currentUserName.isEmpty) return;
+    _isLoading = true;
+    try {
+      final results = await Future.wait<dynamic>([
+        getFriendRequestsApi(currentUserName),
+        getRecentFriendsApi(currentUserName),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _pendingRequests = results[0] as List<FriendRequestModel>;
+        _recentFriends = results[1] as List<RecentFriendModel>;
+      });
+    } catch (error) {
+      debugPrint('刷新好友申请失败: $error');
+    } finally {
+      _isLoading = false;
+    }
   }
 
   // 最近添加的好友数据
@@ -300,8 +299,10 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                 const SizedBox(height: 5),
                 Text(
                   request.verificationMessage?.trim().isNotEmpty == true
-                      ? request.verificationMessage!
-                      : '申请添加你为好友',
+                      ? '${request.isIncoming ? '' : '我：'}${request.verificationMessage!}'
+                      : request.isIncoming
+                      ? '申请添加你为好友'
+                      : '已发送好友申请',
                   style: TextStyle(
                     color: context.appTextSecondary,
                     fontSize: 13,
@@ -322,51 +323,75 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
             ),
           ),
           const SizedBox(width: 10),
+          _buildRequestAction(request),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequestAction(FriendRequestModel request) {
+    if (!request.canRespond) {
+      final (label, color) = switch (request.status) {
+        RequestStatus.rejected => ('已拒绝', const Color(0xFF9A6B49)),
+        RequestStatus.expired => ('已过期', context.appTextSecondary),
+        RequestStatus.accepted => ('已添加', AppColors.primary),
+        _ => ('待处理', const Color(0xFF8A8E95)),
+      };
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+    return SizedBox(
+      width: 68,
+      child: Column(
+        children: [
           SizedBox(
             width: 68,
-            child: Column(
-              children: [
-                SizedBox(
-                  width: 68,
-                  height: 34,
-                  child: ElevatedButton(
-                    onPressed: () => _handleAccept(request),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text(
-                      '同意',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+            height: 34,
+            child: ElevatedButton(
+              onPressed: () => _handleAccept(request),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: 68,
-                  height: 34,
-                  child: OutlinedButton(
-                    onPressed: () => _handleReject(request),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: context.appTextSecondary,
-                      padding: EdgeInsets.zero,
-                      side: const BorderSide(color: Color(0xFFD4D6DA)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text('忽略', style: TextStyle(fontSize: 13)),
-                  ),
+              ),
+              child: const Text(
+                '同意',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 68,
+            height: 34,
+            child: OutlinedButton(
+              onPressed: () => _handleReject(request),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: context.appTextSecondary,
+                padding: EdgeInsets.zero,
+                side: const BorderSide(color: Color(0xFFD4D6DA)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
-              ],
+              ),
+              child: const Text('忽略', style: TextStyle(fontSize: 13)),
             ),
           ),
         ],
@@ -455,52 +480,54 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     );
   }
 
-  void _handleAccept(FriendRequestModel request) {
-    setState(() {
-      request.status = RequestStatus.accepted;
-      _pendingRequests.remove(request);
-
-      // 添加到最近好友列表
-      _recentFriends.insert(
-        0,
-        RecentFriendModel(
-          userName: request.userName ?? '',
-          nickName: request.nickName ?? '',
-          addTime: DateTime.now().millisecondsSinceEpoch,
+  Future<void> _handleAccept(FriendRequestModel request) async {
+    final requestId = request.requestId;
+    final userName = GlobalUtil().userName?.trim() ?? '';
+    if (requestId == null || userName.isEmpty || !request.canRespond) return;
+    try {
+      final response = await handleFriendRequestApi(requestId, 1, userName);
+      if (response['code'] != 100) throw Exception('申请已失效');
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已同意 ${request.nickName} 的好友申请'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
         ),
       );
-    });
-
-    // 发送同意请求
-    if (request.requestId != null) {
-      _sendHandleRequest(request.requestId!, 1);
+    } catch (error) {
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('处理失败：$error')));
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('已同意 ${request.nickName} 的好友申请'),
-        backgroundColor: Colors.green,
-      ),
-    );
   }
 
-  void _handleReject(FriendRequestModel request) {
-    setState(() {
-      request.status = RequestStatus.rejected;
-      _pendingRequests.remove(request);
-    });
-
-    // 发送拒绝请求
-    if (request.requestId != null) {
-      _sendHandleRequest(request.requestId!, 2);
+  Future<void> _handleReject(FriendRequestModel request) async {
+    final requestId = request.requestId;
+    final userName = GlobalUtil().userName?.trim() ?? '';
+    if (requestId == null || userName.isEmpty || !request.canRespond) return;
+    try {
+      final response = await handleFriendRequestApi(requestId, 2, userName);
+      if (response['code'] != 100) throw Exception('申请已失效');
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已拒绝 ${request.nickName} 的好友申请'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (error) {
+      await _reload();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('处理失败：$error')));
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('已拒绝 ${request.nickName} 的好友申请'),
-        backgroundColor: Colors.orange,
-      ),
-    );
   }
 
   void _showFriendDetail(RecentFriendModel friend) {
