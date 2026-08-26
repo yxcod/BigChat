@@ -96,7 +96,83 @@ class _ChatpageState extends State<Chatpage> {
   }
 
   void _refreshPrivacyMessages() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    // 销毁隐私消息后重新以服务端会话摘要为底，再叠加仍存活的内存消息，
+    // 避免会话列表继续显示已经销毁的隐私内容。
+    if (widget.autoRefresh) {
+      unawaited(fetchConversations());
+    } else {
+      setState(() {});
+    }
+  }
+
+  Message? _latestPrivacyMessage(String conversationKey) {
+    Message? latest;
+    for (final message in globalUtil.getChatRecords(conversationKey)) {
+      if (!message.isPrivacy) continue;
+      if (latest == null ||
+          message.timestamp > latest.timestamp ||
+          (message.timestamp == latest.timestamp &&
+              message.msgId > latest.msgId)) {
+        latest = message;
+      }
+    }
+    return latest;
+  }
+
+  String _conversationTime(int timestamp) {
+    final formatted = GlobalUtil.formatTimestamp(timestamp);
+    return formatted.length >= 16 ? formatted.substring(11, 16) : formatted;
+  }
+
+  String _privacySenderLabel(Chat chat, Message message) {
+    final senderId = message.senderId?.trim() ?? '';
+    if (senderId.isEmpty) return chat.lastSenderName ?? '';
+    if (senderId == globalUtil.userName) return '我';
+    if (chat.isGroup) {
+      final groupId = int.tryParse(chat.userName) ?? 0;
+      for (final member in globalUtil.getGroupMembers(groupId)) {
+        if (member.userId == senderId &&
+            member.groupNickName.trim().isNotEmpty) {
+          return member.groupNickName.trim();
+        }
+      }
+    }
+    final friend = globalUtil.getFriendInfoByUserName(senderId);
+    final remark = friend.remarks?.trim() ?? '';
+    if (remark.isNotEmpty) return remark;
+    final nickname = friend.nickName?.trim() ?? '';
+    return nickname.isNotEmpty ? nickname : senderId;
+  }
+
+  Chat _applyPrivacyConversationPreview(Chat chat) {
+    final conversationKey = chat.isGroup
+        ? GlobalUtil.groupConversationKey(chat.userName)
+        : chat.userName;
+    final message = _latestPrivacyMessage(conversationKey);
+    if (message == null || message.timestamp < chat.updateTime) return chat;
+    return chat.copyWith(
+      lastMessage: messageQuotePreview(message),
+      time: _conversationTime(message.timestamp),
+      updateTime: message.timestamp,
+      lastSenderName: chat.isGroup
+          ? _privacySenderLabel(chat, message)
+          : chat.lastSenderName,
+    );
+  }
+
+  void _showRealtimePrivacyPreview(String conversationKey) {
+    final index = _chats.indexWhere((chat) {
+      final key = chat.isGroup
+          ? GlobalUtil.groupConversationKey(chat.userName)
+          : chat.userName;
+      return key == conversationKey;
+    });
+    if (index < 0 || !mounted) return;
+    setState(() {
+      _chats[index] = _applyPrivacyConversationPreview(_chats[index]);
+      _chats.sort((left, right) => right.updateTime.compareTo(left.updateTime));
+    });
   }
 
   Chat _applyGroupNotificationSetting(Chat chat) {
@@ -331,6 +407,9 @@ class _ChatpageState extends State<Chatpage> {
             180,
       ),
     );
+    if (event.data['privacyMode'] == true) {
+      _showRealtimePrivacyPreview(event.senderId);
+    }
     globalUtil.addUnreadMessage(event.senderId, event.messageId);
   }
 
@@ -379,6 +458,9 @@ class _ChatpageState extends State<Chatpage> {
             180,
       ),
     );
+    if (event.data['privacyMode'] == true) {
+      _showRealtimePrivacyPreview(conversationKey);
+    }
     final muted = _groupNotificationSettings.isMuted(event.groupId);
     if (muted) {
       final index = _chats.indexWhere(
@@ -702,7 +784,7 @@ class _ChatpageState extends State<Chatpage> {
       // 继续处理，不中断整个流程
     }
 
-    return sortChatsByLatest(chatList);
+    return sortChatsByLatest(chatList.map(_applyPrivacyConversationPreview));
   }
 
   Future<void> fetchConversations() async {
@@ -1487,24 +1569,28 @@ class Chat {
   }) : rawUnreadCount = rawUnreadCount ?? unreadCount;
 
   Chat copyWith({
+    String? lastMessage,
+    String? time,
     int? unreadCount,
     int? rawUnreadCount,
     bool? isOnline,
+    String? lastSenderName,
+    int? updateTime,
     bool? isMuted,
     bool? hasMutedUnread,
   }) {
     return Chat(
       name: name,
       avatar: avatar,
-      lastMessage: lastMessage,
-      time: time,
+      lastMessage: lastMessage ?? this.lastMessage,
+      time: time ?? this.time,
       unreadCount: unreadCount ?? this.unreadCount,
       rawUnreadCount: rawUnreadCount ?? this.rawUnreadCount,
       userName: userName,
       isGroup: isGroup,
       isOnline: isOnline ?? this.isOnline,
-      lastSenderName: lastSenderName,
-      updateTime: updateTime,
+      lastSenderName: lastSenderName ?? this.lastSenderName,
+      updateTime: updateTime ?? this.updateTime,
       isMuted: isMuted ?? this.isMuted,
       hasMutedUnread: hasMutedUnread ?? this.hasMutedUnread,
     );

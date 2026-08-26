@@ -89,6 +89,31 @@ void main() {
     expect(viewedByBob.timestamp, 1000);
   });
 
+  test('rebinds ownership without stripping privacy metadata', () {
+    final privacyMessage = Message(
+      msgId: 33,
+      content: '仅保存在内存中的内容',
+      isMe: false,
+      time: '10:00',
+      isRead: false,
+      conversationId: '5',
+      senderId: 'alice',
+      timestamp: 1000,
+      isPrivacy: true,
+      privacyReadDelaySeconds: 25,
+      privacyUnreadDelaySeconds: 240,
+    );
+
+    final rebound = ChatMessageMapper.rebindOwnership(
+      privacyMessage,
+      currentUserId: 'bob',
+    );
+
+    expect(rebound.isPrivacy, isTrue);
+    expect(rebound.privacyReadDelaySeconds, 25);
+    expect(rebound.privacyUnreadDelaySeconds, 240);
+  });
+
   test('maps server voice type to an audio message', () {
     final record = MessageDetailModel(
       msgId: 31,

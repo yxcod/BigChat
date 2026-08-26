@@ -50,6 +50,7 @@ import '../../core/media/chat_media_saver.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import '../../features/privacy/application/privacy_settings_service.dart';
+import '../../features/privacy/domain/privacy_message_policy.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -222,18 +223,17 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
           .toList();
 
       final loadedMessageIds = messages.map((message) => message.msgId).toSet();
-      // 服务端明确返回空列表时必须覆盖旧缓存，避免其他设备删除记录后
-      // 本机在下次进入群聊时又把历史消息恢复出来。
-      if (groupRecord.messages.isNotEmpty) {
-        for (final entry in existingById.entries) {
-          if (!loadedMessageIds.contains(entry.key)) {
-            messages.add(
-              ChatMessageMapper.rebindOwnership(
-                entry.value,
-                currentUserId: currentUserId,
-              ),
-            );
-          }
+      // 普通历史记录以服务端为准；隐私消息从不入库，只存在内存中，
+      // 即使服务端返回空列表也必须保留，否则进入群聊时会提前消失。
+      for (final entry in existingById.entries) {
+        if (!loadedMessageIds.contains(entry.key) &&
+            (entry.value.isPrivacy || groupRecord.messages.isNotEmpty)) {
+          messages.add(
+            ChatMessageMapper.rebindOwnership(
+              entry.value,
+              currentUserId: currentUserId,
+            ),
+          );
         }
       }
       messages.sort((left, right) {
@@ -413,12 +413,28 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       return;
     }
 
-    final incomingMessageIds = globalUtil
+    final incomingMessages = globalUtil
         .getChatRecords(_conversationKey)
         .where((message) => !message.isMe && message.msgId > 0)
+        .toList();
+    if (incomingMessages.isEmpty) return;
+
+    // 隐私消息不写入数据库，不能依赖普通群聊的批量已读水位。用户在
+    // 会话列表收到消息后再进入群聊时，必须逐条通知服务端启动已读销毁计时。
+    final privacyMessages = privacyMessagesAwaitingReadAck(
+      incomingMessages,
+      _sentReadAckMessageIds,
+    );
+    for (final message in privacyMessages) {
+      _sentReadAckMessageIds.add(message.msgId);
+      _sendReadAck(message.msgId, message.senderId ?? '');
+    }
+
+    final normalMessageIds = incomingMessages
+        .where((message) => !message.isPrivacy)
         .map((message) => message.msgId);
-    if (incomingMessageIds.isEmpty) return;
-    final readThroughMsgId = incomingMessageIds.reduce(
+    if (normalMessageIds.isEmpty) return;
+    final readThroughMsgId = normalMessageIds.reduce(
       (current, next) => next > current ? next : current,
     );
     _wsManager.send({

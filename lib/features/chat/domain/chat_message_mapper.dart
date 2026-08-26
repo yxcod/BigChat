@@ -76,6 +76,9 @@ class ChatMessageMapper {
       senderId: message.senderId,
       timestamp: message.timestamp,
       quote: message.quote,
+      isPrivacy: message.isPrivacy,
+      privacyReadDelaySeconds: message.privacyReadDelaySeconds,
+      privacyUnreadDelaySeconds: message.privacyUnreadDelaySeconds,
     );
   }
 }
