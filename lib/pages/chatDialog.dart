@@ -37,6 +37,7 @@ import '../shared/widgets/app_voice_message.dart';
 import '../shared/widgets/hold_to_record_field.dart';
 import '../shared/widgets/message_action_menu.dart';
 import '../shared/widgets/quoted_message_view.dart';
+import '../shared/widgets/top_aligned_reversed_list.dart';
 import '../core/media/chat_media_saver.dart';
 import '../core/media/voice_message.dart';
 import '../core/media/voice_media.dart';
@@ -1333,9 +1334,8 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
             //聊天气泡
             children: [
               Expanded(
-                child: ListView.builder(
+                child: TopAlignedReversedList(
                   padding: const EdgeInsets.fromLTRB(4, 12, 4, 16),
-                  reverse: true,
                   controller: _scrollController,
                   // 使用当前聊天好友的全局消息列表，如果不存在则使用空列表
                   itemCount: GlobalUtil().getChatRecords(id ?? '').length,
