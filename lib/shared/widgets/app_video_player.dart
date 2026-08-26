@@ -86,23 +86,65 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
 
     _playbackSource = resolvedSource;
     _playbackIsLocal = resolvedIsLocal;
-    final controller = resolvedIsLocal
+    VideoPlayerController createController() => resolvedIsLocal
         ? VideoPlayerController.file(File(resolvedSource))
         : VideoPlayerController.networkUrl(Uri.parse(resolvedSource));
-    _controller = controller;
+
     try {
-      await controller.initialize();
-      await controller.seekTo(const Duration(milliseconds: 1));
-      await controller.pause();
-      if (!mounted || generation != _loadGeneration) {
-        await controller.dispose();
-        return;
+      try {
+        await _initializeController(createController(), generation);
+      } catch (_) {
+        // A freshly uploaded remote file can briefly be unavailable to the
+        // receiver. Retry once instead of permanently showing a broken cover.
+        if (resolvedIsLocal || !mounted || generation != _loadGeneration) {
+          rethrow;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        if (!mounted || generation != _loadGeneration) return;
+        await _initializeController(createController(), generation);
       }
-      setState(() {});
     } catch (error) {
       if (mounted && generation == _loadGeneration) {
         setState(() => _previewError = error);
       }
+    }
+  }
+
+  Future<void> _initializeController(
+    VideoPlayerController controller,
+    int generation,
+  ) async {
+    _controller = controller;
+    try {
+      await controller.initialize();
+    } catch (_) {
+      if (_controller == controller) _controller = null;
+      await controller.dispose();
+      rethrow;
+    }
+
+    if (!mounted || generation != _loadGeneration) {
+      if (_controller == controller) _controller = null;
+      await controller.dispose();
+      return;
+    }
+
+    // Initialization already exposes the first decoded frame. Seeking and
+    // pausing are only best-effort: some remote codecs reject a tiny seek even
+    // though normal playback works, which must not turn into a cover error.
+    try {
+      await controller.seekTo(Duration.zero);
+    } catch (error) {
+      debugPrint('Video preview initial seek was skipped: $error');
+    }
+    try {
+      await controller.pause();
+    } catch (error) {
+      debugPrint('Video preview initial pause was skipped: $error');
+    }
+
+    if (mounted && generation == _loadGeneration) {
+      setState(() => _previewError = null);
     }
   }
 
@@ -113,15 +155,18 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
     super.dispose();
   }
 
-  void _openPlayer() {
+  Future<void> _openPlayer() async {
     if (_isUploading || widget.uploadFailed) return;
     final source = _playbackSource ?? widget.source;
     final isLocal = _playbackSource == null ? widget.isLocal : _playbackIsLocal;
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => AppVideoPlayerPage(source: source, isLocal: isLocal),
       ),
     );
+    // The player may have downloaded the remote video into the shared cache.
+    // Refresh the bubble after returning so it can immediately use that file.
+    if (mounted) await _initializePreview();
   }
 
   Widget _cover() {
