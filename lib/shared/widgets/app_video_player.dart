@@ -16,6 +16,7 @@ class AppVideoPreview extends StatefulWidget {
     this.height = 150,
     this.uploadProgress,
     this.uploadFailed = false,
+    this.autoCacheRemote = false,
   });
 
   final String source;
@@ -24,6 +25,7 @@ class AppVideoPreview extends StatefulWidget {
   final double height;
   final double? uploadProgress;
   final bool uploadFailed;
+  final bool autoCacheRemote;
 
   @override
   State<AppVideoPreview> createState() => _AppVideoPreviewState();
@@ -35,9 +37,13 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
   int _loadGeneration = 0;
   String? _playbackSource;
   bool _playbackIsLocal = false;
+  CancelToken? _previewDownloadCancelToken;
+  bool _isDownloading = false;
+  double? _downloadProgress;
 
   bool get _isUploading =>
       widget.uploadProgress != null && widget.uploadProgress! < 1;
+  bool get _isTransferring => _isUploading || _isDownloading;
 
   @override
   void initState() {
@@ -49,18 +55,23 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
   void didUpdateWidget(covariant AppVideoPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.source != widget.source ||
-        oldWidget.isLocal != widget.isLocal) {
+        oldWidget.isLocal != widget.isLocal ||
+        oldWidget.autoCacheRemote != widget.autoCacheRemote) {
       _initializePreview();
     }
   }
 
   Future<void> _initializePreview() async {
     final generation = ++_loadGeneration;
+    _previewDownloadCancelToken?.cancel('视频预览已更新');
+    _previewDownloadCancelToken = null;
     final previous = _controller;
     _controller = null;
     _previewError = null;
     _playbackSource = null;
     _playbackIsLocal = false;
+    _isDownloading = false;
+    _downloadProgress = null;
     if (mounted) setState(() {});
     await previous?.dispose();
     if (!mounted || generation != _loadGeneration) return;
@@ -84,6 +95,21 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
       }
     }
 
+    if (!resolvedIsLocal && widget.autoCacheRemote) {
+      try {
+        resolvedSource = await _downloadPreviewToCache(
+          widget.source,
+          generation,
+        );
+        resolvedIsLocal = true;
+      } catch (error) {
+        // Keep the network-preview fallback available when automatic
+        // receiving fails; tapping the bubble can still open the player.
+        debugPrint('Automatic video receive failed: $error');
+      }
+      if (!mounted || generation != _loadGeneration) return;
+    }
+
     _playbackSource = resolvedSource;
     _playbackIsLocal = resolvedIsLocal;
     VideoPlayerController createController() => resolvedIsLocal
@@ -105,8 +131,53 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
       }
     } catch (error) {
       if (mounted && generation == _loadGeneration) {
-        setState(() => _previewError = error);
+        setState(() {
+          _previewError = error;
+          _isDownloading = false;
+          _downloadProgress = null;
+        });
       }
+    }
+  }
+
+  Future<String> _downloadPreviewToCache(String source, int generation) async {
+    final cachePath = await videoCachePath(source);
+    final temporary = File('$cachePath.preview.part');
+    if (await temporary.exists()) await temporary.delete();
+    final cancelToken = CancelToken();
+    _previewDownloadCancelToken = cancelToken;
+    if (mounted && generation == _loadGeneration) {
+      setState(() {
+        _isDownloading = true;
+        _downloadProgress = 0;
+      });
+    }
+
+    try {
+      await HttpUtil().downloadFile(
+        source,
+        temporary.path,
+        cancelToken: cancelToken,
+        onReceiveProgress: (received, total) {
+          if (!mounted || generation != _loadGeneration || total <= 0) return;
+          final progress = (received / total).clamp(0.0, 1.0);
+          final previousProgress = _downloadProgress ?? 0;
+          if (progress < 1 && progress - previousProgress < 0.01) return;
+          setState(() => _downloadProgress = progress);
+        },
+      );
+      if (!await temporary.exists() || await temporary.length() <= 0) {
+        throw StateError('接收的视频文件为空');
+      }
+      final cached = File(cachePath);
+      if (await cached.exists()) await cached.delete();
+      await temporary.rename(cachePath);
+      return cachePath;
+    } finally {
+      if (_previewDownloadCancelToken == cancelToken) {
+        _previewDownloadCancelToken = null;
+      }
+      if (await temporary.exists()) await temporary.delete();
     }
   }
 
@@ -144,19 +215,24 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
     }
 
     if (mounted && generation == _loadGeneration) {
-      setState(() => _previewError = null);
+      setState(() {
+        _previewError = null;
+        _isDownloading = false;
+        _downloadProgress = null;
+      });
     }
   }
 
   @override
   void dispose() {
     _loadGeneration++;
+    _previewDownloadCancelToken?.cancel('视频预览已关闭');
     _controller?.dispose();
     super.dispose();
   }
 
   Future<void> _openPlayer() async {
-    if (_isUploading || widget.uploadFailed) return;
+    if (_isTransferring || widget.uploadFailed) return;
     final source = _playbackSource ?? widget.source;
     final isLocal = _playbackSource == null ? widget.isLocal : _playbackIsLocal;
     await Navigator.of(context).push(
@@ -205,7 +281,9 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
         child: Icon(Icons.error_outline, size: 32, color: Colors.white),
       );
     }
-    final progress = widget.uploadProgress;
+    final progress =
+        widget.uploadProgress ??
+        (_isDownloading ? (_downloadProgress ?? 0) : null);
     if (progress != null) {
       final normalized = progress.clamp(0.0, 1.0);
       return Container(
@@ -261,9 +339,9 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
             fit: StackFit.expand,
             children: [
               _cover(),
-              if (_previewError == null || _isUploading)
+              if (_previewError == null || _isTransferring)
                 Center(child: _centerOverlay()),
-              if (_previewError != null && !_isUploading)
+              if (_previewError != null && !_isTransferring)
                 const Positioned(
                   left: 8,
                   right: 8,

@@ -2372,6 +2372,7 @@ class MessageBubble extends StatelessWidget {
                           child: AppVideoPreview(
                             source: localVideoPath ?? _resolveVideoUrl(),
                             isLocal: localVideoPath != null,
+                            autoCacheRemote: !message.isPrivacy,
                             uploadProgress: videoUploadProgress,
                             uploadFailed: videoUploadFailed,
                           ),
