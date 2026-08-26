@@ -46,4 +46,65 @@ void main() {
     expect(find.text('安然'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('发送方的待处理申请显示为待验证', (tester) async {
+    final request = FriendRequestModel(
+      requestId: 101,
+      userName: 'receiver',
+      nickName: '接收方',
+      verificationMessage: '你好',
+      requestTime: DateTime.now(),
+      direction: FriendRequestDirection.outgoing,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: FriendAddManagerPage(initialRequests: [request], autoLoad: false),
+      ),
+    );
+
+    expect(find.text('待验证'), findsOneWidget);
+  });
+
+  testWidgets('已过期申请可以向右滑动删除', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var deleted = false;
+    final request = FriendRequestModel(
+      requestId: 202,
+      userName: 'expired-user',
+      nickName: '过期申请',
+      verificationMessage: '三天前的申请',
+      requestTime: DateTime.now().subtract(const Duration(days: 4)),
+      status: RequestStatus.expired,
+      direction: FriendRequestDirection.outgoing,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: FriendAddManagerPage(
+          initialRequests: [request],
+          autoLoad: false,
+          deleteExpiredRequest: (_) async {
+            deleted = true;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    final expiredCell = find.byKey(
+      const ValueKey('expired_friend_request_202'),
+    );
+    expect(expiredCell, findsOneWidget);
+    await tester.drag(expiredCell, const Offset(320, 0));
+    await tester.pumpAndSettle();
+
+    expect(deleted, isTrue);
+    expect(find.text('过期申请'), findsNothing);
+  });
 }

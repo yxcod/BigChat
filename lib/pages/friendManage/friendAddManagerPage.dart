@@ -9,16 +9,21 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import '../../utils/WebSocketManager.dart';
 
+typedef ExpiredFriendRequestDelete =
+    Future<bool> Function(FriendRequestModel request);
+
 class FriendAddManagerPage extends StatefulWidget {
   final List<FriendRequestModel>? initialRequests;
   final List<RecentFriendModel>? initialRecentFriends;
   final bool autoLoad;
+  final ExpiredFriendRequestDelete? deleteExpiredRequest;
 
   const FriendAddManagerPage({
     super.key,
     this.initialRequests,
     this.initialRecentFriends,
     this.autoLoad = true,
+    this.deleteExpiredRequest,
   });
 
   @override
@@ -168,9 +173,55 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                 )
               : Column(
                   children: List.generate(_pendingRequests.length, (index) {
+                    final request = _pendingRequests[index];
                     return Column(
                       children: [
-                        _buildRequestItem(_pendingRequests[index]),
+                        request.status == RequestStatus.expired
+                            ? Dismissible(
+                                key: ValueKey(
+                                  'expired_friend_request_${request.requestId ?? index}',
+                                ),
+                                direction: DismissDirection.startToEnd,
+                                confirmDismiss: (_) =>
+                                    _deleteExpiredRequest(request),
+                                onDismissed: (_) {
+                                  setState(() {
+                                    _pendingRequests.removeWhere(
+                                      (item) => identical(item, request),
+                                    );
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('已删除过期申请'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                                background: Container(
+                                  color: const Color(0xFFE53935),
+                                  alignment: Alignment.centerLeft,
+                                  padding: const EdgeInsets.only(left: 22),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: Colors.white,
+                                      ),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        '删除',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                child: _buildRequestItem(request),
+                              )
+                            : _buildRequestItem(request),
                         if (index < _pendingRequests.length - 1)
                           Divider(
                             height: 1,
@@ -336,7 +387,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
         RequestStatus.rejected => ('已拒绝', const Color(0xFF9A6B49)),
         RequestStatus.expired => ('已过期', context.appTextSecondary),
         RequestStatus.accepted => ('已添加', AppColors.primary),
-        _ => ('待处理', const Color(0xFF8A8E95)),
+        _ => ('待验证', const Color(0xFF8A8E95)),
       };
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
@@ -537,6 +588,30 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
         timestamp: timestamp,
       ),
     );
+  }
+
+  Future<bool> _deleteExpiredRequest(FriendRequestModel request) async {
+    if (request.status != RequestStatus.expired) return false;
+    final customDelete = widget.deleteExpiredRequest;
+    if (customDelete != null) return customDelete(request);
+    final requestId = request.requestId;
+    final userName = GlobalUtil().userName?.trim() ?? '';
+    if (requestId == null || userName.isEmpty) return false;
+    try {
+      final response = await handleFriendRequestApi(requestId, 5, userName);
+      if (response['code'] == 100) return true;
+      throw Exception('申请状态已发生变化');
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('删除失败：$error'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return false;
+    }
   }
 
   Future<void> _handleReject(FriendRequestModel request) async {
