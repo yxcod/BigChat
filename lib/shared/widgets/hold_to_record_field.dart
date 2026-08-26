@@ -46,15 +46,32 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
   bool _cancelRequested = false;
   bool _starting = false;
   bool _pointerHeld = false;
+  bool _isFocused = false;
 
   @override
   void initState() {
     super.initState();
     _recorder = widget.recorder ?? VoiceRecorder();
+    widget.focusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    final isFocused = widget.focusNode.hasFocus;
+    if (isFocused != _isFocused) {
+      setState(() => _isFocused = isFocused);
+    }
+  }
+
+  bool get _isTextEditingMode {
+    final keyboardVisible =
+        (MediaQuery.maybeOf(context)?.viewInsets.bottom ?? 0) > 0;
+    return _isFocused || keyboardVisible;
   }
 
   void _pointerDown(PointerDownEvent event) {
-    if (!widget.enabled || _recording || _starting) return;
+    if (!widget.enabled || _recording || _starting || _isTextEditingMode) {
+      return;
+    }
     _holdTimer?.cancel();
     _pointerHeld = true;
     _startY = event.position.dy;
@@ -85,7 +102,9 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
   }
 
   Future<void> _start(double globalY) async {
-    if (!widget.enabled || _recording || _starting) return;
+    if (!widget.enabled || _recording || _starting || _isTextEditingMode) {
+      return;
+    }
     widget.focusNode.unfocus();
     setState(() {
       _starting = true;
@@ -161,6 +180,7 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
   void dispose() {
     _holdTimer?.cancel();
     _timer?.cancel();
+    widget.focusNode.removeListener(_onFocusChange);
     unawaited(_disposeRecorder());
     super.dispose();
   }
@@ -213,12 +233,12 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
                       onChanged: widget.onChanged,
                       onSubmitted: widget.onSubmitted,
                       onTap: widget.focusNode.requestFocus,
-                      enableInteractiveSelection: false,
+                      enableInteractiveSelection: true,
                       enableSuggestions: true,
                       autocorrect: true,
                       style: TextStyle(color: context.appTextPrimary),
                       decoration: InputDecoration.collapsed(
-                        hintText: '长按发送语音',
+                        hintText: _isFocused ? null : '长按发送语音',
                         hintStyle: TextStyle(color: context.appTextSecondary),
                       ),
                     ),

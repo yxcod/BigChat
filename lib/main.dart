@@ -448,17 +448,26 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             ),
         routes: getRoutes(),
         onGenerateRoute: generateRoute,
-        builder: (context, child) => Stack(
-          children: [
-            if (child != null) child,
-            if (_connectionNoticeStatus != null) _buildConnectionNotice(),
-            if (_privacyLockPending)
-              Positioned.fill(
-                child: PrivacyUnlockPage(
-                  onUnlocked: _completePrivacyUnlock,
-                  onForceLogout: _forcePrivacyLogout,
+        builder: (context, child) => Overlay(
+          initialEntries: [
+            OverlayEntry(
+              builder: (context) => SelectionArea(
+                child: Stack(
+                  children: [
+                    if (child != null) child,
+                    if (_connectionNoticeStatus != null)
+                      _buildConnectionNotice(),
+                    if (_privacyLockPending)
+                      Positioned.fill(
+                        child: PrivacyUnlockPage(
+                          onUnlocked: _completePrivacyUnlock,
+                          onForceLogout: _forcePrivacyLogout,
+                        ),
+                      ),
+                  ],
                 ),
               ),
+            ),
           ],
         ),
       ),

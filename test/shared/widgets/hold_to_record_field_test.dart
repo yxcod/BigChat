@@ -85,11 +85,61 @@ void main() {
     await tester.pump(const Duration(milliseconds: 30));
     await tester.pump();
     expect(recorder.started, isTrue);
-    expect(find.textContaining('松开发送'), findsOneWidget);
+    final recordingIndicator = tester.widgetList(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Icon && widget.icon == Icons.mic && widget.size == 16.0,
+      ),
+    );
+    expect(recordingIndicator, isNotEmpty);
 
     await gesture.up();
     await tester.pump();
     expect(recorder.stopped, isTrue);
     expect(recorded?.durationMs, 1000);
+  });
+
+  testWidgets('holding the focused editor keeps native text selection mode', (
+    tester,
+  ) async {
+    final controller = TextEditingController(text: '可粘贴内容');
+    final focusNode = FocusNode();
+    final recorder = _FakeVoiceRecorder();
+    addTearDown(controller.dispose);
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HoldToRecordField(
+            controller: controller,
+            focusNode: focusNode,
+            recorder: recorder,
+            onChanged: (_) {},
+            onSubmitted: (_) {},
+            onRecorded: (_) async {},
+            onError: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    focusNode.requestFocus();
+    await tester.pump();
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(HoldToRecordField)),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(recorder.started, isFalse);
+    expect(
+      tester
+          .widget<TextField>(find.byType(TextField))
+          .enableInteractiveSelection,
+      isTrue,
+    );
+
+    await gesture.up();
+    await tester.pump();
   });
 }
