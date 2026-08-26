@@ -299,7 +299,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                           title: '设置昵称',
                           initialValue: _nickName,
                           hintText: '请输入昵称',
-                          maxLength: 50,
+                          maxLength: 10,
                           onChanged: (value) => _nickName = value,
                         ),
                       ),
@@ -372,6 +372,14 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Future<void> _saveProfile() async {
     if (_nickName.trim().isEmpty) {
       _showMessage('请输入昵称');
+      return;
+    }
+    if (_nickName.trim().characters.length > 10) {
+      _showMessage('昵称不能超过10个字');
+      return;
+    }
+    if (_region.trim().characters.length > 8) {
+      _showMessage('地区不能超过8个字');
       return;
     }
     setState(() => _isLoading = true);

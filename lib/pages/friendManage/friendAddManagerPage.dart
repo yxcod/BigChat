@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../model/friendRequestModel.dart';
+import '../../model/messageModel.dart';
 import '../../utils/Gloabl.dart';
 import '../../api/getFriendRequestsAPI.dart';
 import '../../core/cache/app_image_cache.dart';
@@ -487,6 +488,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     try {
       final response = await handleFriendRequestApi(requestId, 1, userName);
       if (response['code'] != 100) throw Exception('申请已失效');
+      _cacheAutomaticGreeting(response, request, userName);
       await _reload();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -503,6 +505,38 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
         context,
       ).showSnackBar(SnackBar(content: Text('处理失败：$error')));
     }
+  }
+
+  void _cacheAutomaticGreeting(
+    Map<String, dynamic> response,
+    FriendRequestModel request,
+    String currentUserName,
+  ) {
+    final rawGreeting = response['greeting'];
+    if (rawGreeting is! Map) return;
+    final greeting = Map<String, dynamic>.from(rawGreeting);
+    final counterpart = (request.userName ?? request.fromUserId ?? '').trim();
+    final msgId = int.tryParse(greeting['msgId']?.toString() ?? '');
+    final timestamp =
+        int.tryParse(greeting['sendTime']?.toString() ?? '') ??
+        DateTime.now().millisecondsSinceEpoch;
+    if (counterpart.isEmpty || msgId == null || msgId <= 0) return;
+    GlobalUtil().addMessage(
+      counterpart,
+      Message(
+        msgId: msgId,
+        content: greeting['msgContent']?.toString() ?? '我们已经成功添加好友啦!',
+        isMe: true,
+        time: GlobalUtil.formatChatTimestamp(timestamp),
+        isRead: false,
+        conversationId:
+            greeting['sessionId']?.toString() ??
+            GlobalUtil.generateSessionId(currentUserName, counterpart),
+        status: MessageStatus.sent,
+        senderId: currentUserName,
+        timestamp: timestamp,
+      ),
+    );
   }
 
   Future<void> _handleReject(FriendRequestModel request) async {

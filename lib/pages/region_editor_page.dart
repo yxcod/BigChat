@@ -53,8 +53,9 @@ class _RegionEditorPageState extends State<RegionEditorPage> {
       final region = await (widget.cityLocator ?? _locateCity)();
       if (!mounted) return;
       if (region.trim().isEmpty) throw Exception('未解析到市级地区');
+      final normalizedRegion = region.trim().characters.take(8).toString();
       setState(() {
-        _controller.text = region.trim();
+        _controller.text = normalizedRegion;
         _controller.selection = TextSelection.collapsed(
           offset: _controller.text.length,
         );
@@ -75,6 +76,15 @@ class _RegionEditorPageState extends State<RegionEditorPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('请填写市级地区')));
+      return;
+    }
+    if (value.characters.length > 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('地区不能超过8个字'),
+          duration: Duration(seconds: 2),
+        ),
+      );
       return;
     }
     Navigator.pop(context, value);
@@ -170,7 +180,7 @@ class _RegionEditorPageState extends State<RegionEditorPage> {
                 key: const Key('region_manual_field'),
                 controller: _controller,
                 autofocus: false,
-                maxLength: 100,
+                maxLength: 8,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _complete(),
                 decoration: const InputDecoration(

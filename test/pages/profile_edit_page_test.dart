@@ -88,6 +88,7 @@ void main() {
     final field = tester.widget<TextField>(
       find.byKey(const Key('region_manual_field')),
     );
+    expect(field.maxLength, 8);
     expect(field.controller?.text, '广东省 深圳市');
 
     await tester.enterText(
@@ -97,5 +98,31 @@ void main() {
     await tester.tap(find.byKey(const Key('region_complete_button')));
     await tester.pumpAndSettle();
     expect(result, '浙江省 杭州市');
+  });
+
+  testWidgets('昵称编辑限制为10个字', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ProfileEditPage(
+          profileInfo: {
+            'nickName': '叶翔',
+            'gender': 1,
+            'region': '北京市',
+            'signature': '',
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('edit_nickname_row')));
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.maxLength, 10);
+    await tester.enterText(find.byType(TextField), '一二三四五六七八九十十一');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      '一二三四五六七八九十',
+    );
   });
 }
