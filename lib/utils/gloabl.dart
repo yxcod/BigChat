@@ -25,6 +25,7 @@ class GlobalUtil {
   UserInfoModel? _userInfoModel;
   bool? _isChatting;
   String? _currentChatUserName;
+  bool _isOnChatTab = true;
   Function(String, int)? onUnreadCountChanged;
 
   final ChatStore _chatStore = ChatStore();
@@ -52,6 +53,7 @@ class GlobalUtil {
   bool? get isLoading => _isLoading ?? StorageUtil.getBool('global_isLoading');
   bool? get isChatting => _isChatting ?? false;
   String? get currentChatUserName => _currentChatUserName;
+  bool get isOnChatTab => _isOnChatTab;
 
   set token(String? value) {
     _token = value;
@@ -104,6 +106,10 @@ class GlobalUtil {
 
   set isChatting(bool? value) {
     _isChatting = value;
+  }
+
+  set isOnChatTab(bool value) {
+    _isOnChatTab = value;
   }
 
   set currentChatUserName(String? value) {
@@ -509,11 +515,18 @@ class GlobalUtil {
 
   // 根据视频名生成支持 HTTP Range 分段播放的视频 URL。
   String getVideoURL(String userName, String videoName) {
+    if (token == null) {
+      throw Exception('Token is null');
+    }
     final baseUri = Uri.parse(baseURL);
     return baseUri
         .replace(
           path: '${baseUri.path}/api/video/download',
-          queryParameters: {'userName': userName, 'videoName': videoName},
+          queryParameters: {
+            'key': token!,
+            'userName': userName,
+            'videoName': videoName,
+          },
         )
         .toString();
   }

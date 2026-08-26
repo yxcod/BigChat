@@ -1379,21 +1379,6 @@ class _ChatpageState extends State<Chatpage> {
                     size: 25,
                   ),
           ),
-          if (!chat.isGroup && chat.isOnline)
-            Positioned(
-              right: -1,
-              bottom: 1,
-              child: Container(
-                key: ValueKey('chat_online_${chat.userName}'),
-                width: 13,
-                height: 13,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: context.appSurface, width: 2),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -1410,18 +1395,18 @@ class _ChatpageState extends State<Chatpage> {
     final label = chat.unreadCount > 99 ? '99+' : chat.unreadCount.toString();
     return Container(
       key: ValueKey('chat_unread_badge_${chat.userName}'),
-      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: AppColors.danger,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(11),
       ),
       child: Text(
         label,
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 10.5,
+          fontSize: 11.5,
           fontWeight: FontWeight.w600,
           height: 1.15,
         ),
@@ -1432,8 +1417,8 @@ class _ChatpageState extends State<Chatpage> {
   Widget _buildMutedUnreadDot(Chat chat) {
     return Container(
       key: ValueKey('chat_muted_unread_dot_${chat.userName}'),
-      width: 10,
-      height: 10,
+      width: 12,
+      height: 12,
       decoration: BoxDecoration(
         color: const Color(0xFFB8BBC2),
         shape: BoxShape.circle,

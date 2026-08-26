@@ -952,25 +952,23 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
             key: const ValueKey('group_notification_settings_card'),
             margin: const EdgeInsets.only(top: 12),
             color: context.appSurface,
-            child: SwitchListTile.adaptive(
-              key: const ValueKey('group_mute_switch'),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 3,
+            child: SwitchTheme(
+              data: SwitchThemeData(
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              title: const Text(
-                '群消息免打扰',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-              ),
-              subtitle: Text(
-                '开启后不震动、不播放提示音、不显示横幅和红色未读数',
-                style: TextStyle(
-                  color: context.appTextSecondary,
-                  fontSize: 12.5,
+              child: SwitchListTile.adaptive(
+                key: const ValueKey('group_mute_switch'),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 2,
                 ),
+                title: const Text(
+                  '群消息免打扰',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+                value: _groupMuted,
+                onChanged: _setGroupMuted,
               ),
-              value: _groupMuted,
-              onChanged: _setGroupMuted,
             ),
           ),
 

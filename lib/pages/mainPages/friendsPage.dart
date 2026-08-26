@@ -476,14 +476,14 @@ class _FriendsPage extends State<Friendspage>
                       top: -9,
                       right: -14,
                       child: Container(
-                        constraints: const BoxConstraints(minWidth: 20),
+                        constraints: const BoxConstraints(minWidth: 22),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
+                          horizontal: 6,
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.danger,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(11),
                           border: Border.all(color: Colors.white, width: 1.5),
                         ),
                         child: Text(
@@ -491,7 +491,7 @@ class _FriendsPage extends State<Friendspage>
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
                         ),

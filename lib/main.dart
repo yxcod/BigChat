@@ -173,15 +173,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     ChatRealtimeEvent event,
   ) async {
     final global = GlobalUtil();
-    final activeConversation = event.type == ChatRealtimeEventType.groupMessage
-        ? GlobalUtil.groupConversationKey(event.groupId)
-        : event.senderId;
+    final inChatModule = global.isOnChatTab || global.isChatting == true;
     final notice = await _notificationFeedbackService.handle(
       event,
       appIsForeground: _isAppForeground,
-      conversationIsActive:
-          global.isChatting == true &&
-          global.currentChatUserName == activeConversation,
+      conversationIsActive: inChatModule,
     );
     if (!mounted || notice == null) return;
     _showMessageBanner(notice);

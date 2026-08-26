@@ -440,6 +440,15 @@ class _ProfilePageState extends State<ProfilePage>
         ),
       );
     }
+    if (images.length == 1) {
+      return SizedBox(
+        height: 92,
+        child: SizedBox(
+          width: 110,
+          child: _buildPreviewImage(images.first),
+        ),
+      );
+    }
     return SizedBox(
       height: 92,
       child: Row(

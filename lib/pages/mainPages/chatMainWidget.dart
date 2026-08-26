@@ -177,6 +177,7 @@ class _BigchatMainPageState extends State<BigchatMainPage>
         currentIndex: _currentIndex,
         onTap: (int index) {
           FocusManager.instance.primaryFocus?.unfocus();
+          GlobalUtil().isOnChatTab = (index == 0);
           setState(() {
             _currentIndex = index;
           });
@@ -262,19 +263,19 @@ class _BigchatMainPageState extends State<BigchatMainPage>
               right: -1,
               child: Container(
                 key: const ValueKey('main_chat_unread_badge'),
-                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
+                constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: AppColors.danger,
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: context.appSurface, width: 1.5),
                 ),
                 child: Text(
                   unreadCount > 99 ? '99+' : unreadCount.toString(),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 9,
+                    fontSize: 10,
                     fontWeight: FontWeight.w600,
                     height: 1,
                   ),

@@ -172,66 +172,102 @@ class _HoldToRecordFieldState extends State<HoldToRecordField> {
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.opaque,
-      onPointerDown: _pointerDown,
-      onPointerMove: _pointerMove,
-      onPointerUp: (_) => _pointerUp(),
-      onPointerCancel: (_) => _pointerCancel(),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        height: 46,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: _cancelRequested
-              ? Colors.red.shade50
-              : (_recording
-                    ? (context.isDarkMode
-                          ? const Color(0xFF183326)
-                          : Colors.green.shade50)
-                    : context.appSearchBackground),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 15),
-        child: _recording
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    _cancelRequested ? Icons.delete_outline : Icons.mic,
-                    size: 19,
-                    color: _cancelRequested ? Colors.red : Colors.green,
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    _cancelRequested
-                        ? '松开取消'
-                        : '松开发送  ${_elapsedSeconds.clamp(0, 60)}″  ·  上滑取消',
-                    style: TextStyle(
-                      color: _cancelRequested
-                          ? Colors.red
-                          : context.appTextPrimary,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              )
-            : TextField(
-                controller: widget.controller,
-                focusNode: widget.focusNode,
-                enabled: widget.enabled && !_starting && !_recording,
-                onChanged: widget.onChanged,
-                onSubmitted: widget.onSubmitted,
-                onTap: widget.focusNode.requestFocus,
-                enableInteractiveSelection: false,
-                enableSuggestions: true,
-                autocorrect: true,
-                style: TextStyle(color: context.appTextPrimary),
-                decoration: InputDecoration.collapsed(
-                  hintText: '长按发送语音',
-                  hintStyle: TextStyle(color: context.appTextSecondary),
-                ),
+    return SizedBox(
+      height: 46,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: _pointerDown,
+            onPointerMove: _pointerMove,
+            onPointerUp: (_) => _pointerUp(),
+            onPointerCancel: (_) => _pointerCancel(),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              height: 46,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _cancelRequested
+                    ? Colors.red.shade50
+                    : (_recording
+                          ? (context.isDarkMode
+                                ? const Color(0xFF183326)
+                                : Colors.green.shade50)
+                          : context.appSearchBackground),
+                borderRadius: BorderRadius.circular(20),
               ),
+              padding: const EdgeInsets.symmetric(horizontal: 15),
+              child: _recording
+                  ? Center(
+                      child: Icon(
+                        _cancelRequested ? Icons.delete_outline : Icons.mic,
+                        size: 22,
+                        color: _cancelRequested ? Colors.red : Colors.green,
+                      ),
+                    )
+                  : TextField(
+                      controller: widget.controller,
+                      focusNode: widget.focusNode,
+                      enabled: widget.enabled && !_starting && !_recording,
+                      onChanged: widget.onChanged,
+                      onSubmitted: widget.onSubmitted,
+                      onTap: widget.focusNode.requestFocus,
+                      enableInteractiveSelection: false,
+                      enableSuggestions: true,
+                      autocorrect: true,
+                      style: TextStyle(color: context.appTextPrimary),
+                      decoration: InputDecoration.collapsed(
+                        hintText: '长按发送语音',
+                        hintStyle: TextStyle(color: context.appTextSecondary),
+                      ),
+                    ),
+            ),
+          ),
+          if (_recording || _starting)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 78,
+              child: Center(child: _buildRecordingIndicator()),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordingIndicator() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: _cancelRequested ? Colors.red : const Color(0xFF333333),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _cancelRequested ? Icons.delete_outline : Icons.mic,
+            size: 16,
+            color: Colors.white,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _cancelRequested ? '松开手指 取消发送' : '${_elapsedSeconds.clamp(0, 60)}″',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
