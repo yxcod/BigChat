@@ -18,6 +18,7 @@ import '../../core/cache/app_image_cache.dart';
 import '../../core/config/refresh_intervals.dart';
 import '../../features/chat/domain/chat_realtime_event.dart';
 import '../../features/chat/domain/chat_message_mapper.dart';
+import '../../features/chat/domain/read_all_policy.dart';
 import '../../features/chat/data/hidden_conversations_store.dart';
 import '../../shared/widgets/swipe_action_cell.dart';
 import '../../app/theme/app_colors.dart';
@@ -59,6 +60,7 @@ class _ChatpageState extends State<Chatpage> {
   final Set<int> _locallyReadGroupIds = {};
   final GroupNotificationSettingsService _groupNotificationSettings =
       GroupNotificationSettingsService.instance;
+  bool _isMarkingAllRead = false;
   // 头像 URL 缓存，用于避免重复加载
   final Map<String, String> _avatarCache = {};
 
@@ -1150,21 +1152,138 @@ class _ChatpageState extends State<Chatpage> {
     }
   }
 
-  void _scrollToFirstUnread() {
-    final index = _chats.indexWhere((chat) => chat.unreadCount > 0);
-    if (index < 0) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_conversationScrollController.hasClients) return;
-      final target = (index * 79.0).clamp(
-        0.0,
-        _conversationScrollController.position.maxScrollExtent,
+  Future<void> _markAllUnreadAsRead() async {
+    if (_isMarkingAllRead) return;
+    final webSocket = WebSocketManager();
+    if (!webSocket.isConnected) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('服务器未连接，暂时无法标记已读')));
+      return;
+    }
+
+    final currentUserId = globalUtil.userName?.trim() ?? '';
+    if (currentUserId.isEmpty) return;
+
+    final targets = _chats
+        .where((chat) {
+          final conversationKey = chat.isGroup
+              ? GlobalUtil.groupConversationKey(chat.userName)
+              : chat.userName;
+          return chat.rawUnreadCount > 0 ||
+              globalUtil.getUnreadMessages(conversationKey).isNotEmpty;
+        })
+        .toList(growable: false);
+    if (targets.isEmpty) return;
+
+    setState(() => _isMarkingAllRead = true);
+    final readConversationKeys = <String>{};
+    var failedConversationCount = 0;
+
+    for (final chat in targets) {
+      final conversationKey = chat.isGroup
+          ? GlobalUtil.groupConversationKey(chat.userName)
+          : chat.userName;
+      final pending = pendingReadAcks(
+        messages: globalUtil.getChatRecords(conversationKey),
+        unreadMessageIds: globalUtil.getUnreadMessages(conversationKey),
+        fallbackSenderId: chat.isGroup ? '' : chat.userName,
       );
-      _conversationScrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-      );
+
+      var queued = pending.isNotEmpty;
+      if (chat.isGroup) {
+        final groupId = int.tryParse(chat.userName) ?? 0;
+        if (groupId <= 0) {
+          queued = false;
+        } else {
+          for (final ack in pending.where((item) => item.isPrivacy)) {
+            queued =
+                webSocket.send({
+                  'type': 'groupChatCallback',
+                  'msgId': ack.messageId,
+                  'receiveId': ack.senderId,
+                  'sender': currentUserId,
+                  'groupId': groupId,
+                  'sessionId': groupId,
+                  'status': 'read',
+                  'privacyMode': true,
+                }) &&
+                queued;
+          }
+
+          final normalMessageIds = pending
+              .where((item) => !item.isPrivacy)
+              .map((item) => item.messageId);
+          if (normalMessageIds.isNotEmpty) {
+            final readThroughMsgId = normalMessageIds.reduce(
+              (current, next) => next > current ? next : current,
+            );
+            queued =
+                webSocket.send({
+                  'type': 'groupChatRead',
+                  'reader': currentUserId,
+                  'groupId': groupId,
+                  'sessionId': groupId,
+                  'readThroughMsgId': readThroughMsgId,
+                }) &&
+                queued;
+          }
+        }
+      } else {
+        final sessionId = GlobalUtil.generateSessionId(
+          currentUserId,
+          chat.userName,
+        );
+        for (final ack in pending) {
+          queued =
+              webSocket.send({
+                'type': 'chatCallback',
+                'msgId': ack.messageId,
+                'receiveId': ack.senderId,
+                'sender': currentUserId,
+                'sessionId': sessionId,
+                if (ack.isPrivacy) 'privacyMode': true,
+              }) &&
+              queued;
+        }
+      }
+
+      if (!queued) {
+        failedConversationCount++;
+        continue;
+      }
+      if (chat.isGroup) {
+        _locallyReadGroupIds.add(int.parse(chat.userName));
+      }
+      globalUtil.markAllMessagesAsRead(conversationKey);
+      globalUtil.clearUnreadMessages(conversationKey);
+      readConversationKeys.add(conversationKey);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      for (var i = 0; i < _chats.length; i++) {
+        final chat = _chats[i];
+        final conversationKey = chat.isGroup
+            ? GlobalUtil.groupConversationKey(chat.userName)
+            : chat.userName;
+        if (readConversationKeys.contains(conversationKey)) {
+          _chats[i] = chat.copyWith(
+            unreadCount: 0,
+            rawUnreadCount: 0,
+            hasMutedUnread: false,
+          );
+        }
+      }
+      _isMarkingAllRead = false;
+      _notifyUnreadCountChanged();
     });
+
+    if (failedConversationCount > 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('部分消息尚未加载，请稍后再试')));
+    }
   }
 
   Widget _buildUnreadSummary() {
@@ -1178,7 +1297,9 @@ class _ChatpageState extends State<Chatpage> {
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: _scrollToFirstUnread,
+          onTap: _isMarkingAllRead
+              ? null
+              : () => unawaited(_markAllUnreadAsRead()),
           child: Container(
             height: 58,
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1196,15 +1317,15 @@ class _ChatpageState extends State<Chatpage> {
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
-                    Icons.notifications_none_rounded,
+                    Icons.cleaning_services_outlined,
                     color: AppColors.primary,
-                    size: 21,
+                    size: 20,
                   ),
                 ),
                 const SizedBox(width: 11),
                 Expanded(
                   child: Text(
-                    '$total 条未读消息',
+                    '已收到 $total 条新消息',
                     style: TextStyle(
                       color: context.appTextPrimary,
                       fontSize: 15,
@@ -1212,9 +1333,9 @@ class _ChatpageState extends State<Chatpage> {
                     ),
                   ),
                 ),
-                const Text(
-                  '快速定位',
-                  style: TextStyle(
+                Text(
+                  _isMarkingAllRead ? '处理中' : '一键已读',
+                  style: const TextStyle(
                     color: AppColors.primary,
                     fontSize: 13,
                     fontWeight: FontWeight.w500,

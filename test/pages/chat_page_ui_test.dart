@@ -51,8 +51,8 @@ void main() {
     expect(find.text('搜索聊天记录'), findsOneWidget);
     expect(find.byKey(const Key('chat_create_group_button')), findsOneWidget);
     expect(find.byKey(const Key('chat_unread_summary')), findsOneWidget);
-    expect(find.text('5 条未读消息'), findsOneWidget);
-    expect(find.text('快速定位'), findsOneWidget);
+    expect(find.text('已收到 5 条新消息'), findsOneWidget);
+    expect(find.text('一键已读'), findsOneWidget);
     expect(find.text('今晚一起吃饭吗？'), findsOneWidget);
     expect(find.text('叶翔：文件已经上传好了'), findsOneWidget);
     expect(find.byKey(const Key('chat_online_zhangwei')), findsOneWidget);
