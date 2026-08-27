@@ -7,14 +7,20 @@ class MerchantReviewComment {
     required this.id,
     required this.content,
     required this.createdAt,
+    this.userId = '',
+    this.displayName = '',
   });
 
   final String id;
+  final String userId;
+  final String displayName;
   final String content;
   final DateTime createdAt;
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'userId': userId,
+    'displayName': displayName,
     'content': content,
     'createdAt': createdAt.toIso8601String(),
   };
@@ -22,10 +28,10 @@ class MerchantReviewComment {
   factory MerchantReviewComment.fromJson(Map<String, dynamic> json) {
     return MerchantReviewComment(
       id: json['id']?.toString() ?? '',
+      userId: json['userId']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
-      createdAt:
-          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0),
+      createdAt: _asDateTime(json['createdAt']),
     );
   }
 }
@@ -34,6 +40,8 @@ class MerchantReview {
   const MerchantReview({
     required this.merchant,
     required this.addedAt,
+    this.entryId = '',
+    this.ownerUserName = '',
     this.likes = 0,
     this.dislikes = 0,
     this.reaction = MerchantReviewReaction.none,
@@ -42,6 +50,8 @@ class MerchantReview {
 
   final NearbyMerchant merchant;
   final DateTime addedAt;
+  final String entryId;
+  final String ownerUserName;
   final int likes;
   final int dislikes;
   final MerchantReviewReaction reaction;
@@ -50,6 +60,8 @@ class MerchantReview {
   MerchantReview copyWith({
     NearbyMerchant? merchant,
     DateTime? addedAt,
+    String? entryId,
+    String? ownerUserName,
     int? likes,
     int? dislikes,
     MerchantReviewReaction? reaction,
@@ -58,6 +70,8 @@ class MerchantReview {
     return MerchantReview(
       merchant: merchant ?? this.merchant,
       addedAt: addedAt ?? this.addedAt,
+      entryId: entryId ?? this.entryId,
+      ownerUserName: ownerUserName ?? this.ownerUserName,
       likes: likes ?? this.likes,
       dislikes: dislikes ?? this.dislikes,
       reaction: reaction ?? this.reaction,
@@ -66,6 +80,8 @@ class MerchantReview {
   }
 
   Map<String, dynamic> toJson() => {
+    'entryId': entryId,
+    'ownerUserName': ownerUserName,
     'merchant': _merchantToJson(merchant),
     'addedAt': addedAt.toIso8601String(),
     'likes': likes,
@@ -78,12 +94,12 @@ class MerchantReview {
     final rawComments = json['comments'];
     final reactionName = json['reaction']?.toString();
     return MerchantReview(
+      entryId: json['entryId']?.toString() ?? '',
+      ownerUserName: json['ownerUserName']?.toString() ?? '',
       merchant: _merchantFromJson(
         Map<String, dynamic>.from(json['merchant'] as Map? ?? const {}),
       ),
-      addedAt:
-          DateTime.tryParse(json['addedAt']?.toString() ?? '') ??
-          DateTime.now(),
+      addedAt: _asDateTime(json['addedAt'], fallback: DateTime.now()),
       likes: _asInt(json['likes']),
       dislikes: _asInt(json['dislikes']),
       reaction: MerchantReviewReaction.values.firstWhere(
@@ -164,3 +180,15 @@ int? _asNullableInt(dynamic value) => value is num ? value.toInt() : null;
 
 double? _asNullableDouble(dynamic value) =>
     value is num ? value.toDouble() : null;
+
+DateTime _asDateTime(dynamic value, {DateTime? fallback}) {
+  if (value is num) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+  }
+  final raw = value?.toString() ?? '';
+  final millis = int.tryParse(raw);
+  if (millis != null) return DateTime.fromMillisecondsSinceEpoch(millis);
+  return DateTime.tryParse(raw) ??
+      fallback ??
+      DateTime.fromMillisecondsSinceEpoch(0);
+}

@@ -123,12 +123,14 @@ class _MerchantReviewCommentsPageState
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const CircleAvatar(
+            CircleAvatar(
               radius: 18,
-              backgroundColor: Color(0xFFE5F7ED),
+              backgroundColor: const Color(0xFFE5F7ED),
               child: Text(
-                '我',
-                style: TextStyle(
+                comment.displayName.trim().isEmpty
+                    ? '用户'
+                    : comment.displayName.trim().characters.first,
+                style: const TextStyle(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w600,
                 ),
@@ -146,11 +148,13 @@ class _MerchantReviewCommentsPageState
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
-                  comment.content,
+                  comment.displayName.trim().isEmpty
+                      ? comment.content
+                      : '${comment.displayName}\n${comment.content}',
                   style: TextStyle(
                     color: context.appTextPrimary,
                     fontSize: 14.5,
-                    height: 1.35,
+                    height: 1.4,
                   ),
                 ),
               ),
