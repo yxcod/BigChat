@@ -132,4 +132,33 @@ void main() {
     expect(vibrationCount, 1);
     expect(soundCount, 1);
   });
+
+  test('rejected friend request notifies the applicant', () async {
+    GlobalUtil().userName = 'sender_200';
+    var vibrationCount = 0;
+    var soundCount = 0;
+    final service = AppNotificationFeedbackService(
+      loadSettings: () async => const AppSettings(
+        vibrationEnabled: true,
+        bannerEnabled: true,
+        messageSoundEnabled: true,
+      ),
+      vibrate: () async => vibrationCount++,
+      playSound: (_) async => soundCount++,
+    );
+    final event = ChatRealtimeEvent.parse({
+      'type': 'friendRequestUpdated',
+      'action': 'rejected',
+      'fromUserId': 'sender_200',
+      'toUserId': 'receiver_100',
+      'toNickName': '测试用户',
+    });
+
+    final notice = await service.handle(event, appIsForeground: true);
+
+    expect(notice?.title, '好友申请已被拒绝');
+    expect(notice?.body, '测试用户 拒绝了你的好友申请');
+    expect(vibrationCount, 1);
+    expect(soundCount, 1);
+  });
 }

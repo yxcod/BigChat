@@ -78,27 +78,59 @@ class FriendRequestModel {
 }
 
 class RecentFriendModel {
+  int? requestId;
   String? userName;
   String? nickName;
   int? addTime;
   String? remarks;
+  String? verificationMessage;
+  RequestStatus status;
+  FriendRequestDirection direction;
 
   RecentFriendModel({
+    this.requestId,
     required this.userName,
     required this.nickName,
     required this.addTime,
     this.remarks,
+    this.verificationMessage,
+    this.status = RequestStatus.accepted,
+    this.direction = FriendRequestDirection.incoming,
   });
 
-  factory RecentFriendModel.fromJSON(Map<String, dynamic> json) {
+  bool get isIncoming => direction == FriendRequestDirection.incoming;
+
+  String get eventKey => '${requestId ?? 0}:${status.name}:${addTime ?? 0}';
+
+  factory RecentFriendModel.fromJSON(
+    Map<String, dynamic> json, {
+    String currentUserName = '',
+  }) {
+    final toUserId = JsonValueParser.stringValue(json['toUserId']);
+    final explicitDirection = JsonValueParser.stringValue(json['direction']);
+    final incoming =
+        explicitDirection == 'incoming' ||
+        (explicitDirection.isEmpty && toUserId == currentUserName);
+    final status = switch (JsonValueParser.intValue(json['status'])) {
+      2 => RequestStatus.rejected,
+      6 => RequestStatus.expired,
+      0 => RequestStatus.pending,
+      _ => RequestStatus.accepted,
+    };
     return RecentFriendModel(
+      requestId: JsonValueParser.intValue(json['id']),
       userName: JsonValueParser.stringValue(json["userName"]),
       nickName: JsonValueParser.stringValue(json["nickName"]),
       addTime: JsonValueParser.timestampMillis(
-        json["addTime"],
+        json["updateTime"] ?? json["addTime"],
         fallback: DateTime.now().millisecondsSinceEpoch,
       ),
       remarks: JsonValueParser.stringValue(json["remarks"]),
+      verificationMessage: JsonValueParser.stringValue(json['applyMsg']),
+      status: status,
+      direction: incoming
+          ? FriendRequestDirection.incoming
+          : FriendRequestDirection.outgoing,
     );
   }
 }

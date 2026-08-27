@@ -98,21 +98,28 @@ Future<Map<String, dynamic>> updateFriendRemarkApi(
   }
 }
 
-//获取最近添加或拒绝的好友列表
+// 获取最近三天已同意或已拒绝的好友申请消息。
 Future<List<RecentFriendModel>> getRecentFriendsApi(String userName) async {
   try {
     Response response = await HttpUtil().post(
       '/api/friend/recentAgreedRequests',
       data: {'userName': userName},
     );
-    debugPrint('获取最近添加的好友列表成功：${response.data}');
+    debugPrint('获取最近好友申请消息成功：${response.data}');
     final mapData = response.data as Map<String, dynamic>;
-    final recentFriends = mapData['recentFriendsList'] as List<dynamic>;
+    final recentFriends =
+        (mapData['recentMessagesList'] ?? mapData['recentFriendsList'])
+            as List<dynamic>;
     return recentFriends
-        .map((item) => RecentFriendModel.fromJSON(item as Map<String, dynamic>))
+        .map(
+          (item) => RecentFriendModel.fromJSON(
+            item as Map<String, dynamic>,
+            currentUserName: userName,
+          ),
+        )
         .toList();
   } on DioException catch (e) {
-    debugPrint('获取最近添加的好友列表失败：${e.error}');
+    debugPrint('获取最近好友申请消息失败：${e.error}');
     throw Exception(e.error);
   }
 }

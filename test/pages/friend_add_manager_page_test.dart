@@ -5,7 +5,25 @@ import 'package:flutter_base/pages/friendManage/friendAddManagerPage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('新的朋友页面分开展示待处理申请和最近添加', (tester) async {
+  test('最近消息可以解析申请方收到的拒绝状态', () {
+    final message = RecentFriendModel.fromJSON({
+      'id': 88,
+      'fromUserId': 'sender',
+      'toUserId': 'receiver',
+      'direction': 'outgoing',
+      'userName': 'receiver',
+      'nickName': '接收方',
+      'status': 2,
+      'updateTime': 1787654321000,
+    }, currentUserName: 'sender');
+
+    expect(message.requestId, 88);
+    expect(message.status, RequestStatus.rejected);
+    expect(message.direction, FriendRequestDirection.outgoing);
+    expect(message.eventKey, '88:rejected:1787654321000');
+  });
+
+  testWidgets('新的朋友页面分开展示待处理申请和最近消息', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -40,11 +58,36 @@ void main() {
     expect(find.text('待处理  1'), findsOneWidget);
     expect(find.byKey(const ValueKey('friend_request_card')), findsOneWidget);
     expect(find.text('同意'), findsOneWidget);
-    expect(find.text('忽略'), findsOneWidget);
-    expect(find.text('最近添加'), findsOneWidget);
+    expect(find.text('拒绝'), findsOneWidget);
+    expect(find.text('最近消息'), findsOneWidget);
     expect(find.byKey(const ValueKey('recent_friends_card')), findsOneWidget);
     expect(find.text('安然'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('最近消息显示申请方被拒绝记录', (tester) async {
+    final recent = RecentFriendModel(
+      requestId: 303,
+      userName: 'rejector',
+      nickName: '拒绝方',
+      addTime: DateTime.now().millisecondsSinceEpoch,
+      status: RequestStatus.rejected,
+      direction: FriendRequestDirection.outgoing,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: FriendAddManagerPage(
+          initialRecentFriends: [recent],
+          autoLoad: false,
+        ),
+      ),
+    );
+
+    expect(find.text('最近消息'), findsOneWidget);
+    expect(find.text('对方拒绝了你的好友申请 · 刚刚'), findsOneWidget);
+    expect(find.text('已拒绝'), findsOneWidget);
   });
 
   testWidgets('发送方的待处理申请显示为待验证', (tester) async {

@@ -243,7 +243,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '最近添加',
+          '最近消息',
           style: TextStyle(
             color: context.appTextPrimary,
             fontSize: 15,
@@ -269,7 +269,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                   height: 100,
                   child: Center(
                     child: Text(
-                      '最近没有添加新好友',
+                      '最近三天没有好友申请消息',
                       style: TextStyle(
                         color: context.appTextSecondary,
                         fontSize: 13,
@@ -443,7 +443,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              child: const Text('忽略', style: TextStyle(fontSize: 13)),
+              child: const Text('拒绝', style: TextStyle(fontSize: 13)),
             ),
           ),
         ],
@@ -465,10 +465,28 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     final avatarUrl = getAvatarUrl();
     final isNetworkImage = avatarUrl.startsWith('http');
 
+    final eventTime = DateTime.fromMillisecondsSinceEpoch(
+      friend.addTime ?? DateTime.now().millisecondsSinceEpoch,
+    );
+    final isAccepted = friend.status == RequestStatus.accepted;
+    final statusText = isAccepted ? '已添加' : '已拒绝';
+    final statusColor = isAccepted
+        ? AppColors.primary
+        : const Color(0xFF9A6B49);
+    final description = switch ((friend.status, friend.direction)) {
+      (RequestStatus.rejected, FriendRequestDirection.outgoing) =>
+        '对方拒绝了你的好友申请',
+      (RequestStatus.rejected, FriendRequestDirection.incoming) =>
+        '你已拒绝对方的好友申请',
+      (RequestStatus.accepted, FriendRequestDirection.outgoing) =>
+        '对方已同意你的好友申请',
+      _ => '你已同意对方的好友申请',
+    };
+
     return Material(
       color: context.appSurface,
       child: InkWell(
-        onTap: () => _showFriendDetail(friend),
+        onTap: isAccepted ? () => _showFriendDetail(friend) : null,
         borderRadius: BorderRadius.circular(16),
         child: SizedBox(
           height: 72,
@@ -510,7 +528,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        '已添加 · ${_formatTime(friend.addTime != null ? DateTime.fromMillisecondsSinceEpoch(friend.addTime!) : DateTime.now())}',
+                        '$description · ${_formatTime(eventTime)}',
                         style: TextStyle(
                           color: context.appTextSecondary,
                           fontSize: 12.5,
@@ -519,10 +537,23 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFFB1B3B7),
-                  size: 21,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
             ),

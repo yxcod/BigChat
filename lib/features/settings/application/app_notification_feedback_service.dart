@@ -84,9 +84,16 @@ class AppNotificationFeedbackService {
   bool _isIncomingNotification(ChatRealtimeEvent event) {
     final currentUser = GlobalUtil().userName?.trim() ?? '';
     if (event.type == ChatRealtimeEventType.friendRequestUpdated) {
-      return event.data['action'] == 'created' &&
-          event.data['toUserId']?.toString() == currentUser &&
-          event.senderId.isNotEmpty;
+      final action = event.data['action']?.toString();
+      if (action == 'created') {
+        return event.data['toUserId']?.toString() == currentUser &&
+            event.senderId.isNotEmpty;
+      }
+      if (action == 'rejected') {
+        return event.data['fromUserId']?.toString() == currentUser &&
+            event.data['toUserId']?.toString().trim().isNotEmpty == true;
+      }
+      return false;
     }
     if (event.type != ChatRealtimeEventType.privateMessage &&
         event.type != ChatRealtimeEventType.groupMessage) {
@@ -101,7 +108,7 @@ class AppNotificationFeedbackService {
         ? friend.nickName!.trim()
         : event.senderId;
     if (event.type == ChatRealtimeEventType.friendRequestUpdated) {
-      return '新的好友申请';
+      return event.data['action'] == 'rejected' ? '好友申请已被拒绝' : '新的好友申请';
     }
     return event.type == ChatRealtimeEventType.groupMessage
         ? '群聊消息 · $displayName'
@@ -110,6 +117,12 @@ class AppNotificationFeedbackService {
 
   String _previewFor(ChatRealtimeEvent event) {
     if (event.type == ChatRealtimeEventType.friendRequestUpdated) {
+      if (event.data['action'] == 'rejected') {
+        final nickname = event.data['toNickName']?.toString().trim() ?? '';
+        final account = event.data['toUserId']?.toString().trim() ?? '';
+        final prefix = nickname.isEmpty ? account : nickname;
+        return prefix.isEmpty ? '对方拒绝了你的好友申请' : '$prefix 拒绝了你的好友申请';
+      }
       final nickname = event.data['fromNickName']?.toString().trim() ?? '';
       final message = event.data['applyMsg']?.toString().trim() ?? '';
       final prefix = nickname.isEmpty ? event.senderId : nickname;
