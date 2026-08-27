@@ -11,6 +11,7 @@ import '../../core/media/video_media.dart';
 import '../../features/moments/data/moments_repository.dart';
 import '../../features/moments/data/server_moments_repository.dart';
 import '../../features/moments/domain/moment.dart';
+import '../../features/nearby/presentation/nearby_merchants_page.dart';
 import '../../model/userInfoModel.dart';
 import '../../utils/gloabl.dart';
 
@@ -190,6 +191,8 @@ class _ProfilePageState extends State<ProfilePage>
             _buildProfileCard(),
             const SizedBox(height: 16),
             _buildMomentsCard(),
+            const SizedBox(height: 16),
+            _buildNearbyCard(),
             const SizedBox(height: 16),
             _buildSettingsCard(),
           ],
@@ -518,6 +521,25 @@ class _ProfilePageState extends State<ProfilePage>
             onTap: () {},
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildNearbyCard() {
+    return Container(
+      key: const ValueKey('profile_nearby_card'),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: _buildMenuRow(
+        icon: Icons.near_me_outlined,
+        title: '附近',
+        subtitle: '发现身边的商家与地点',
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const NearbyMerchantsPage())),
       ),
     );
   }

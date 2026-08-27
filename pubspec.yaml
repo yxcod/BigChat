@@ -50,6 +50,10 @@ dependencies:
   saver_gallery: ^4.1.2
   # image_gallery_saver: ^2.0.3 # 暂时移除，等待修复兼容性问题
   cached_network_image: ^3.4.1
+  # Baidu LBS POI search. AKs are supplied by the native platform config.
+  flutter_baidu_mapapi_base: ^4.0.1
+  flutter_baidu_mapapi_search: ^4.0.1
+  flutter_baidu_mapapi_utils: ^4.0.1
   # Agora Flutter SDK for real-time audio and video communication
   agora_rtc_engine: ^6.4.2
   # Permission handler for requesting camera and microphone permissions

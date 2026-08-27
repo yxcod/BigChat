@@ -25,8 +25,12 @@
     
     <application
         android:label="全信"
-        android:name="${applicationName}"
+        android:name="com.baidu.mapapi.base.BmfMapApplication"
         android:icon="@mipmap/ic_launcher">
+        <!-- Replace baidu_map_ak in res/values/baidu_lbs.xml with the Android AK. -->
+        <meta-data
+            android:name="com.baidu.lbsapi.API_KEY"
+            android:value="@string/baidu_map_ak" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

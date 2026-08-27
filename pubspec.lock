@@ -214,6 +214,30 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_baidu_mapapi_base:
+    dependency: "direct main"
+    description:
+      name: flutter_baidu_mapapi_base
+      sha256: "6108c473894bfc6949b69c5214ca3bf29fd3e457cc9b72005ba5cdd1fe113485"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "4.0.1+1"
+  flutter_baidu_mapapi_search:
+    dependency: "direct main"
+    description:
+      name: flutter_baidu_mapapi_search
+      sha256: e044b930a506e95fb579c8e9a0b1fa76701dc72d1f7d1165b1d96909e92c6cb8
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "4.0.1+1"
+  flutter_baidu_mapapi_utils:
+    dependency: "direct main"
+    description:
+      name: flutter_baidu_mapapi_utils
+      sha256: "9ca313a6ce2d7e01b2b72438cc0f15217b89c681a39735f66fbdf9f48eaf7039"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "4.0.1+1"
   flutter_cache_manager:
     dependency: "direct main"
     description:
