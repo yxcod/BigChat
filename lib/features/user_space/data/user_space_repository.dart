@@ -2,6 +2,9 @@ import '../../../utils/gloabl.dart';
 import '../../../utils/http.dart';
 import '../domain/user_space.dart';
 
+typedef SpaceCoverUrlBuilder =
+    String Function(String ownerUserName, String imageName);
+
 abstract class UserSpaceRepository {
   Future<UserSpaceData> fetchSpace(String targetUserName);
 
@@ -52,11 +55,17 @@ class ServerUserSpaceRepository implements UserSpaceRepository {
   ServerUserSpaceRepository({
     UserSpaceApiClient? apiClient,
     GlobalUtil? globalUtil,
+    SpaceCoverUrlBuilder? coverUrlBuilder,
+    String? currentUserName,
   }) : _apiClient = apiClient ?? HttpUserSpaceApiClient(),
-       _globalUtil = globalUtil ?? GlobalUtil();
+       _globalUtil = globalUtil ?? GlobalUtil(),
+       _coverUrlBuilder = coverUrlBuilder,
+       _currentUserName = currentUserName;
 
   final UserSpaceApiClient _apiClient;
   final GlobalUtil _globalUtil;
+  final SpaceCoverUrlBuilder? _coverUrlBuilder;
+  final String? _currentUserName;
 
   @override
   Future<UserSpaceData> fetchSpace(String targetUserName) async {
@@ -67,10 +76,14 @@ class ServerUserSpaceRepository implements UserSpaceRepository {
       }),
     );
     final rawMessages = data['messages'];
+    final ownerUserName = data['ownerUserName']?.toString() ?? targetUserName;
     return UserSpaceData(
-      ownerUserName: data['ownerUserName']?.toString() ?? targetUserName,
+      ownerUserName: ownerUserName,
       isOwner: data['isOwner'] == true,
-      coverImageUrl: data['coverImageUrl']?.toString() ?? '',
+      coverImageUrl: _resolveCoverUrl(
+        ownerUserName,
+        data['coverImageUrl']?.toString() ?? '',
+      ),
       messages: rawMessages is List
           ? rawMessages
                 .whereType<Map>()
@@ -82,12 +95,17 @@ class ServerUserSpaceRepository implements UserSpaceRepository {
 
   @override
   Future<String> updateCover(String coverImageUrl) async {
+    final stableReference = _stableCoverReference(coverImageUrl);
     final data = _requireData(
       await _apiClient.post('/api/space/updateCover', {
-        'coverImageUrl': coverImageUrl,
+        'coverImageUrl': stableReference,
       }),
     );
-    return data['coverImageUrl']?.toString() ?? '';
+    final ownerUserName = _currentUserName ?? _globalUtil.userName ?? '';
+    return _resolveCoverUrl(
+      ownerUserName,
+      data['coverImageUrl']?.toString() ?? stableReference,
+    );
   }
 
   @override
@@ -157,6 +175,43 @@ class ServerUserSpaceRepository implements UserSpaceRepository {
   int? _asInt(Object? value) {
     if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '');
+  }
+
+  String _stableCoverReference(String rawValue) {
+    final value = rawValue.trim();
+    if (value.isEmpty) return '';
+    final uri = Uri.tryParse(value);
+    final imageName = uri?.queryParameters['imageName']?.trim() ?? '';
+    return imageName.isEmpty ? value : imageName;
+  }
+
+  String _resolveCoverUrl(String ownerUserName, String rawValue) {
+    final value = rawValue.trim();
+    if (value.isEmpty) return '';
+    final uri = Uri.tryParse(value);
+    final imageName = uri?.queryParameters['imageName']?.trim() ?? '';
+    final storedOwner = uri?.queryParameters['userName']?.trim() ?? '';
+    if (imageName.isNotEmpty) {
+      return _buildCoverUrl(
+        storedOwner.isEmpty ? ownerUserName : storedOwner,
+        imageName,
+      );
+    }
+    if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+      return value;
+    }
+    return _buildCoverUrl(ownerUserName, value);
+  }
+
+  String _buildCoverUrl(String ownerUserName, String imageName) {
+    if (ownerUserName.isEmpty || imageName.isEmpty) return '';
+    final builder = _coverUrlBuilder;
+    if (builder != null) return builder(ownerUserName, imageName);
+    try {
+      return _globalUtil.getImageURL(ownerUserName, imageName);
+    } catch (_) {
+      return '';
+    }
   }
 }
 

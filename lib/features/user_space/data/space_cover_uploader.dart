@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import '../../../utils/gloabl.dart';
 import '../../../utils/http.dart';
 
 abstract class SpaceCoverUploader {
@@ -11,12 +10,10 @@ abstract class SpaceCoverUploader {
 }
 
 class ServerSpaceCoverUploader implements SpaceCoverUploader {
-  ServerSpaceCoverUploader({HttpUtil? httpUtil, GlobalUtil? globalUtil})
-    : _httpUtil = httpUtil ?? HttpUtil(),
-      _globalUtil = globalUtil ?? GlobalUtil();
+  ServerSpaceCoverUploader({HttpUtil? httpUtil})
+    : _httpUtil = httpUtil ?? HttpUtil();
 
   final HttpUtil _httpUtil;
-  final GlobalUtil _globalUtil;
 
   @override
   Future<String> upload({
@@ -37,7 +34,9 @@ class ServerSpaceCoverUploader implements SpaceCoverUploader {
       userName: ownerUserName,
     );
     if (!success) throw Exception('封面上传失败');
-    return _globalUtil.getImageURL(ownerUserName, name);
+    // Persist a stable resource identity. Download URLs contain a login token
+    // and must be regenerated whenever the space is opened again.
+    return name;
   }
 
   String _extension(String path) {

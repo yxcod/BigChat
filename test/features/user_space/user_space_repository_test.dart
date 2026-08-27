@@ -75,6 +75,41 @@ void main() {
     expect(api.requests[1].data['content'], '你好');
     expect(api.requests[2].data['messageId'], 'm2');
   });
+
+  test('cover references survive renewed download tokens', () async {
+    final api = _FakeUserSpaceApiClient({
+      '/api/space/detail': {
+        'code': 100,
+        'data': {
+          'ownerUserName': 'owner',
+          'isOwner': true,
+          'coverImageUrl':
+              'https://old.example/api/image/download?key=expired'
+              '&userName=owner&imageName=owner_space_cover_1.jpg',
+          'messages': <dynamic>[],
+        },
+      },
+      '/api/space/updateCover': {
+        'code': 100,
+        'data': {'coverImageUrl': 'owner_space_cover_2.jpg'},
+      },
+    });
+    final repository = ServerUserSpaceRepository(
+      apiClient: api,
+      coverUrlBuilder: (owner, image) => 'current://$owner/$image',
+      currentUserName: 'owner',
+    );
+
+    final loaded = await repository.fetchSpace('owner');
+    final updated = await repository.updateCover(
+      'https://old.example/api/image/download?key=expired'
+      '&userName=owner&imageName=owner_space_cover_2.jpg',
+    );
+
+    expect(loaded.coverImageUrl, 'current://owner/owner_space_cover_1.jpg');
+    expect(updated, 'current://owner/owner_space_cover_2.jpg');
+    expect(api.requests[1].data['coverImageUrl'], 'owner_space_cover_2.jpg');
+  });
 }
 
 class _Request {
