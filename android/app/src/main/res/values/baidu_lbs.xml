@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Android mobile AK from the Baidu LBS console. -->
-    <string name="baidu_map_ak"></string>
+    <string name="baidu_map_ak">ijHZCoSjbiKom1NgkQN5dnL5CAL7yHka</string>
 </resources>
