@@ -1,11 +1,9 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_context.dart';
-import '../../../core/cache/app_image_cache.dart';
 import '../data/merchant_reviews_repository.dart';
 import '../data/nearby_merchants_repository.dart';
 import '../domain/nearby_merchant.dart';
@@ -601,24 +599,12 @@ class _MerchantImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final images = merchant.availableImageUrls;
-    final imageUrl = images.isEmpty ? null : images.first;
-    final fallback = MerchantCategoryPlaceholder(merchant: merchant);
     return ClipRRect(
       borderRadius: BorderRadius.circular(13),
       child: SizedBox(
         width: 86,
         height: 86,
-        child: imageUrl == null
-            ? fallback
-            : CachedNetworkImage(
-                cacheManager: AppImageCache.manager,
-                imageUrl: imageUrl,
-                cacheKey: AppImageCache.cacheKey(imageUrl),
-                fit: BoxFit.cover,
-                placeholder: (_, _) => fallback,
-                errorWidget: (_, _, _) => fallback,
-              ),
+        child: MerchantImageView(merchant: merchant),
       ),
     );
   }

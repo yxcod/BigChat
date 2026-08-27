@@ -60,6 +60,36 @@ void main() {
     expect(find.byIcon(Icons.style_rounded), findsOneWidget);
   });
 
+  testWidgets('keeps category artwork behind a pending merchant photo', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NearbyMerchantsPage(
+          loader: (_) async => const NearbyMerchantsResult(
+            currentCity: '南京市',
+            merchants: [
+              NearbyMerchant(
+                id: 'restaurant-1',
+                name: '巷口饭店',
+                category: '美食;中餐厅',
+                imageUrl: 'https://example.invalid/pending.jpg',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('merchant-placeholder-餐饮美食')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.restaurant_rounded), findsOneWidget);
+  });
+
   testWidgets('search field sends the typed merchant query', (tester) async {
     final queries = <String>[];
     await tester.pumpWidget(

@@ -1,10 +1,8 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_context.dart';
-import '../../../core/cache/app_image_cache.dart';
 import '../data/baidu_poi_search_client.dart';
 import '../domain/nearby_merchant.dart';
 import 'merchant_category_placeholder.dart';
@@ -280,13 +278,10 @@ class _MerchantGallery extends StatelessWidget {
       height: 210,
       child: PageView.builder(
         itemCount: images.length,
-        itemBuilder: (context, index) => CachedNetworkImage(
-          cacheManager: AppImageCache.manager,
+        itemBuilder: (context, index) => MerchantImageView(
+          merchant: merchant,
           imageUrl: images[index],
-          cacheKey: AppImageCache.cacheKey(images[index]),
-          fit: BoxFit.cover,
-          errorWidget: (_, _, _) =>
-              MerchantCategoryPlaceholder(merchant: merchant, showLabel: true),
+          showFallbackLabel: true,
         ),
       ),
     );

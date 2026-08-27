@@ -1,5 +1,7 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/cache/app_image_cache.dart';
 import '../domain/nearby_merchant.dart';
 
 class MerchantCategoryVisual {
@@ -201,6 +203,77 @@ class MerchantCategoryPlaceholder extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Keeps the category artwork visible until a real network image has decoded.
+///
+/// Some POI image URLs never return an error and remain pending for a long time.
+/// Putting the fallback behind the network layer avoids an empty merchant tile
+/// in that state, while still replacing it immediately after a frame is ready.
+class MerchantImageView extends StatelessWidget {
+  const MerchantImageView({
+    super.key,
+    required this.merchant,
+    this.imageUrl,
+    this.fit = BoxFit.cover,
+    this.showFallbackLabel = false,
+    this.fallbackCaption,
+  });
+
+  final NearbyMerchant merchant;
+  final String? imageUrl;
+  final BoxFit fit;
+  final bool showFallbackLabel;
+  final String? fallbackCaption;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedUrl =
+        _usableNetworkUrl(imageUrl) ??
+        _firstUsableUrl(merchant.availableImageUrls);
+    final fallback = MerchantCategoryPlaceholder(
+      merchant: merchant,
+      showLabel: showFallbackLabel,
+      caption: fallbackCaption,
+    );
+
+    if (resolvedUrl == null) return fallback;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        fallback,
+        CachedNetworkImage(
+          cacheManager: AppImageCache.manager,
+          imageUrl: resolvedUrl,
+          cacheKey: AppImageCache.cacheKey(resolvedUrl),
+          fit: fit,
+          fadeInDuration: const Duration(milliseconds: 160),
+          placeholder: (_, _) => const SizedBox.expand(),
+          errorWidget: (_, _, _) => const SizedBox.expand(),
+        ),
+      ],
+    );
+  }
+
+  String? _usableNetworkUrl(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty || value == 'null') return null;
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
+      return null;
+    }
+    return value;
+  }
+
+  String? _firstUsableUrl(Iterable<String> values) {
+    for (final value in values) {
+      final resolved = _usableNetworkUrl(value);
+      if (resolved != null) return resolved;
+    }
+    return null;
   }
 }
 
