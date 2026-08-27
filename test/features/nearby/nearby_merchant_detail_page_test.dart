@@ -80,4 +80,22 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(clipboardText, '025-12345678');
   });
+
+  testWidgets('merchant name copies on tap', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NearbyMerchantDetailPage(
+          merchant: merchant,
+          loader: (value) async => value,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('nearby_detail_merchant_name')));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(clipboardText, '蓝鲸咖啡');
+    expect(find.text('商家名称已复制'), findsOneWidget);
+  });
 }

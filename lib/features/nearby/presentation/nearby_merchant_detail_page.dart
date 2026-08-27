@@ -126,12 +126,32 @@ class _NearbyMerchantDetailPageState extends State<NearbyMerchantDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _merchant.name,
-                  style: TextStyle(
-                    color: context.appTextPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
+                InkWell(
+                  key: const ValueKey('nearby_detail_merchant_name'),
+                  onTap: () => _copy('商家名称', _merchant.name),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _merchant.name,
+                            style: TextStyle(
+                              color: context.appTextPrimary,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.content_copy_rounded,
+                          size: 17,
+                          color: context.appTextSecondary,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 10),
