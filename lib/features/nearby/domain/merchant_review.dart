@@ -9,12 +9,14 @@ class MerchantReviewComment {
     required this.createdAt,
     this.userId = '',
     this.displayName = '',
+    this.imageName = '',
   });
 
   final String id;
   final String userId;
   final String displayName;
   final String content;
+  final String imageName;
   final DateTime createdAt;
 
   Map<String, dynamic> toJson() => {
@@ -22,6 +24,7 @@ class MerchantReviewComment {
     'userId': userId,
     'displayName': displayName,
     'content': content,
+    'imageName': imageName,
     'createdAt': createdAt.toIso8601String(),
   };
 
@@ -31,6 +34,7 @@ class MerchantReviewComment {
       userId: json['userId']?.toString() ?? '',
       displayName: json['displayName']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
+      imageName: json['imageName']?.toString() ?? '',
       createdAt: _asDateTime(json['createdAt']),
     );
   }

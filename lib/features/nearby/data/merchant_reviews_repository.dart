@@ -176,9 +176,16 @@ class MerchantReviewsRepository {
     return updated;
   }
 
-  Future<MerchantReview> addComment(String merchantId, String content) async {
+  Future<MerchantReview> addComment(
+    String merchantId,
+    String content, {
+    String imageName = '',
+  }) async {
     final normalized = content.trim();
-    if (normalized.isEmpty) throw ArgumentError('评论内容不能为空');
+    final normalizedImageName = imageName.trim();
+    if (normalized.isEmpty && normalizedImageName.isEmpty) {
+      throw ArgumentError('评论内容和图片不能同时为空');
+    }
 
     final reviews = await load();
     final index = reviews.indexWhere((item) => item.merchant.id == merchantId);
@@ -191,6 +198,7 @@ class MerchantReviewsRepository {
           await _apiClient.post('/api/merchantReview/comment', {
             'entryId': current.entryId,
             'content': normalized,
+            'imageName': normalizedImageName,
           }),
         ),
       );
@@ -204,6 +212,7 @@ class MerchantReviewsRepository {
       userId: _ownerId,
       displayName: '我',
       content: normalized,
+      imageName: normalizedImageName,
       createdAt: now,
     );
     final updated = current.copyWith(comments: [...current.comments, comment]);
@@ -291,6 +300,7 @@ class MerchantReviewsRepository {
           await _apiClient!.post('/api/merchantReview/comment', {
             'entryId': remote.entryId,
             'content': comment.content,
+            'imageName': comment.imageName,
           }),
         ),
       );

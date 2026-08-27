@@ -98,7 +98,12 @@ void main() {
       const NearbyMerchant(id: 'food-2', name: '北城小馆'),
     );
     await repository.setReaction('food-2', MerchantReviewReaction.like);
-    await repository.addComment('food-2', '服务很好');
+    final commented = await repository.addComment(
+      'food-2',
+      '服务很好',
+      imageName: 'review_photo.jpg',
+    );
+    expect(commented.comments.single.imageName, 'review_photo.jpg');
     await repository.removeMerchant('food-2');
 
     expect(
@@ -112,6 +117,7 @@ void main() {
     );
     final reviews = await repository.load();
     expect(reviews, isEmpty);
+    expect(api.lastCommentImageName, 'review_photo.jpg');
   });
 
   test('migrates an existing local review to server once', () async {
@@ -146,6 +152,7 @@ void main() {
 class _FakeMerchantReviewsApiClient implements MerchantReviewsApiClient {
   final List<String> paths = [];
   Map<String, dynamic>? _review;
+  String? lastCommentImageName;
 
   @override
   Future<Map<String, dynamic>> post(
@@ -181,12 +188,14 @@ class _FakeMerchantReviewsApiClient implements MerchantReviewsApiClient {
         if (reaction == 'dislike') _review!['dislikes'] = 1;
         return _success(_review!);
       case '/api/merchantReview/comment':
+        lastCommentImageName = data['imageName']?.toString();
         final comments = _review!['comments'] as List<Map<String, dynamic>>;
         comments.add({
           'id': comments.length + 1,
           'userId': 'tester',
           'displayName': '测试用户',
           'content': data['content'],
+          'imageName': data['imageName'],
           'createdAt': DateTime(2026, 8, 27).millisecondsSinceEpoch,
         });
         return _success(_review!);
