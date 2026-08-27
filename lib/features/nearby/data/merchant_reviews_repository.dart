@@ -212,6 +212,26 @@ class MerchantReviewsRepository {
     return updated;
   }
 
+  Future<void> removeMerchant(String merchantId) async {
+    final reviews = await load();
+    final index = reviews.indexWhere((item) => item.merchant.id == merchantId);
+    if (index < 0) return;
+
+    final current = reviews[index];
+    if (_apiClient != null && current.entryId.isNotEmpty) {
+      _requireData(
+        await _apiClient.post('/api/merchantReview/remove', {
+          'entryId': current.entryId,
+        }),
+      );
+    }
+    await _save(
+      reviews
+          .where((item) => item.merchant.id != merchantId)
+          .toList(growable: false),
+    );
+  }
+
   Future<void> _save(List<MerchantReview> reviews) async {
     final value = jsonEncode(reviews.map((item) => item.toJson()).toList());
     if (_write != null) {

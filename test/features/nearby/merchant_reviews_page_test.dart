@@ -58,4 +58,35 @@ void main() {
 
     expect(find.text('赞 1'), findsOneWidget);
   });
+
+  testWidgets('owner can remove a collected merchant', (tester) async {
+    String? storedValue;
+    final repository = MerchantReviewsRepository(
+      ownerId: 'tester',
+      read: (_) => storedValue,
+      write: (_, value) async => storedValue = value,
+    );
+    await repository.addMerchant(
+      const NearbyMerchant(id: 'remove-1', name: '待移除商家'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: MerchantReviewsPage(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('merchant_review_menu_remove-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('移除收录'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('confirm_remove_merchant_review')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('待移除商家'), findsNothing);
+    expect(await repository.load(), isEmpty);
+  });
 }

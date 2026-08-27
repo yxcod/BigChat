@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_context.dart';
 import '../../../core/cache/app_image_cache.dart';
+import '../../../utils/storageUtil.dart';
 import '../data/merchant_reviews_repository.dart';
 import '../domain/merchant_review.dart';
 import '../domain/nearby_merchant.dart';
+import 'merchant_category_placeholder.dart';
 import 'merchant_review_comments_page.dart';
 import 'nearby_merchant_detail_page.dart';
 
@@ -16,11 +18,13 @@ class MerchantReviewsPage extends StatefulWidget {
     this.repository,
     this.userId,
     this.pageTitle,
+    this.allowRemoval,
   });
 
   final MerchantReviewsRepository? repository;
   final String? userId;
   final String? pageTitle;
+  final bool? allowRemoval;
 
   @override
   State<MerchantReviewsPage> createState() => _MerchantReviewsPageState();
@@ -35,12 +39,17 @@ class _MerchantReviewsPageState extends State<MerchantReviewsPage> {
   String _selectedFilter = '全部';
   bool _loading = true;
   bool _searching = false;
+  late final bool _canRemove;
 
   @override
   void initState() {
     super.initState();
     _repository =
         widget.repository ?? MerchantReviewsRepository(ownerId: widget.userId);
+    final currentUserId = StorageUtil.getUserId();
+    _canRemove =
+        widget.allowRemoval ??
+        (widget.userId == null || widget.userId == currentUserId);
     _load();
   }
 
@@ -96,6 +105,46 @@ class _MerchantReviewsPageState extends State<MerchantReviewsPage> {
       ),
     );
     await _load();
+  }
+
+  Future<void> _removeReview(MerchantReview review) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('移除已收录商家'),
+        content: Text('确定将“${review.merchant.name}”从点评系统中移除吗？相关点赞、踩和评论也会一并删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            key: const ValueKey('confirm_remove_merchant_review'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            child: const Text('移除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await _repository.removeMerchant(review.merchant.id);
+      if (!mounted) return;
+      setState(() {
+        _reviews = _reviews
+            .where((item) => item.merchant.id != review.merchant.id)
+            .toList(growable: false);
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已移除该商家')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('移除失败：$error')));
+    }
   }
 
   @override
@@ -257,6 +306,7 @@ class _MerchantReviewsPageState extends State<MerchantReviewsPage> {
             onDislike: () =>
                 _toggleReaction(review, MerchantReviewReaction.dislike),
             onComment: () => _openComments(review),
+            onRemove: _canRemove ? () => _removeReview(review) : null,
           );
         },
       ),
@@ -271,6 +321,7 @@ class _ReviewMerchantCard extends StatelessWidget {
     required this.onLike,
     required this.onDislike,
     required this.onComment,
+    this.onRemove,
   });
 
   final MerchantReview review;
@@ -278,6 +329,7 @@ class _ReviewMerchantCard extends StatelessWidget {
   final VoidCallback onLike;
   final VoidCallback onDislike;
   final VoidCallback onComment;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -300,7 +352,7 @@ class _ReviewMerchantCard extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: SizedBox(
-                      height: 92,
+                      height: 94,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -321,11 +373,48 @@ class _ReviewMerchantCard extends StatelessWidget {
                               _CategoryBadge(
                                 label: _merchantCategory(merchant),
                               ),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                color: Color(0xFFA5A8AD),
-                                size: 21,
-                              ),
+                              if (onRemove == null)
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: Color(0xFFA5A8AD),
+                                  size: 21,
+                                )
+                              else
+                                PopupMenuButton<String>(
+                                  key: ValueKey(
+                                    'merchant_review_menu_${merchant.id}',
+                                  ),
+                                  tooltip: '更多操作',
+                                  padding: EdgeInsets.zero,
+                                  child: const SizedBox(
+                                    width: 28,
+                                    height: 24,
+                                    child: Icon(
+                                      Icons.more_horiz_rounded,
+                                      color: Color(0xFFA5A8AD),
+                                      size: 21,
+                                    ),
+                                  ),
+                                  onSelected: (value) {
+                                    if (value == 'remove') onRemove?.call();
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                      value: 'remove',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.remove_circle_outline,
+                                            color: AppColors.danger,
+                                            size: 20,
+                                          ),
+                                          SizedBox(width: 9),
+                                          Text('移除收录'),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -418,15 +507,7 @@ class _ReviewMerchantImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final images = merchant.availableImageUrls;
-    final fallback = Container(
-      color: const Color(0xFF71BE99),
-      alignment: Alignment.center,
-      child: const Icon(
-        Icons.storefront_rounded,
-        color: Colors.white,
-        size: 34,
-      ),
-    );
+    final fallback = MerchantCategoryPlaceholder(merchant: merchant);
     return ClipRRect(
       borderRadius: BorderRadius.circular(13),
       child: SizedBox.square(

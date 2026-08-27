@@ -33,7 +33,31 @@ void main() {
     expect(find.text('蓝鲸咖啡'), findsOneWidget);
     expect(find.text('180m'), findsOneWidget);
     expect(find.text('中山东路1号'), findsOneWidget);
-    expect(find.byIcon(Icons.restaurant_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.local_cafe_rounded), findsOneWidget);
+  });
+
+  testWidgets('uses a category placeholder when a merchant has no photo', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NearbyMerchantsPage(
+          loader: (_) async => const NearbyMerchantsResult(
+            currentCity: '南京市',
+            merchants: [
+              NearbyMerchant(id: 'cards-1', name: '好友棋牌室', category: '休闲娱乐;棋牌'),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('merchant-placeholder-棋牌娱乐')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.style_rounded), findsOneWidget);
   });
 
   testWidgets('search field sends the typed merchant query', (tester) async {

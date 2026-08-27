@@ -68,6 +68,22 @@ void main() {
     ]);
   });
 
+  test('removes a collected merchant from local storage', () async {
+    String? storedValue;
+    final repository = MerchantReviewsRepository(
+      ownerId: 'tester',
+      read: (_) => storedValue,
+      write: (_, value) async => storedValue = value,
+    );
+    await repository.addMerchant(
+      const NearbyMerchant(id: 'remove-local', name: '待移除商家'),
+    );
+
+    await repository.removeMerchant('remove-local');
+
+    expect(await repository.load(), isEmpty);
+  });
+
   test('persists merchant, reaction and comment through server API', () async {
     String? storedValue;
     final api = _FakeMerchantReviewsApiClient();
@@ -83,6 +99,7 @@ void main() {
     );
     await repository.setReaction('food-2', MerchantReviewReaction.like);
     await repository.addComment('food-2', '服务很好');
+    await repository.removeMerchant('food-2');
 
     expect(
       api.paths,
@@ -90,12 +107,11 @@ void main() {
         '/api/merchantReview/add',
         '/api/merchantReview/reaction',
         '/api/merchantReview/comment',
+        '/api/merchantReview/remove',
       ]),
     );
     final reviews = await repository.load();
-    expect(reviews.single.entryId, '42');
-    expect(reviews.single.likes, 1);
-    expect(reviews.single.comments.single.content, '服务很好');
+    expect(reviews, isEmpty);
   });
 
   test('migrates an existing local review to server once', () async {
@@ -174,6 +190,9 @@ class _FakeMerchantReviewsApiClient implements MerchantReviewsApiClient {
           'createdAt': DateTime(2026, 8, 27).millisecondsSinceEpoch,
         });
         return _success(_review!);
+      case '/api/merchantReview/remove':
+        _review = null;
+        return _success({'entryId': data['entryId']});
       default:
         throw StateError('Unexpected path: $path');
     }

@@ -9,6 +9,7 @@ import '../../../core/cache/app_image_cache.dart';
 import '../data/merchant_reviews_repository.dart';
 import '../data/nearby_merchants_repository.dart';
 import '../domain/nearby_merchant.dart';
+import 'merchant_category_placeholder.dart';
 import 'merchant_reviews_page.dart';
 import 'nearby_merchant_detail_page.dart';
 
@@ -602,15 +603,7 @@ class _MerchantImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final images = merchant.availableImageUrls;
     final imageUrl = images.isEmpty ? null : images.first;
-    final fallback = Container(
-      color: _categoryColor(merchant.category),
-      alignment: Alignment.center,
-      child: Icon(
-        _categoryIcon(merchant.category),
-        color: Colors.white,
-        size: 34,
-      ),
-    );
+    final fallback = MerchantCategoryPlaceholder(merchant: merchant);
     return ClipRRect(
       borderRadius: BorderRadius.circular(13),
       child: SizedBox(
@@ -628,26 +621,6 @@ class _MerchantImage extends StatelessWidget {
               ),
       ),
     );
-  }
-
-  IconData _categoryIcon(String category) {
-    if (category.contains('美食') || category.contains('餐饮')) {
-      return Icons.restaurant_rounded;
-    }
-    if (category.contains('酒店')) return Icons.hotel_rounded;
-    if (category.contains('购物')) return Icons.shopping_bag_rounded;
-    if (category.contains('娱乐')) return Icons.sports_esports_rounded;
-    return Icons.storefront_rounded;
-  }
-
-  Color _categoryColor(String category) {
-    if (category.contains('美食') || category.contains('餐饮')) {
-      return const Color(0xFFF29B68);
-    }
-    if (category.contains('酒店')) return const Color(0xFF829BE9);
-    if (category.contains('购物')) return const Color(0xFFE486A8);
-    if (category.contains('娱乐')) return const Color(0xFF8E83DD);
-    return const Color(0xFF65B995);
   }
 }
 

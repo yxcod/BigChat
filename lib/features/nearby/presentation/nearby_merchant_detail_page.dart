@@ -7,6 +7,7 @@ import '../../../app/theme/app_theme_context.dart';
 import '../../../core/cache/app_image_cache.dart';
 import '../data/baidu_poi_search_client.dart';
 import '../domain/nearby_merchant.dart';
+import 'merchant_category_placeholder.dart';
 
 typedef NearbyMerchantDetailLoader =
     Future<NearbyMerchant> Function(NearbyMerchant merchant);
@@ -263,33 +264,15 @@ class _MerchantGallery extends StatelessWidget {
   Widget build(BuildContext context) {
     final images = merchant.availableImageUrls;
     if (images.isEmpty) {
-      return Container(
+      return SizedBox(
         height: 190,
         width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              _categoryColor(merchant.category),
-              const Color(0xFFB8D9C8),
-            ],
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _categoryIcon(merchant.category),
-              size: 50,
-              color: Colors.white,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              merchant.imageCount > 0 ? '商家图片暂不可读取' : '商家暂未提供实景图片',
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-            ),
-          ],
+        child: MerchantCategoryPlaceholder(
+          merchant: merchant,
+          showLabel: true,
+          caption: merchant.imageCount > 0
+              ? '商家图片暂不可读取'
+              : merchantCategoryVisual(merchant).label,
         ),
       );
     }
@@ -302,13 +285,8 @@ class _MerchantGallery extends StatelessWidget {
           imageUrl: images[index],
           cacheKey: AppImageCache.cacheKey(images[index]),
           fit: BoxFit.cover,
-          errorWidget: (_, _, _) => ColoredBox(
-            color: context.appSearchBackground,
-            child: Icon(
-              Icons.broken_image_outlined,
-              color: context.appTextSecondary,
-            ),
-          ),
+          errorWidget: (_, _, _) =>
+              MerchantCategoryPlaceholder(merchant: merchant, showLabel: true),
         ),
       ),
     );
@@ -448,24 +426,4 @@ class _BusinessInfoRow extends StatelessWidget {
       ),
     );
   }
-}
-
-IconData _categoryIcon(String category) {
-  if (category.contains('美食') || category.contains('餐饮')) {
-    return Icons.restaurant_rounded;
-  }
-  if (category.contains('酒店')) return Icons.hotel_rounded;
-  if (category.contains('购物')) return Icons.shopping_bag_rounded;
-  if (category.contains('娱乐')) return Icons.sports_esports_rounded;
-  return Icons.storefront_rounded;
-}
-
-Color _categoryColor(String category) {
-  if (category.contains('美食') || category.contains('餐饮')) {
-    return const Color(0xFFF29B68);
-  }
-  if (category.contains('酒店')) return const Color(0xFF829BE9);
-  if (category.contains('购物')) return const Color(0xFFE486A8);
-  if (category.contains('娱乐')) return const Color(0xFF8E83DD);
-  return const Color(0xFF65B995);
 }
