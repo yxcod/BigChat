@@ -273,9 +273,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           },
         );
       } else {
-        ScaffoldMessenger.maybeOf(
-          navigator.context,
-        )?.showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.maybeOf(navigator.context)?.showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
       _handlingRemovedGroups.remove(groupId);
     });

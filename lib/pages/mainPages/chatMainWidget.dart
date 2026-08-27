@@ -80,9 +80,6 @@ class _BigchatMainPageState extends State<BigchatMainPage>
     }
     if (state == AppLifecycleState.resumed && _wasBackgrounded) {
       _wasBackgrounded = false;
-      if (_currentIndex != 0 && mounted) {
-        setState(() => _currentIndex = 0);
-      }
     }
   }
 

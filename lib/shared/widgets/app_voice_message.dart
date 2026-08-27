@@ -197,7 +197,10 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
     if (!mounted) return;
     final isDamaged = error is StateError && error.toString().contains('已损坏');
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(isDamaged ? '该语音文件已损坏，无法播放' : '语音加载失败，请稍后重试')),
+      SnackBar(
+        content: Text(isDamaged ? '该语音文件已损坏，无法播放' : '语音加载失败，请稍后重试'),
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
@@ -288,7 +291,10 @@ class _AppVoiceMessageState extends State<AppVoiceMessage> {
   void _showTranscriptionError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message.isEmpty ? '语音转文字失败，请稍后重试' : message)),
+      SnackBar(
+        content: Text(message.isEmpty ? '语音转文字失败，请稍后重试' : message),
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 

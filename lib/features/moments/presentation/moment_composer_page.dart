@@ -80,9 +80,12 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
         });
     } catch (error) {
       if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('无法选择视频：$error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('无法选择视频：$error'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
     }
   }
 
@@ -138,9 +141,12 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('发布失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('发布失败：$error'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isPublishing = false);
     }

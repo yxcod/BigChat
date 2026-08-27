@@ -62,9 +62,12 @@ class _RegionEditorPageState extends State<RegionEditorPage> {
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('定位失败：$error，请手动填写地区')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('定位失败：$error，请手动填写地区'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLocating = false);
     }
@@ -73,9 +76,12 @@ class _RegionEditorPageState extends State<RegionEditorPage> {
   void _complete() {
     final value = _controller.text.trim();
     if (value.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请填写市级地区')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('请填写市级地区'),
+          duration: Duration(seconds: 2),
+        ),
+      );
       return;
     }
     if (value.characters.length > 8) {

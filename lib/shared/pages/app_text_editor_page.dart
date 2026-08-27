@@ -58,9 +58,12 @@ class _AppTextEditorPageState extends State<AppTextEditorPage> {
   void _save() {
     final value = _controller.text.trim();
     if (!widget.allowEmpty && value.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(widget.emptyMessage)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.emptyMessage),
+          duration: const Duration(seconds: 2),
+        ),
+      );
       return;
     }
     Navigator.pop(context, value);

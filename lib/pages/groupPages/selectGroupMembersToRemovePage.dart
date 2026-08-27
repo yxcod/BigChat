@@ -273,9 +273,12 @@ class _SelectGroupMembersToRemovePageState
         // 检查页面是否仍然可见
         if (mounted) {
           // 显示成功提示
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('移除群成员成功')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('移除群成员成功'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
 
           // 更新群成员列表，确保下次打开页面时能正确显示
           setState(() {
@@ -303,9 +306,12 @@ class _SelectGroupMembersToRemovePageState
       // 检查页面是否仍然可见
       if (mounted) {
         // 显示错误提示
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('移除群成员失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('移除群成员失败: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     }
   }

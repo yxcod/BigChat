@@ -84,9 +84,12 @@ class _RegisterPageState extends State<RegisterPage> {
 
       final code = result is Map ? result['code'] : null;
       if (code == 100) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('注册成功，请登录')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('注册成功，请登录'),
+            duration: Duration(seconds: 2),
+          ),
+        );
         Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
       } else if (code == 101) {
         _showMessage('该账号已注册');
@@ -106,7 +109,9 @@ class _RegisterPageState extends State<RegisterPage> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+      );
   }
 
   void _returnToLogin() {

@@ -614,9 +614,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     } catch (e) {
       debugPrint('选择图片失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('图片发送失败：$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('图片发送失败：$e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     } finally {
       _imageUploadCancelToken = null;
@@ -709,9 +712,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             _failedVideoMessageIds.add(pendingMessageId!);
           });
         }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('视频发送失败：$error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('视频发送失败：$error'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     } finally {
       _videoUploadCancelToken = null;
@@ -816,9 +822,12 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
             _failedFileMessageIds.add(pendingMessageId!);
           });
         }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('文件发送失败：$error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('文件发送失败：$error'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     } finally {
       _fileUploadCancelToken = null;
@@ -1230,7 +1239,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$sender 拒绝了您的视频通话邀请'),
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -1440,7 +1449,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     messenger.showSnackBar(
       const SnackBar(
         content: Text('正在获取当前位置…'),
-        duration: Duration(seconds: 15),
+        duration: const Duration(seconds: 2),
       ),
     );
     try {
@@ -1457,7 +1466,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       messenger.hideCurrentSnackBar();
       final message = error.toString().replaceFirst('Exception: ', '').trim();
       messenger.showSnackBar(
-        SnackBar(content: Text(message.isEmpty ? '位置获取失败，请稍后重试' : message)),
+        SnackBar(
+          content: Text(message.isEmpty ? '位置获取失败，请稍后重试' : message),
+          duration: const Duration(seconds: 2),
+        ),
       );
     } finally {
       if (mounted) {
@@ -1771,9 +1783,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   void _showVoiceError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
   }
 
   Future<void> _handleVoiceRecorded(VoiceRecordingResult recording) async {
@@ -2240,15 +2252,21 @@ class GroupMessageBubble extends StatelessWidget {
         );
       }
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('已保存到系统相册')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('已保存到系统相册'),
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('保存失败，请检查相册权限')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('保存失败，请检查相册权限'),
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     }
   }

@@ -53,7 +53,7 @@ class _VideoCallPageState extends State<VideoCallPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('需要摄像头和麦克风权限才能进行视频通话'),
-            duration: Duration(seconds: 3),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -82,7 +82,7 @@ class _VideoCallPageState extends State<VideoCallPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('视频通话初始化失败: $e'),
-            duration: const Duration(seconds: 3),
+            duration: const Duration(seconds: 2),
           ),
         );
         Navigator.of(context).pop();

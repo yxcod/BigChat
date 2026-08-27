@@ -513,13 +513,19 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
         },
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('视频已保存到应用本地：$path')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('视频已保存到应用本地：$path'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } on DioException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('下载失败：${error.message ?? '网络异常'}')),
+          SnackBar(
+            content: Text('下载失败：${error.message ?? '网络异常'}'),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     } finally {

@@ -133,9 +133,12 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('加载动态失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('加载动态失败：$error'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -293,9 +296,12 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
       _replaceMoment(updated);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('点赞失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('点赞失败：$error'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -358,9 +364,12 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
       _replaceMoment(updated);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('评论失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('评论失败：$error'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -404,14 +413,17 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
             .where((item) => item.id != moment.id)
             .toList(growable: false);
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('动态已删除')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('动态已删除'), duration: Duration(seconds: 2)),
+      );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('删除动态失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('删除动态失败：$error'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _deletingMomentIds.remove(moment.id));
     }

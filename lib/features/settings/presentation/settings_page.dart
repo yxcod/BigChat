@@ -126,14 +126,20 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(
         () => _settings = _settings.copyWith(chatBackgroundPath: savedPath),
       );
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('聊天背景已更新')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('聊天背景已更新'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('选择聊天背景失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('选择聊天背景失败：$error'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _savingBackground = false);
     }

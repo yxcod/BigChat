@@ -18,6 +18,7 @@ import '../pages/LoginPages/registerPage.dart';
 import '../pages/LoginPages/forgot_password_page.dart';
 import '../model/friendRequestModel.dart';
 import '../features/moments/presentation/my_moments_page.dart';
+import '../features/settings/presentation/about_page.dart';
 import '../features/settings/presentation/settings_page.dart';
 import '../features/settings/presentation/notification_settings_page.dart';
 import '../features/settings/presentation/sound_selection_page.dart';
@@ -74,6 +75,8 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       return MaterialPageRoute(builder: (context) => const MyMomentsPage());
     case '/settings':
       return MaterialPageRoute(builder: (context) => const SettingsPage());
+    case '/about':
+      return MaterialPageRoute(builder: (context) => const AboutPage());
     case '/notificationSettings':
       return MaterialPageRoute(
         builder: (context) => NotificationSettingsPage(

@@ -183,9 +183,9 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     }
   }
 
-  void _message(String value) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(value)));
+  void _message(String value) => ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(value), duration: const Duration(seconds: 2)),
+  );
   String _size(int bytes) => bytes >= 1024 * 1024
       ? '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB'
       : '${(bytes / 1024).toStringAsFixed(1)} KB';

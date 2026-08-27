@@ -29,9 +29,12 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
       unreadSeconds: _unreadSeconds.round(),
     );
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('隐私参数已保存')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('隐私参数已保存'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 

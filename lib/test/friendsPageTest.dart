@@ -41,14 +41,18 @@ class _FriendsPageTestState extends State<FriendsPageTest> {
                 print('注册的路由: ${routes.keys.toList()}');
 
                 if (routes.containsKey('/searchFriendPage')) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('路由已正确注册')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('路由已正确注册'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('路由未注册'),
                       backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 2),
                     ),
                   );
                 }

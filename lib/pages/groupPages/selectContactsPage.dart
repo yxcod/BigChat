@@ -229,9 +229,12 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
         // 检查页面是否仍然可见
         if (mounted) {
           // 显示成功提示
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('邀请好友进群成功')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('邀请好友进群成功'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
 
           // 更新群成员列表，确保下次打开页面时能正确过滤
           setState(() {
@@ -266,9 +269,12 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
       // 检查页面是否仍然可见
       if (mounted) {
         // 显示错误提示
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('邀请好友进群失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('邀请好友进群失败: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     }
   }

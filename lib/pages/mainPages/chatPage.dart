@@ -352,6 +352,7 @@ class _ChatpageState extends State<Chatpage> {
           content: Text(
             message['message']?.toString() ?? '群主或管理员已删除当前群聊的全部聊天记录',
           ),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -1158,9 +1159,12 @@ class _ChatpageState extends State<Chatpage> {
     if (_isMarkingAllRead) return;
     final webSocket = WebSocketManager();
     if (!webSocket.isConnected) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('服务器未连接，暂时无法标记已读')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('服务器未连接，暂时无法标记已读'),
+          duration: Duration(seconds: 2),
+        ),
+      );
       return;
     }
 
@@ -1282,9 +1286,12 @@ class _ChatpageState extends State<Chatpage> {
     });
 
     if (failedConversationCount > 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('部分消息尚未加载，请稍后再试')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('部分消息尚未加载，请稍后再试'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 

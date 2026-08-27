@@ -535,9 +535,12 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           });
 
           // 显示成功提示
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('群名称更新成功')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('群名称更新成功'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
           print('群名称更新成功');
         } else {
           throw Exception('更新失败，错误码: $code');
@@ -546,9 +549,12 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         print('更新群名称失败: $e');
 
         // 显示错误提示
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('群名称更新失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('群名称更新失败: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     }
   }
@@ -607,9 +613,12 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           });
 
           // 显示成功提示
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('群公告更新成功')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('群公告更新成功'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
           print('群公告更新成功');
         } else {
           throw Exception('更新失败，错误码: $code');
@@ -618,9 +627,12 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         print('更新群公告失败: $e');
 
         // 显示错误提示
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('群公告更新失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('群公告更新失败: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     }
   }
@@ -752,9 +764,9 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
   }
 
   void _openGroupResources() {
@@ -845,9 +857,12 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
           });
 
           // 显示成功提示
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('昵称更新成功')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('昵称更新成功'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
         } else {
           throw Exception('更新失败，错误码: $code');
         }
@@ -855,9 +870,12 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         print('更新群昵称失败: $e');
 
         // 显示错误提示
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('昵称更新失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('昵称更新失败: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     }
   }

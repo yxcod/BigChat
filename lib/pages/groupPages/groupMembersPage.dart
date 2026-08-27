@@ -147,14 +147,20 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
       if (code != 100) throw Exception('服务器返回错误码 $code');
       await _fetchGroupMembers();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(promote ? '已设为管理员' : '已取消管理员')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(promote ? '已设为管理员' : '已取消管理员'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('修改成员角色失败：$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('修改成员角色失败：$error'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 

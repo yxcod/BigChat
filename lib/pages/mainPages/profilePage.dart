@@ -446,10 +446,7 @@ class _ProfilePageState extends State<ProfilePage>
     if (images.length == 1) {
       return SizedBox(
         height: 92,
-        child: SizedBox(
-          width: 110,
-          child: _buildPreviewImage(images.first),
-        ),
+        child: SizedBox(width: 110, child: _buildPreviewImage(images.first)),
       );
     }
     return SizedBox(
@@ -517,8 +514,8 @@ class _ProfilePageState extends State<ProfilePage>
           _buildMenuRow(
             icon: Icons.more_horiz_rounded,
             title: '其它',
-            subtitle: '帮助与关于',
-            onTap: () {},
+            subtitle: '关于全信',
+            onTap: () => Navigator.pushNamed(context, '/about'),
           ),
         ],
       ),
