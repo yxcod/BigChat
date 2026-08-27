@@ -45,24 +45,9 @@ class BaiduPoiSearchClient {
         final seen = <String>{};
         final merchants = <NearbyMerchant>[];
         for (final poi in result.poiInfoList ?? const <BMFPoiInfo>[]) {
-          final name = poi.name?.trim() ?? '';
-          if (name.isEmpty) continue;
-          final id = poi.uid?.trim().isNotEmpty == true
-              ? poi.uid!.trim()
-              : '${poi.pt?.latitude},${poi.pt?.longitude}:$name';
-          if (!seen.add(id)) continue;
-          merchants.add(
-            NearbyMerchant(
-              id: id,
-              name: name,
-              address: poi.address?.trim() ?? '',
-              category: (poi.detailInfo?.tag ?? poi.tag ?? '').trim(),
-              distanceMeters: poi.detailInfo?.distance ?? poi.distance,
-              rating: poi.detailInfo?.overallRating,
-              latitude: poi.pt?.latitude,
-              longitude: poi.pt?.longitude,
-            ),
-          );
+          final merchant = _merchantFromPoi(poi);
+          if (merchant == null || !seen.add(merchant.id)) continue;
+          merchants.add(merchant);
         }
         completer.complete(merchants);
       },
@@ -85,6 +70,72 @@ class BaiduPoiSearchClient {
       completer.completeError(StateError('百度地点检索未能启动'));
     }
     return completer.future.timeout(const Duration(seconds: 10));
+  }
+
+  Future<NearbyMerchant> loadDetail(NearbyMerchant merchant) async {
+    if (merchant.id.startsWith('system:')) return merchant;
+    await _initialize();
+    final completer = Completer<NearbyMerchant>();
+    final searcher = BMFPoiDetailSearch();
+    searcher.onGetPoiDetailSearchResult(
+      callback: (result, errorCode) {
+        if (completer.isCompleted) return;
+        if (errorCode != BMFSearchErrorCode.NO_ERROR ||
+            result.poiInfoList?.isNotEmpty != true) {
+          completer.completeError(StateError('百度商家详情加载失败：$errorCode'));
+          return;
+        }
+        completer.complete(
+          _merchantFromPoi(result.poiInfoList!.first, fallback: merchant) ??
+              merchant,
+        );
+      },
+    );
+    final started = await searcher.poiDetailSearch(
+      BMFPoiDetailSearchOption(
+        poiUIDs: [merchant.id],
+        scope: BMFPoiSearchScopeType.DETAIL_INFORMATION,
+      ),
+    );
+    if (!started && !completer.isCompleted) {
+      completer.completeError(StateError('百度商家详情检索未能启动'));
+    }
+    return completer.future.timeout(const Duration(seconds: 10));
+  }
+
+  NearbyMerchant? _merchantFromPoi(BMFPoiInfo poi, {NearbyMerchant? fallback}) {
+    final name = poi.name?.trim() ?? fallback?.name ?? '';
+    if (name.isEmpty) return null;
+    final detail = poi.detailInfo;
+    final id = poi.uid?.trim().isNotEmpty == true
+        ? poi.uid!.trim()
+        : fallback?.id ?? '${poi.pt?.latitude},${poi.pt?.longitude}:$name';
+    return NearbyMerchant(
+      id: id,
+      name: name,
+      address: poi.address?.trim().isNotEmpty == true
+          ? poi.address!.trim()
+          : fallback?.address ?? '',
+      category: (detail?.tag ?? poi.tag ?? fallback?.category ?? '').trim(),
+      distanceMeters:
+          detail?.distance ?? poi.distance ?? fallback?.distanceMeters,
+      rating: detail?.overallRating ?? fallback?.rating,
+      imageUrl: fallback?.imageUrl ?? '',
+      imageUrls: fallback?.imageUrls ?? const [],
+      phone: poi.phone?.trim().isNotEmpty == true
+          ? poi.phone!.trim()
+          : fallback?.phone ?? '',
+      openingHours: detail?.openingHours?.trim().isNotEmpty == true
+          ? detail!.openingHours!.trim()
+          : fallback?.openingHours ?? '',
+      price: detail?.price ?? fallback?.price,
+      detailUrl: detail?.detailURL?.trim().isNotEmpty == true
+          ? detail!.detailURL!.trim()
+          : fallback?.detailUrl ?? '',
+      imageCount: detail?.imageNumber ?? fallback?.imageCount ?? 0,
+      latitude: poi.pt?.latitude ?? fallback?.latitude,
+      longitude: poi.pt?.longitude ?? fallback?.longitude,
+    );
   }
 
   Future<void> _initialize() async {

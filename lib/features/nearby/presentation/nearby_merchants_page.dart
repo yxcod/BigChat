@@ -8,6 +8,7 @@ import '../../../app/theme/app_theme_context.dart';
 import '../../../core/cache/app_image_cache.dart';
 import '../data/nearby_merchants_repository.dart';
 import '../domain/nearby_merchant.dart';
+import 'nearby_merchant_detail_page.dart';
 
 typedef NearbyMerchantsLoader =
     Future<NearbyMerchantsResult> Function(String query);
@@ -247,8 +248,18 @@ class _NearbyMerchantsPageState extends State<NearbyMerchantsPage> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             itemCount: merchants.length,
             separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, index) =>
-                _MerchantCard(merchant: merchants[index]),
+            itemBuilder: (context, index) {
+              final merchant = merchants[index];
+              return _MerchantCard(
+                merchant: merchant,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        NearbyMerchantDetailPage(merchant: merchant),
+                  ),
+                ),
+              );
+            },
           ),
         ),
         if (_loading)
@@ -267,128 +278,132 @@ class _NearbyMerchantsPageState extends State<NearbyMerchantsPage> {
 }
 
 class _MerchantCard extends StatelessWidget {
-  const _MerchantCard({required this.merchant});
+  const _MerchantCard({required this.merchant, required this.onTap});
 
   final NearbyMerchant merchant;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Material(
       key: ValueKey('nearby-merchant-${merchant.id}'),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 12,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _MerchantImage(merchant: merchant),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SizedBox(
-              height: 86,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+      color: context.appSurface,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _MerchantImage(merchant: merchant),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 86,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          merchant.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: context.appTextPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              merchant.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: context.appTextPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                        ),
+                          if (merchant.distanceMeters != null) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatDistance(merchant.distanceMeters!),
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(width: 3),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 19,
+                            color: Color(0xFFA3A6AB),
+                          ),
+                        ],
                       ),
-                      if (merchant.distanceMeters != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          _formatDistance(merchant.distanceMeters!),
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          if (merchant.rating != null) ...[
+                            const Icon(
+                              Icons.star_rounded,
+                              color: Color(0xFFFFB547),
+                              size: 16,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              merchant.rating!.toStringAsFixed(1),
+                              style: const TextStyle(
+                                color: Color(0xFFE59520),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Expanded(
+                            child: Text(
+                              merchant.category.isEmpty
+                                  ? '附近商家'
+                                  : merchant.category,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: context.appTextSecondary,
+                                fontSize: 12.5,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 7),
-                  Row(
-                    children: [
-                      if (merchant.rating != null) ...[
-                        const Icon(
-                          Icons.star_rounded,
-                          color: Color(0xFFFFB547),
-                          size: 16,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          merchant.rating!.toStringAsFixed(1),
-                          style: const TextStyle(
-                            color: Color(0xFFE59520),
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: Text(
-                          merchant.category.isEmpty
-                              ? '附近商家'
-                              : merchant.category,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                        ],
+                      ),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
                             color: context.appTextSecondary,
-                            fontSize: 12.5,
+                            size: 15,
                           ),
-                        ),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(
+                              merchant.address.isEmpty
+                                  ? '暂无详细地址'
+                                  : merchant.address,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: context.appTextSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const Spacer(),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on_outlined,
-                        color: context.appTextSecondary,
-                        size: 15,
-                      ),
-                      const SizedBox(width: 3),
-                      Expanded(
-                        child: Text(
-                          merchant.address.isEmpty
-                              ? '暂无详细地址'
-                              : merchant.address,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: context.appTextSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -406,6 +421,8 @@ class _MerchantImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final images = merchant.availableImageUrls;
+    final imageUrl = images.isEmpty ? null : images.first;
     final fallback = Container(
       color: _categoryColor(merchant.category),
       alignment: Alignment.center,
@@ -420,12 +437,12 @@ class _MerchantImage extends StatelessWidget {
       child: SizedBox(
         width: 86,
         height: 86,
-        child: merchant.imageUrl.isEmpty
+        child: imageUrl == null
             ? fallback
             : CachedNetworkImage(
                 cacheManager: AppImageCache.manager,
-                imageUrl: merchant.imageUrl,
-                cacheKey: AppImageCache.cacheKey(merchant.imageUrl),
+                imageUrl: imageUrl,
+                cacheKey: AppImageCache.cacheKey(imageUrl),
                 fit: BoxFit.cover,
                 placeholder: (_, _) => fallback,
                 errorWidget: (_, _, _) => fallback,
