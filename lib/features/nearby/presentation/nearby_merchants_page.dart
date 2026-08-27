@@ -6,17 +6,20 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_context.dart';
 import '../../../core/cache/app_image_cache.dart';
+import '../data/merchant_reviews_repository.dart';
 import '../data/nearby_merchants_repository.dart';
 import '../domain/nearby_merchant.dart';
+import 'merchant_reviews_page.dart';
 import 'nearby_merchant_detail_page.dart';
 
 typedef NearbyMerchantsLoader =
     Future<NearbyMerchantsResult> Function(String query);
 
 class NearbyMerchantsPage extends StatefulWidget {
-  const NearbyMerchantsPage({super.key, this.loader});
+  const NearbyMerchantsPage({super.key, this.loader, this.reviewsRepository});
 
   final NearbyMerchantsLoader? loader;
+  final MerchantReviewsRepository? reviewsRepository;
 
   @override
   State<NearbyMerchantsPage> createState() => _NearbyMerchantsPageState();
@@ -30,11 +33,16 @@ class _NearbyMerchantsPageState extends State<NearbyMerchantsPage> {
   Object? _error;
   bool _loading = true;
   int _requestSerial = 0;
+  late final MerchantReviewsRepository _reviewsRepository;
+  Set<String> _reviewedMerchantIds = const {};
 
   @override
   void initState() {
     super.initState();
+    _reviewsRepository =
+        widget.reviewsRepository ?? MerchantReviewsRepository();
     _load();
+    _loadReviewedMerchantIds();
   }
 
   @override
@@ -73,6 +81,33 @@ class _NearbyMerchantsPageState extends State<NearbyMerchantsPage> {
     return NearbyMerchantsRepository().search(query: query);
   }
 
+  Future<void> _loadReviewedMerchantIds() async {
+    final reviews = await _reviewsRepository.load();
+    if (!mounted) return;
+    setState(() {
+      _reviewedMerchantIds = reviews.map((item) => item.merchant.id).toSet();
+    });
+  }
+
+  Future<void> _openReviews() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MerchantReviewsPage(repository: _reviewsRepository),
+      ),
+    );
+    await _loadReviewedMerchantIds();
+  }
+
+  Future<void> _addToReviews(NearbyMerchant merchant) async {
+    if (_reviewedMerchantIds.contains(merchant.id)) return;
+    await _reviewsRepository.addMerchant(merchant);
+    if (!mounted) return;
+    setState(() {
+      _reviewedMerchantIds = {..._reviewedMerchantIds, merchant.id};
+    });
+    await _openReviews();
+  }
+
   void _onQueryChanged(String value) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 420), () => _load(value));
@@ -105,6 +140,20 @@ class _NearbyMerchantsPageState extends State<NearbyMerchantsPage> {
               fontWeight: FontWeight.w600,
             ),
           ),
+          actions: [
+            TextButton(
+              key: const ValueKey('nearby_reviews_entry'),
+              onPressed: _openReviews,
+              child: const Text(
+                '点评',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 5),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
             child: Divider(height: 1, color: context.appDivider),
@@ -250,12 +299,17 @@ class _NearbyMerchantsPageState extends State<NearbyMerchantsPage> {
             separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final merchant = merchants[index];
-              return _MerchantCard(
-                merchant: merchant,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        NearbyMerchantDetailPage(merchant: merchant),
+              final alreadyAdded = _reviewedMerchantIds.contains(merchant.id);
+              return _MerchantReviewSwipeCell(
+                alreadyAdded: alreadyAdded,
+                onReview: () => _addToReviews(merchant),
+                child: _MerchantCard(
+                  merchant: merchant,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          NearbyMerchantDetailPage(merchant: merchant),
+                    ),
                   ),
                 ),
               );
@@ -273,6 +327,131 @@ class _NearbyMerchantsPageState extends State<NearbyMerchantsPage> {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _MerchantReviewSwipeCell extends StatefulWidget {
+  const _MerchantReviewSwipeCell({
+    required this.child,
+    required this.alreadyAdded,
+    required this.onReview,
+  });
+
+  final Widget child;
+  final bool alreadyAdded;
+  final VoidCallback onReview;
+
+  @override
+  State<_MerchantReviewSwipeCell> createState() =>
+      _MerchantReviewSwipeCellState();
+}
+
+class _MerchantReviewSwipeCellState extends State<_MerchantReviewSwipeCell>
+    with SingleTickerProviderStateMixin {
+  static const double _actionExtent = 72;
+  late final AnimationController _controller;
+  late Animation<double> _animation;
+  double _offset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    )..addListener(() => setState(() => _offset = _animation.value));
+    _animation = const AlwaysStoppedAnimation(0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _animateTo(double target) {
+    _controller.stop();
+    _animation = Tween<double>(
+      begin: _offset,
+      end: target,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _controller.forward(from: 0);
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    _controller.stop();
+    setState(() {
+      _offset = (_offset + details.delta.dx).clamp(0.0, _actionExtent);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final shouldOpen = velocity > 250
+        ? true
+        : velocity < -250
+        ? false
+        : _offset >= _actionExtent * 0.42;
+    _animateTo(shouldOpen ? _actionExtent : 0);
+  }
+
+  void _handleReview() {
+    if (widget.alreadyAdded) return;
+    _animateTo(0);
+    widget.onReview();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final open = _offset > 1;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Stack(
+        children: [
+          if (open)
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: _actionExtent,
+                  child: Material(
+                    color: widget.alreadyAdded
+                        ? const Color(0xFFAEB3B8)
+                        : AppColors.primary,
+                    child: InkWell(
+                      key: ValueKey(
+                        widget.alreadyAdded
+                            ? 'nearby_review_added_action'
+                            : 'nearby_review_action',
+                      ),
+                      onTap: widget.alreadyAdded ? null : _handleReview,
+                      child: Center(
+                        child: Text(
+                          widget.alreadyAdded ? '已点评' : '点评',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Transform.translate(
+            offset: Offset(_offset, 0),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: _onDragUpdate,
+              onHorizontalDragEnd: _onDragEnd,
+              onTap: open ? () => _animateTo(0) : null,
+              child: AbsorbPointer(absorbing: open, child: widget.child),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

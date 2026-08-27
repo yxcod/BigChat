@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_base/features/nearby/data/merchant_reviews_repository.dart';
 import 'package:flutter_base/features/nearby/domain/nearby_merchant.dart';
 import 'package:flutter_base/features/nearby/presentation/nearby_merchants_page.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -60,5 +61,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(queries, contains('火锅'));
+  });
+
+  testWidgets('right swipe adds a merchant and opens my reviews', (
+    tester,
+  ) async {
+    String? storedValue;
+    final reviewsRepository = MerchantReviewsRepository(
+      ownerId: 'tester',
+      read: (_) => storedValue,
+      write: (_, value) async => storedValue = value,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NearbyMerchantsPage(
+          reviewsRepository: reviewsRepository,
+          loader: (_) async => const NearbyMerchantsResult(
+            currentCity: '南京市',
+            merchants: [NearbyMerchant(id: 'coffee-1', name: '巷口咖啡')],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('nearby-merchant-coffee-1')),
+      const Offset(120, 0),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nearby_review_action')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('我的点评'), findsOneWidget);
+    expect(find.text('巷口咖啡'), findsOneWidget);
+    expect(await reviewsRepository.load(), hasLength(1));
   });
 }
