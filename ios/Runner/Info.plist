@@ -16,6 +16,9 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>全信</string>
+	<!-- iOS mobile AK from the Baidu LBS console. -->
+	<key>BaiduMapAK</key>
+	<string></string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

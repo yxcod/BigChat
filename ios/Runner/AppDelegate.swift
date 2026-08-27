@@ -5,6 +5,7 @@ import UIKit
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var nearbyPlacesChannel: FlutterMethodChannel?
+  private var baiduSetupChannel: FlutterMethodChannel?
   private var nearbyPlacesSearch: MKLocalSearch?
 
   override func application(
@@ -28,6 +29,20 @@ import UIKit
       self?.loadNearbyPlaces(call: call, result: result)
     }
     nearbyPlacesChannel = channel
+
+    let setupChannel = FlutterMethodChannel(
+      name: "com.yxcod.bigchat/baidu_lbs_setup",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    setupChannel.setMethodCallHandler { call, result in
+      guard call.method == "getApiKey" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let apiKey = Bundle.main.object(forInfoDictionaryKey: "BaiduMapAK") as? String ?? ""
+      result(apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+    baiduSetupChannel = setupChannel
   }
 
   private func loadNearbyPlaces(call: FlutterMethodCall, result: @escaping FlutterResult) {

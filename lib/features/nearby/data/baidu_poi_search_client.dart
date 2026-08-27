@@ -91,10 +91,16 @@ class BaiduPoiSearchClient {
     if (_initialized) return;
     BMFMapSDK.setAgreePrivacy(true);
     if (Platform.isIOS) {
-      if (_iosAk.trim().isEmpty) {
+      final configuredAk = _iosAk.trim().isNotEmpty
+          ? _iosAk.trim()
+          : (await _androidSetupChannel.invokeMethod<String>(
+                  'getApiKey',
+                ))?.trim() ??
+                '';
+      if (configuredAk.isEmpty) {
         throw StateError('尚未配置 iOS 百度地图 AK');
       }
-      BMFMapSDK.setApiKeyAndCoordType(_iosAk, BMF_COORD_TYPE.BD09LL);
+      BMFMapSDK.setApiKeyAndCoordType(configuredAk, BMF_COORD_TYPE.BD09LL);
     } else if (Platform.isAndroid) {
       final configured = await _androidSetupChannel.invokeMethod<bool>(
         'initialize',
