@@ -71,6 +71,7 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
       setState(() {
         _gender = userInfo.gender;
         _region = userInfo.region.trim();
+        widget.friendData['signature'] = userInfo.signature ?? '';
       });
     } catch (error) {
       debugPrint('加载用户性别和地区失败，使用已有资料: $error');
@@ -599,6 +600,9 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
           allowPublishing: false,
           pageTitle: '$_displayName的空间',
           visibilityFilter: _isFriend ? null : MomentVisibility.public,
+          gender: userGenderLabel(_gender),
+          region: _region,
+          signature: widget.friendData['signature']?.toString() ?? '',
         ),
       ),
     );

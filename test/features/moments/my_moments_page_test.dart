@@ -43,7 +43,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(ValueKey('like-${moment.id}')));
+    final likeButton = find.byKey(ValueKey('like-${moment.id}'));
+    await tester.ensureVisible(likeButton);
+    await tester.pumpAndSettle();
+    await tester.tap(likeButton);
     await tester.pumpAndSettle();
 
     expect(find.text('1'), findsOneWidget);
@@ -66,7 +69,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(ValueKey('comment-${moment.id}')));
+    final commentButton = find.byKey(ValueKey('comment-${moment.id}'));
+    await tester.ensureVisible(commentButton);
+    await tester.pumpAndSettle();
+    await tester.tap(commentButton);
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('moment_comment_field')),
@@ -138,7 +144,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(ValueKey('moment-menu-${moment.id}')));
+    final menuButton = find.byKey(ValueKey('moment-menu-${moment.id}'));
+    await tester.ensureVisible(menuButton);
+    await tester.pumpAndSettle();
+    await tester.tap(menuButton);
     await tester.pumpAndSettle();
     await tester.tap(find.text('删除动态'));
     await tester.pumpAndSettle();

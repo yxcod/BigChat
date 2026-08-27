@@ -2,15 +2,24 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_context.dart';
 import '../../../core/cache/app_image_cache.dart';
 import '../../../core/media/video_media.dart';
+import '../../../model/userInfoModel.dart';
 import '../../../utils/gloabl.dart';
 import '../../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../../shared/widgets/app_video_player.dart';
+import '../../../shared/pages/app_text_editor_page.dart';
+import '../../nearby/data/merchant_reviews_repository.dart';
+import '../../nearby/presentation/merchant_reviews_page.dart';
+import '../../user_space/data/space_cover_uploader.dart';
+import '../../user_space/data/user_space_repository.dart';
+import '../../user_space/domain/user_space.dart';
+import '../../user_space/presentation/space_message_management_page.dart';
 import '../data/moments_repository.dart';
 import '../data/server_moments_repository.dart';
 import '../domain/moment.dart';
@@ -26,6 +35,12 @@ class MyMomentsPage extends StatefulWidget {
     this.allowPublishing = true,
     this.pageTitle,
     this.visibilityFilter,
+    this.gender,
+    this.region,
+    this.signature,
+    this.spaceRepository,
+    this.coverUploader,
+    this.reviewsRepository,
   });
 
   final MomentsRepository? repository;
@@ -35,19 +50,32 @@ class MyMomentsPage extends StatefulWidget {
   final bool allowPublishing;
   final String? pageTitle;
   final MomentVisibility? visibilityFilter;
+  final String? gender;
+  final String? region;
+  final String? signature;
+  final UserSpaceRepository? spaceRepository;
+  final SpaceCoverUploader? coverUploader;
+  final MerchantReviewsRepository? reviewsRepository;
 
   @override
   State<MyMomentsPage> createState() => _MyMomentsPageState();
 }
 
 class _MyMomentsPageState extends State<MyMomentsPage> {
+  final ScrollController _scrollController = ScrollController();
   late final MomentsRepository _repository;
   late final String _userId;
   late final String _displayName;
   late final String _avatarUrl;
+  late final bool _isOwner;
+  late final UserSpaceRepository _spaceRepository;
+  late final SpaceCoverUploader _coverUploader;
   List<Moment> _moments = const [];
+  UserSpaceData? _space;
   final Set<String> _deletingMomentIds = {};
   bool _isLoading = true;
+  bool _isLoadingSpace = true;
+  bool _isUpdatingCover = false;
 
   @override
   void initState() {
@@ -60,7 +88,21 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
         global.userInfoModel.nickName ??
         (_userId.isEmpty ? '我' : _userId);
     _avatarUrl = widget.avatarUrl ?? _buildCurrentAvatarUrl(global);
+    _isOwner = widget.allowPublishing;
+    _spaceRepository =
+        widget.spaceRepository ??
+        (_repository is LocalMomentsRepository
+            ? InMemoryUserSpaceRepository(
+                currentUserName: _isOwner ? _userId : 'viewer',
+                initialData: UserSpaceData(
+                  ownerUserName: _userId,
+                  isOwner: _isOwner,
+                ),
+              )
+            : ServerUserSpaceRepository());
+    _coverUploader = widget.coverUploader ?? ServerSpaceCoverUploader();
     _loadMoments();
+    _loadSpace();
   }
 
   String _buildCurrentAvatarUrl(GlobalUtil global) {
@@ -95,6 +137,137 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
         context,
       ).showSnackBar(SnackBar(content: Text('加载动态失败：$error')));
     }
+  }
+
+  Future<void> _loadSpace() async {
+    try {
+      final space = await _spaceRepository.fetchSpace(_userId);
+      if (!mounted) return;
+      setState(() {
+        _space = space;
+        _isLoadingSpace = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _space = UserSpaceData(ownerUserName: _userId, isOwner: _isOwner);
+        _isLoadingSpace = false;
+      });
+    }
+  }
+
+  Future<void> _changeCover() async {
+    if (!_isOwner || _isUpdatingCover) return;
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 2048,
+      maxHeight: 1280,
+    );
+    if (image == null || !mounted) return;
+    setState(() => _isUpdatingCover = true);
+    try {
+      final uploaded = await _coverUploader.upload(
+        ownerUserName: _userId,
+        localPath: image.path,
+      );
+      final coverUrl = await _spaceRepository.updateCover(uploaded);
+      if (!mounted) return;
+      setState(() {
+        _space =
+            (_space ?? UserSpaceData(ownerUserName: _userId, isOwner: true))
+                .copyWith(coverImageUrl: coverUrl);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('更换封面失败：$error')));
+    } finally {
+      if (mounted) setState(() => _isUpdatingCover = false);
+    }
+  }
+
+  Future<void> _leaveMessage() async {
+    if (_isOwner) return;
+    final content = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => AppTextEditorPage(
+          title: '给$_displayName留言',
+          initialValue: '',
+          hintText: '写下你想说的话…',
+          maxLength: 200,
+          maxLines: 6,
+          allowEmpty: false,
+          emptyMessage: '请输入留言内容',
+          saveText: '发表',
+          fieldKey: const Key('space_message_editor_field'),
+          saveButtonKey: const Key('publish_space_message_button'),
+        ),
+      ),
+    );
+    if (content == null || content.trim().isEmpty) return;
+    try {
+      final message = await _spaceRepository.addMessage(
+        targetUserName: _userId,
+        content: content,
+      );
+      if (!mounted) return;
+      final current =
+          _space ?? UserSpaceData(ownerUserName: _userId, isOwner: false);
+      setState(() {
+        _space = current.copyWith(messages: [message, ...current.messages]);
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('留言已发表')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('发表留言失败：$error')));
+    }
+  }
+
+  Future<void> _manageMessages() async {
+    if (!_isOwner) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => SpaceMessageManagementPage(
+          repository: _spaceRepository,
+          ownerUserName: _userId,
+          initialMessages: _space?.messages ?? const [],
+        ),
+      ),
+    );
+    await _loadSpace();
+  }
+
+  void _openReviews() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MerchantReviewsPage(
+          repository: widget.reviewsRepository,
+          userId: _userId,
+          pageTitle: _isOwner ? '我的点评' : '$_displayName的点评',
+        ),
+      ),
+    );
+  }
+
+  void _scrollToMoments() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      430,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _openComposer() async {
@@ -250,7 +423,7 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
       backgroundColor: context.appPageBackground,
       appBar: AppBar(
         title: Text(
-          widget.pageTitle ?? (widget.allowPublishing ? '我的动态' : '动态'),
+          widget.pageTitle ?? (_isOwner ? '我的空间' : '$_displayName的空间'),
         ),
       ),
       floatingActionButton: widget.allowPublishing
@@ -266,14 +439,60 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
       body: RefreshIndicator(
         onRefresh: _loadMoments,
         child: CustomScrollView(
+          controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
-              child: _ProfileHeader(
+              child: _SpaceProfileHeader(
                 userId: _userId,
                 displayName: _displayName,
                 avatarUrl: _avatarUrl,
                 momentCount: _moments.length,
+                isOwner: _isOwner,
+                gender:
+                    widget.gender ??
+                    (_isOwner
+                        ? userGenderLabel(GlobalUtil().userInfoModel.gender)
+                        : null),
+                region:
+                    widget.region ??
+                    (_isOwner ? GlobalUtil().userInfoModel.region : null),
+                signature:
+                    widget.signature ??
+                    (_isOwner ? GlobalUtil().userInfoModel.signature : null),
+                coverImageUrl: _space?.coverImageUrl ?? '',
+                messages: _space?.messages ?? const [],
+                loadingSpace: _isLoadingSpace,
+                updatingCover: _isUpdatingCover,
+                onChangeCover: _changeCover,
+                onLeaveMessage: _leaveMessage,
+                onManageMessages: _manageMessages,
+                onOpenMoments: _scrollToMoments,
+                onOpenReviews: _openReviews,
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 2),
+                child: Row(
+                  children: [
+                    Text(
+                      _isOwner ? '我的动态' : '他的动态',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${_moments.length} 条',
+                      style: TextStyle(
+                        color: context.appTextSecondary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             if (_isLoading)
@@ -316,65 +535,431 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
   }
 }
 
-class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({
+class _SpaceProfileHeader extends StatelessWidget {
+  const _SpaceProfileHeader({
     required this.userId,
     required this.displayName,
     required this.avatarUrl,
     required this.momentCount,
+    required this.isOwner,
+    required this.coverImageUrl,
+    required this.messages,
+    required this.loadingSpace,
+    required this.updatingCover,
+    required this.onChangeCover,
+    required this.onLeaveMessage,
+    required this.onManageMessages,
+    required this.onOpenMoments,
+    required this.onOpenReviews,
+    this.gender,
+    this.region,
+    this.signature,
   });
 
   final String userId;
   final String displayName;
   final String avatarUrl;
   final int momentCount;
+  final bool isOwner;
+  final String coverImageUrl;
+  final List<SpaceGuestbookMessage> messages;
+  final bool loadingSpace;
+  final bool updatingCover;
+  final VoidCallback onChangeCover;
+  final VoidCallback onLeaveMessage;
+  final VoidCallback onManageMessages;
+  final VoidCallback onOpenMoments;
+  final VoidCallback onOpenReviews;
+  final String? gender;
+  final String? region;
+  final String? signature;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final profileParts = <String>[
+      if ((gender ?? '').trim().isNotEmpty) gender!.trim(),
+      if ((region ?? '').trim().isNotEmpty) region!.trim(),
+    ];
+    return ColoredBox(
       color: context.appSurface,
       child: Column(
         children: [
-          Container(
-            height: 118,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF315C48), Color(0xFF86B59B)],
-              ),
-            ),
-          ),
-          Transform.translate(
-            offset: const Offset(0, -34),
-            child: Column(
+          SizedBox(
+            height: 250,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                _MomentAvatar(
-                  avatarUrl: avatarUrl,
-                  displayName: displayName,
-                  radius: 38,
-                  borderWidth: 4,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  displayName,
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
+                _SpaceCover(imageUrl: coverImageUrl),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Color(0x55000000)],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  '$userId  ·  $momentCount 条动态',
-                  style: TextStyle(
-                    color: context.appTextSecondary,
-                    fontSize: 12,
+                if (!loadingSpace)
+                  _SpaceDanmaku(messages: messages.take(5).toList()),
+                if (isOwner)
+                  Positioned(
+                    right: 14,
+                    top: 12,
+                    child: _CoverActionButton(
+                      key: const Key('change_space_cover_button'),
+                      icon: updatingCover
+                          ? Icons.hourglass_top_rounded
+                          : Icons.photo_camera_outlined,
+                      label: updatingCover ? '上传中' : '更换封面',
+                      onTap: updatingCover ? null : onChangeCover,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
+          Transform.translate(
+            offset: const Offset(0, -28),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _MomentAvatar(
+                        avatarUrl: avatarUrl,
+                        displayName: displayName,
+                        radius: 42,
+                        borderWidth: 4,
+                      ),
+                      const SizedBox(width: 13),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 5),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '账号：$userId',
+                                style: TextStyle(
+                                  color: context.appTextSecondary,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        key: Key(
+                          isOwner
+                              ? 'manage_space_messages_button'
+                              : 'leave_space_message_button',
+                        ),
+                        onPressed: isOwner ? onManageMessages : onLeaveMessage,
+                        icon: Icon(
+                          isOwner
+                              ? Icons.tune_rounded
+                              : Icons.chat_bubble_outline_rounded,
+                          size: 17,
+                        ),
+                        label: Text(isOwner ? '管理留言' : '留言'),
+                      ),
+                    ],
+                  ),
+                  if (profileParts.isNotEmpty ||
+                      (signature ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        [
+                          if (profileParts.isNotEmpty) profileParts.join(' · '),
+                          if ((signature ?? '').trim().isNotEmpty)
+                            signature!.trim(),
+                        ].join('   '),
+                        style: TextStyle(
+                          color: context.appTextSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: context.appSearchBackground,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _SpaceShortcut(
+                            key: const Key('space_moments_shortcut'),
+                            icon: Icons.photo_library_outlined,
+                            title: isOwner ? '我的动态' : '他的动态',
+                            subtitle: '$momentCount 条动态',
+                            onTap: onOpenMoments,
+                          ),
+                        ),
+                        Container(
+                          height: 54,
+                          width: 0.5,
+                          color: context.appDivider,
+                        ),
+                        Expanded(
+                          child: _SpaceShortcut(
+                            key: const Key('space_reviews_shortcut'),
+                            icon: Icons.storefront_outlined,
+                            title: isOwner ? '我的点评' : '他的点评',
+                            subtitle: '查看收藏与点评',
+                            onTap: onOpenReviews,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _SpaceCover extends StatelessWidget {
+  const _SpaceCover({required this.imageUrl});
+
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl.trim().isEmpty) {
+      return const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFDDF5E7), Color(0xFFBCE8CF)],
+          ),
+        ),
+      );
+    }
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      cacheManager: AppImageCache.manager,
+      fit: BoxFit.cover,
+      placeholder: (_, _) => const ColoredBox(color: Color(0xFFDDF5E7)),
+      errorWidget: (_, _, _) => const ColoredBox(color: Color(0xFFDDF5E7)),
+    );
+  }
+}
+
+class _SpaceDanmaku extends StatelessWidget {
+  const _SpaceDanmaku({required this.messages});
+
+  final List<SpaceGuestbookMessage> messages;
+
+  @override
+  Widget build(BuildContext context) {
+    if (messages.isEmpty) return const SizedBox.shrink();
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          for (var index = 0; index < messages.length; index++)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 50 + (index % 3) * 48,
+              height: 36,
+              child: _DanmakuLane(
+                key: ValueKey('space-danmaku-${messages[index].id}'),
+                text:
+                    '${messages[index].authorNickName}: ${messages[index].content}',
+                delay: Duration(milliseconds: index * 850),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DanmakuLane extends StatefulWidget {
+  const _DanmakuLane({super.key, required this.text, required this.delay});
+
+  final String text;
+  final Duration delay;
+
+  @override
+  State<_DanmakuLane> createState() => _DanmakuLaneState();
+}
+
+class _DanmakuLaneState extends State<_DanmakuLane>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(seconds: 8 + (widget.text.length / 8).round()),
+    );
+    Future<void>.delayed(widget.delay, () {
+      if (mounted) _controller.repeat();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final estimatedWidth = (widget.text.characters.length * 15 + 34)
+            .clamp(120, 360)
+            .toDouble();
+        return ClipRect(
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final x =
+                  constraints.maxWidth -
+                  (_controller.value * (constraints.maxWidth + estimatedWidth));
+              return Transform.translate(offset: Offset(x, 0), child: child);
+            },
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 360),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.42),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Text(
+                  widget.text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CoverActionButton extends StatelessWidget {
+  const _CoverActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.42),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpaceShortcut extends StatelessWidget {
+  const _SpaceShortcut({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.primary, size: 24),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: context.appTextSecondary,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: context.appTextSecondary),
+          ],
+        ),
       ),
     );
   }

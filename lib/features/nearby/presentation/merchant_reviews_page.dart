@@ -11,9 +11,16 @@ import 'merchant_review_comments_page.dart';
 import 'nearby_merchant_detail_page.dart';
 
 class MerchantReviewsPage extends StatefulWidget {
-  const MerchantReviewsPage({super.key, this.repository});
+  const MerchantReviewsPage({
+    super.key,
+    this.repository,
+    this.userId,
+    this.pageTitle,
+  });
 
   final MerchantReviewsRepository? repository;
+  final String? userId;
+  final String? pageTitle;
 
   @override
   State<MerchantReviewsPage> createState() => _MerchantReviewsPageState();
@@ -32,7 +39,8 @@ class _MerchantReviewsPageState extends State<MerchantReviewsPage> {
   @override
   void initState() {
     super.initState();
-    _repository = widget.repository ?? MerchantReviewsRepository();
+    _repository =
+        widget.repository ?? MerchantReviewsRepository(ownerId: widget.userId);
     _load();
   }
 
@@ -112,9 +120,12 @@ class _MerchantReviewsPageState extends State<MerchantReviewsPage> {
                 ),
                 onChanged: (_) => setState(() {}),
               )
-            : const Text(
-                '我的点评',
-                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
+            : Text(
+                widget.pageTitle ?? '我的点评',
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
         actions: [
           IconButton(
