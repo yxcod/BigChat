@@ -90,6 +90,38 @@ void main() {
     expect(find.text('已拒绝'), findsOneWidget);
   });
 
+  testWidgets('窄屏下拒绝说明与状态标签保持间距且无溢出', (tester) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final recent = RecentFriendModel(
+      requestId: 304,
+      userName: 'long-name-rejector',
+      nickName: '这是一个较长的好友昵称',
+      addTime: DateTime.now()
+          .subtract(const Duration(hours: 16))
+          .millisecondsSinceEpoch,
+      status: RequestStatus.rejected,
+      direction: FriendRequestDirection.incoming,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: FriendAddManagerPage(
+          initialRecentFriends: [recent],
+          autoLoad: false,
+        ),
+      ),
+    );
+
+    expect(find.text('已拒绝'), findsOneWidget);
+    expect(find.textContaining('你已拒绝对方的好友申请'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('发送方的待处理申请显示为待验证', (tester) async {
     final request = FriendRequestModel(
       requestId: 101,

@@ -488,10 +488,10 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
       child: InkWell(
         onTap: isAccepted ? () => _showFriendDetail(friend) : null,
         borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          height: 72,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 82),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
                 CircleAvatar(
@@ -529,29 +529,36 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
                       const SizedBox(height: 5),
                       Text(
                         '$description · ${_formatTime(eventTime)}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: context.appTextSecondary,
                           fontSize: 12.5,
+                          height: 1.35,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 58,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 7),
+                      child: Text(
+                        statusText,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ),
