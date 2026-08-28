@@ -28,8 +28,10 @@ class AppImageCache {
         imageName.isEmpty) {
       return imageUrl;
     }
+    final version = uri.queryParameters['version']?.trim() ?? '';
     return 'server-image:${Uri.encodeComponent(ownerId)}:'
-        '${Uri.encodeComponent(imageName)}';
+        '${Uri.encodeComponent(imageName)}'
+        '${version.isEmpty ? '' : ':${Uri.encodeComponent(version)}'}';
   }
 
   static ImageProvider<Object> provider(String imageUrl) {

@@ -16,6 +16,20 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+@visibleForTesting
+int countUnseenIncomingFriendRequests(
+  Iterable<FriendRequestModel> requests,
+  Set<int> seenRequestIds,
+) {
+  return requests.where((request) {
+    final id = request.requestId;
+    return request.isIncoming &&
+        request.status == RequestStatus.pending &&
+        id != null &&
+        !seenRequestIds.contains(id);
+  }).length;
+}
+
 class Friendspage extends StatefulWidget {
   final List<Friend> friendListDate;
   final bool autoRefresh;
@@ -41,9 +55,7 @@ class _FriendsPage extends State<Friendspage>
   final GlobalUtil _globalUtil = GlobalUtil();
   int _friendRequestCount = 0;
   List<FriendRequestModel> _pendingRequests = [];
-  List<RecentFriendModel> _recentRequestEvents = [];
   Set<int> _seenIncomingRequestIds = <int>{};
-  Set<String> _seenRejectedRequestEvents = <String>{};
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _friendScrollController = ScrollController();
   String _searchQuery = '';
@@ -112,11 +124,6 @@ class _FriendsPage extends State<Friendspage>
               .whereType<int>()
               .toSet() ??
           <int>{};
-      _seenRejectedRequestEvents =
-          preferences
-              .getStringList('seen_rejected_friend_request_events_$userName')
-              ?.toSet() ??
-          <String>{};
     }
     if (mounted) _startPolling();
   }
@@ -139,15 +146,6 @@ class _FriendsPage extends State<Friendspage>
       if (action == 'created' && target == _globalUtil.userName) {
         final requestId = int.tryParse(message['id']?.toString() ?? '');
         if (requestId != null) _seenIncomingRequestIds.remove(requestId);
-      }
-      if (action == 'rejected' &&
-          message['fromUserId']?.toString() == _globalUtil.userName) {
-        final requestId = int.tryParse(message['id']?.toString() ?? '');
-        if (requestId != null) {
-          _seenRejectedRequestEvents.removeWhere(
-            (eventKey) => eventKey.startsWith('$requestId:'),
-          );
-        }
       }
       unawaited(_refreshFriends());
       return;
@@ -197,29 +195,14 @@ class _FriendsPage extends State<Friendspage>
       return;
     }
     try {
-      final results = await Future.wait<dynamic>([
-        getFriendRequestsApi(userName),
-        getRecentFriendsApi(userName),
-      ]);
-      final requests = results[0] as List<FriendRequestModel>;
-      final recentEvents = results[1] as List<RecentFriendModel>;
+      final requests = await getFriendRequestsApi(userName);
       if (mounted) {
         setState(() {
           _pendingRequests = requests;
-          _recentRequestEvents = recentEvents;
-          final unseenIncoming = requests.where((request) {
-            final id = request.requestId;
-            return request.isIncoming &&
-                request.status == RequestStatus.pending &&
-                id != null &&
-                !_seenIncomingRequestIds.contains(id);
-          }).length;
-          final unseenRejections = recentEvents.where((event) {
-            return !event.isIncoming &&
-                event.status == RequestStatus.rejected &&
-                !_seenRejectedRequestEvents.contains(event.eventKey);
-          }).length;
-          _friendRequestCount = unseenIncoming + unseenRejections;
+          _friendRequestCount = countUnseenIncomingFriendRequests(
+            requests,
+            _seenIncomingRequestIds,
+          );
         });
       }
     } catch (e) {
@@ -236,14 +219,6 @@ class _FriendsPage extends State<Friendspage>
         .map((request) => request.requestId)
         .whereType<int>();
     _seenIncomingRequestIds.addAll(ids);
-    _seenRejectedRequestEvents.addAll(
-      _recentRequestEvents
-          .where(
-            (event) =>
-                !event.isIncoming && event.status == RequestStatus.rejected,
-          )
-          .map((event) => event.eventKey),
-    );
     if (mounted) setState(() => _friendRequestCount = 0);
     final userName = _globalUtil.userName?.trim() ?? '';
     if (userName.isEmpty) return;
@@ -251,10 +226,6 @@ class _FriendsPage extends State<Friendspage>
     await preferences.setStringList(
       'seen_friend_request_ids_$userName',
       _seenIncomingRequestIds.map((id) => id.toString()).toList(),
-    );
-    await preferences.setStringList(
-      'seen_rejected_friend_request_events_$userName',
-      _seenRejectedRequestEvents.toList(),
     );
   }
 
@@ -272,7 +243,11 @@ class _FriendsPage extends State<Friendspage>
             final userName = f.userName ?? '';
             final remark = f.remarks?.trim() ?? '';
             // 使用 globalUtil.getImageURL 生成头像 URL
-            String avatarURL = _globalUtil.getImageURL(userName, avatarName);
+            String avatarURL = _globalUtil.getImageURL(
+              userName,
+              avatarName,
+              version: f.modifyTime,
+            );
             final previousAvatar = previousAvatars[userName] ?? '';
             // 只有当 URL 不同时才更新缓存
             if (avatarURL != previousAvatar && avatarURL.isNotEmpty) {

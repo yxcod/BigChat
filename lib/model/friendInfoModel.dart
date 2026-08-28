@@ -5,6 +5,7 @@ class FriendInfoModel {
   String? nickName;
   String? remarks;
   String? avatar;
+  int modifyTime;
   int gender;
   String region;
   String? signature;
@@ -14,6 +15,7 @@ class FriendInfoModel {
     required this.nickName,
     required this.remarks,
     required this.avatar,
+    this.modifyTime = 0,
     this.gender = 0,
     this.region = '',
     required this.signature,
@@ -25,6 +27,7 @@ class FriendInfoModel {
       nickName: JsonValueParser.stringValue(json["nickName"]),
       remarks: JsonValueParser.stringValue(json["remark"]),
       avatar: JsonValueParser.stringValue(json["avatar"]),
+      modifyTime: JsonValueParser.timestampMillis(json['modifyTime']),
       gender: JsonValueParser.intValue(json["gender"], fallback: 0),
       region: JsonValueParser.stringValue(json["region"]),
       signature: JsonValueParser.stringValue(json["signature"]),

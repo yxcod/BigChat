@@ -496,7 +496,7 @@ class GlobalUtil {
   }
 
   //根据图片名生成图片的URL
-  String getImageURL(String userName, String imageName) {
+  String getImageURL(String userName, String imageName, {Object? version}) {
     if (token == null) {
       throw Exception('Token is null');
     }
@@ -508,6 +508,8 @@ class GlobalUtil {
             'key': token!,
             'userName': userName,
             'imageName': imageName,
+            if (version != null && version.toString().trim().isNotEmpty)
+              'version': version.toString(),
           },
         )
         .toString();

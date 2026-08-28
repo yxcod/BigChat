@@ -23,6 +23,18 @@ void main() {
     );
   });
 
+  test('a changed avatar version invalidates a reused file name', () {
+    const oldAvatar =
+        'http://server/api/image/download?key=token&userName=alice&imageName=head.jpg&version=100';
+    const newAvatar =
+        'http://server/api/image/download?key=token&userName=alice&imageName=head.jpg&version=200';
+
+    expect(
+      AppImageCache.cacheKey(oldAvatar),
+      isNot(AppImageCache.cacheKey(newAvatar)),
+    );
+  });
+
   test('external images retain their full URL as the cache identity', () {
     const url = 'https://images.example.com/photo.jpg?v=2';
     expect(AppImageCache.cacheKey(url), url);

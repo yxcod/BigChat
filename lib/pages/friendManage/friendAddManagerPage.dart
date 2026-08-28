@@ -8,6 +8,7 @@ import '../../shared/widgets/app_back_button.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import '../../utils/WebSocketManager.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 typedef ExpiredFriendRequestDelete =
     Future<bool> Function(FriendRequestModel request);
@@ -90,6 +91,59 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
 
   // 最近添加的好友数据
   List<RecentFriendModel> _recentFriends = [];
+
+  Widget _buildCounterpartAvatar({
+    required String userName,
+    required String avatarName,
+    required int avatarVersion,
+    required double radius,
+  }) {
+    final normalizedUserName = userName.trim();
+    final normalizedAvatar = avatarName.trim();
+    final size = radius * 2;
+    Widget fallback() => Icon(
+      Icons.person_rounded,
+      size: radius,
+      color: context.appTextSecondary,
+    );
+    if (normalizedUserName.isEmpty ||
+        normalizedAvatar.isEmpty ||
+        normalizedAvatar == 'init') {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: context.appSearchBackground,
+        child: fallback(),
+      );
+    }
+    try {
+      final avatarUrl = GlobalUtil().getImageURL(
+        normalizedUserName,
+        normalizedAvatar,
+        version: avatarVersion,
+      );
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: context.appSearchBackground,
+        child: ClipOval(
+          child: CachedNetworkImage(
+            cacheManager: AppImageCache.manager,
+            imageUrl: avatarUrl,
+            cacheKey: AppImageCache.cacheKey(avatarUrl),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorWidget: (_, _, _) => fallback(),
+          ),
+        ),
+      );
+    } catch (_) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: context.appSearchBackground,
+        child: fallback(),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -299,39 +353,16 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
   }
 
   Widget _buildRequestItem(FriendRequestModel request) {
-    // 获取头像URL
-    String getAvatarUrl() {
-      try {
-        return GlobalUtil().getImageURL(request.userName ?? '', "head.jpg");
-      } catch (_) {
-        // 如果获取失败，返回一个默认的表情
-        return request.userName?.substring(0, 1) ?? '';
-      }
-    }
-
-    final avatarUrl = getAvatarUrl();
-    final isNetworkImage = avatarUrl.startsWith('http');
-
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 15, 14, 15),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
+          _buildCounterpartAvatar(
+            userName: request.userName ?? '',
+            avatarName: request.avatar ?? '',
+            avatarVersion: request.avatarVersion,
             radius: 25,
-            backgroundColor: context.appSearchBackground,
-            backgroundImage: isNetworkImage
-                ? AppImageCache.provider(avatarUrl)
-                : null,
-            child: isNetworkImage
-                ? null
-                : Text(
-                    isNetworkImage ? '' : avatarUrl,
-                    style: TextStyle(
-                      fontSize: 20,
-                      color: context.appTextSecondary,
-                    ),
-                  ),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -452,19 +483,6 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
   }
 
   Widget _buildFriendItem(RecentFriendModel friend) {
-    // 获取头像URL
-    String getAvatarUrl() {
-      try {
-        return GlobalUtil().getImageURL(friend.userName ?? '', "head.jpg");
-      } catch (_) {
-        // 如果获取失败，返回用户名的第一个字符
-        return friend.userName?.substring(0, 1) ?? '';
-      }
-    }
-
-    final avatarUrl = getAvatarUrl();
-    final isNetworkImage = avatarUrl.startsWith('http');
-
     final eventTime = DateTime.fromMillisecondsSinceEpoch(
       friend.addTime ?? DateTime.now().millisecondsSinceEpoch,
     );
@@ -494,21 +512,11 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
-                CircleAvatar(
+                _buildCounterpartAvatar(
+                  userName: friend.userName ?? '',
+                  avatarName: friend.avatar ?? '',
+                  avatarVersion: friend.avatarVersion,
                   radius: 24,
-                  backgroundColor: context.appSearchBackground,
-                  backgroundImage: isNetworkImage
-                      ? AppImageCache.provider(avatarUrl)
-                      : null,
-                  child: isNetworkImage
-                      ? null
-                      : Text(
-                          avatarUrl,
-                          style: TextStyle(
-                            fontSize: 19,
-                            color: context.appTextSecondary,
-                          ),
-                        ),
                 ),
                 const SizedBox(width: 13),
                 Expanded(

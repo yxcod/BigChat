@@ -23,6 +23,21 @@ void main() {
     expect(message.eventKey, '88:rejected:1787654321000');
   });
 
+  test('好友申请可以解析对方最新头像及缓存版本', () {
+    final incoming = FriendRequestModel.fromJSON({
+      'id': 89,
+      'fromUserId': 'new-user',
+      'toUserId': 'me',
+      'fromNickName': '新用户',
+      'fromAvatar': 'avatar.jpg',
+      'fromAvatarVersion': 1787654000000,
+      'status': 0,
+    }, currentUserName: 'me');
+
+    expect(incoming.avatar, 'avatar.jpg');
+    expect(incoming.avatarVersion, 1787654000000);
+  });
+
   testWidgets('新的朋友页面分开展示待处理申请和最近消息', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;

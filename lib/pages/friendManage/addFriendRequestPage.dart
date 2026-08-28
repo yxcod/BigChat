@@ -228,7 +228,7 @@ class _AddFriendRequestPageState extends State<AddFriendRequestPage> {
   }
 
   // 发送好友请求
-  void _sendFriendRequest() {
+  Future<void> _sendFriendRequest() async {
     String message = _requestController.text.trim();
 
     if (message.isEmpty) {
@@ -265,26 +265,25 @@ class _AddFriendRequestPageState extends State<AddFriendRequestPage> {
       return;
     }
 
-    // 调用API发送好友请求
-    sendFriendRequestApi(currentUserName, targetUserName, message)
-        .then((success) {
-          setState(() {
-            _isSending = false;
-          });
-
-          _showSnackBar('好友请求已发送', Colors.green);
-
-          // 返回上一页
-          Navigator.pop(context);
-        })
-        .catchError((error) {
-          setState(() {
-            _isSending = false;
-          });
-
-          _showSnackBar('发送好友请求失败', Colors.red);
-          debugPrint('发送好友请求失败: $error');
-        });
+    try {
+      await sendFriendRequestApi(currentUserName, targetUserName, message);
+      if (!mounted) return;
+      setState(() => _isSending = false);
+      _showSnackBar('好友请求已发送', Colors.green);
+      Navigator.pop(context);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isSending = false);
+      final failureMessage = error
+          .toString()
+          .replaceFirst(RegExp(r'^Exception:\s*'), '')
+          .trim();
+      _showSnackBar(
+        failureMessage.isEmpty ? '发送好友请求失败' : failureMessage,
+        Colors.red,
+      );
+      debugPrint('发送好友请求失败: $error');
+    }
   }
 
   // 显示提示信息

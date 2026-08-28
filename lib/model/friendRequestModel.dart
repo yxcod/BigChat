@@ -8,6 +8,8 @@ class FriendRequestModel {
   int? requestId;
   String? userName;
   String? nickName;
+  String? avatar;
+  int avatarVersion;
   String? fromUserId;
   String? toUserId;
   String? verificationMessage;
@@ -19,6 +21,8 @@ class FriendRequestModel {
     required this.requestId,
     required this.userName,
     required this.nickName,
+    this.avatar,
+    this.avatarVersion = 0,
     this.fromUserId,
     this.toUserId,
     required this.verificationMessage,
@@ -61,6 +65,18 @@ class FriendRequestModel {
       requestId: JsonValueParser.intValue(json["id"]),
       userName: counterpartUserName,
       nickName: counterpartNickname,
+      avatar: JsonValueParser.stringValue(
+        json['avatar'],
+        fallback: incoming
+            ? JsonValueParser.stringValue(json['fromAvatar'])
+            : JsonValueParser.stringValue(json['toAvatar']),
+      ),
+      avatarVersion: JsonValueParser.intValue(
+        json['avatarVersion'],
+        fallback: incoming
+            ? JsonValueParser.intValue(json['fromAvatarVersion'])
+            : JsonValueParser.intValue(json['toAvatarVersion']),
+      ),
       fromUserId: fromUserId,
       toUserId: toUserId,
       verificationMessage: JsonValueParser.stringValue(json["applyMsg"]),
@@ -81,6 +97,8 @@ class RecentFriendModel {
   int? requestId;
   String? userName;
   String? nickName;
+  String? avatar;
+  int avatarVersion;
   int? addTime;
   String? remarks;
   String? verificationMessage;
@@ -91,6 +109,8 @@ class RecentFriendModel {
     this.requestId,
     required this.userName,
     required this.nickName,
+    this.avatar,
+    this.avatarVersion = 0,
     required this.addTime,
     this.remarks,
     this.verificationMessage,
@@ -121,6 +141,8 @@ class RecentFriendModel {
       requestId: JsonValueParser.intValue(json['id']),
       userName: JsonValueParser.stringValue(json["userName"]),
       nickName: JsonValueParser.stringValue(json["nickName"]),
+      avatar: JsonValueParser.stringValue(json['avatar']),
+      avatarVersion: JsonValueParser.intValue(json['avatarVersion']),
       addTime: JsonValueParser.timestampMillis(
         json["updateTime"] ?? json["addTime"],
         fallback: DateTime.now().millisecondsSinceEpoch,

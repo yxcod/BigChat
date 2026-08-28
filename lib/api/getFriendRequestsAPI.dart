@@ -158,6 +158,10 @@ Future<FriendRequestModel> sendFriendRequestApi(
       );
     } else if (code == 103) {
       throw Exception('对方已经是你的好友');
+    } else if (code == 104) {
+      throw Exception('对方已向你发送好友申请，请先在“新的朋友”中处理');
+    } else if (code == 102) {
+      throw Exception('服务器暂时无法处理好友申请，请稍后重试');
     } else if (code == 101) {
       debugPrint('发送好友申请失败：code=101');
       throw Exception('发送好友申请失败');
