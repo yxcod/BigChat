@@ -22,12 +22,14 @@ class MerchantReviewCommentsPage extends StatefulWidget {
     required this.repository,
     this.imageUploader,
     this.imageUrlBuilder,
+    this.currentUserId,
   });
 
   final MerchantReview review;
   final MerchantReviewsRepository repository;
   final MerchantReviewImageUploader? imageUploader;
   final MerchantReviewCommentImageUrlBuilder? imageUrlBuilder;
+  final String? currentUserId;
 
   @override
   State<MerchantReviewCommentsPage> createState() =>
@@ -42,6 +44,9 @@ class _MerchantReviewCommentsPageState
   bool _sending = false;
   String? _selectedImagePath;
   late final MerchantReviewImageUploader _imageUploader;
+
+  String get _currentUserId =>
+      widget.currentUserId?.trim() ?? GlobalUtil().userName?.trim() ?? '';
 
   @override
   void initState() {
@@ -121,6 +126,63 @@ class _MerchantReviewCommentsPageState
     }
   }
 
+  ImageProvider<Object>? _commentAvatarProvider(MerchantReviewComment comment) {
+    final avatarName = comment.avatarName.trim();
+    final userId = comment.userId.trim();
+    if (avatarName.isEmpty || userId.isEmpty) return null;
+    try {
+      final url =
+          avatarName.startsWith('http://') || avatarName.startsWith('https://')
+          ? avatarName
+          : widget.imageUrlBuilder?.call(userId, avatarName) ??
+                GlobalUtil().getImageURL(userId, avatarName);
+      return AppImageCache.provider(url);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _removeComment(MerchantReviewComment comment) async {
+    if (_sending || comment.userId.trim() != _currentUserId) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除评论'),
+        content: const Text('确定删除这条评论吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            key: const ValueKey('confirm_remove_merchant_comment'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('删除', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _sending = true);
+    try {
+      final updated = await widget.repository.removeComment(
+        _review.merchant.id,
+        comment.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _review = updated;
+        _sending = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('评论删除失败，请稍后重试')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -176,21 +238,29 @@ class _MerchantReviewCommentsPageState
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final comment = _review.comments[index];
+        final avatar = _commentAvatarProvider(comment);
+        final isMine =
+            comment.userId.trim().isNotEmpty &&
+            comment.userId.trim() == _currentUserId;
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CircleAvatar(
+              key: ValueKey('merchant_comment_avatar_${comment.id}'),
               radius: 18,
               backgroundColor: const Color(0xFFE5F7ED),
-              child: Text(
-                comment.displayName.trim().isEmpty
-                    ? '用户'
-                    : comment.displayName.trim().characters.first,
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              backgroundImage: avatar,
+              child: avatar == null
+                  ? Text(
+                      comment.displayName.trim().isEmpty
+                          ? '用户'
+                          : comment.displayName.trim().characters.first,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  : null,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -206,14 +276,43 @@ class _MerchantReviewCommentsPageState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (comment.displayName.trim().isNotEmpty)
-                      Text(
-                        comment.displayName,
-                        style: TextStyle(
-                          color: context.appTextSecondary,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    if (comment.displayName.trim().isNotEmpty || isMine)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              comment.displayName.trim().isEmpty
+                                  ? '我'
+                                  : comment.displayName,
+                              style: TextStyle(
+                                color: context.appTextSecondary,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (isMine)
+                            IconButton(
+                              key: ValueKey(
+                                'remove_merchant_comment_${comment.id}',
+                              ),
+                              onPressed: _sending
+                                  ? null
+                                  : () => _removeComment(comment),
+                              tooltip: '删除评论',
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints.tightFor(
+                                width: 32,
+                                height: 28,
+                              ),
+                              padding: EdgeInsets.zero,
+                              icon: Icon(
+                                Icons.delete_outline_rounded,
+                                size: 18,
+                                color: context.appTextSecondary,
+                              ),
+                            ),
+                        ],
                       ),
                     if (comment.displayName.trim().isNotEmpty &&
                         comment.content.isNotEmpty)
@@ -299,7 +398,7 @@ class _MerchantReviewCommentsPageState
                   ),
                 ),
                 const SizedBox(width: 9),
-                IconButton.filled(
+                _SendCommentButton(
                   key: const ValueKey('merchant_review_send_comment'),
                   onPressed:
                       (_controller.text.trim().isEmpty &&
@@ -307,26 +406,46 @@ class _MerchantReviewCommentsPageState
                           _sending
                       ? null
                       : _send,
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    disabledBackgroundColor: context.appDivider,
-                  ),
-                  icon: _sending
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.arrow_upward_rounded,
-                          color: Colors.white,
-                        ),
+                  sending: _sending,
                 ),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SendCommentButton extends StatelessWidget {
+  const _SendCommentButton({super.key, this.onPressed, required this.sending});
+
+  final VoidCallback? onPressed;
+  final bool sending;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Material(
+      color: enabled ? AppColors.primary : context.appDivider,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: const CircleBorder(),
+        child: SizedBox.square(
+          dimension: 44,
+          child: Center(
+            child: sending
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.send_rounded, color: Colors.white, size: 21),
+          ),
         ),
       ),
     );

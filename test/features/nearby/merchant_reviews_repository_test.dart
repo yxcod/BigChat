@@ -26,6 +26,10 @@ void main() {
       expect(reviews.single.dislikes, 0);
       expect(reviews.single.reaction, MerchantReviewReaction.like);
       expect(reviews.single.comments.single.content, '味道不错');
+
+      final commentId = reviews.single.comments.single.id;
+      final updated = await repository.removeComment('food-1', commentId);
+      expect(updated.comments, isEmpty);
     },
   );
 
@@ -104,6 +108,7 @@ void main() {
       imageName: 'review_photo.jpg',
     );
     expect(commented.comments.single.imageName, 'review_photo.jpg');
+    await repository.removeComment('food-2', commented.comments.single.id);
     await repository.removeMerchant('food-2');
 
     expect(
@@ -112,6 +117,7 @@ void main() {
         '/api/merchantReview/add',
         '/api/merchantReview/reaction',
         '/api/merchantReview/comment',
+        '/api/merchantReview/comment/remove',
         '/api/merchantReview/remove',
       ]),
     );
@@ -194,10 +200,17 @@ class _FakeMerchantReviewsApiClient implements MerchantReviewsApiClient {
           'id': comments.length + 1,
           'userId': 'tester',
           'displayName': '测试用户',
+          'avatarName': 'head.jpg',
           'content': data['content'],
           'imageName': data['imageName'],
           'createdAt': DateTime(2026, 8, 27).millisecondsSinceEpoch,
         });
+        return _success(_review!);
+      case '/api/merchantReview/comment/remove':
+        final comments = _review!['comments'] as List<Map<String, dynamic>>;
+        comments.removeWhere(
+          (item) => item['id'].toString() == data['commentId'].toString(),
+        );
         return _success(_review!);
       case '/api/merchantReview/remove':
         _review = null;

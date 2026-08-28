@@ -36,6 +36,28 @@ void main() {
     expect(result.merchants.single.distanceMeters, 180);
   });
 
+  test('sorts nearby merchants from nearest to farthest', () async {
+    final repository = NearbyMerchantsRepository(
+      locationLoader: () async => current,
+      baiduLoader: (_, _) async => const [
+        NearbyMerchant(id: 'unknown', name: '未知距离'),
+        NearbyMerchant(id: 'far', name: '远处商家', distanceMeters: 900),
+        NearbyMerchant(id: 'near', name: '近处商家', distanceMeters: 80),
+        NearbyMerchant(id: 'middle', name: '中间商家', distanceMeters: 260),
+      ],
+      fallbackLoader: () => throw StateError('fallback should not run'),
+    );
+
+    final result = await repository.search();
+
+    expect(result.merchants.map((item) => item.id), [
+      'near',
+      'middle',
+      'far',
+      'unknown',
+    ]);
+  });
+
   test(
     'falls back to native nearby places when Baidu is unavailable',
     () async {

@@ -9,12 +9,14 @@ class MerchantReviewComment {
     required this.createdAt,
     this.userId = '',
     this.displayName = '',
+    this.avatarName = '',
     this.imageName = '',
   });
 
   final String id;
   final String userId;
   final String displayName;
+  final String avatarName;
   final String content;
   final String imageName;
   final DateTime createdAt;
@@ -23,6 +25,7 @@ class MerchantReviewComment {
     'id': id,
     'userId': userId,
     'displayName': displayName,
+    'avatarName': avatarName,
     'content': content,
     'imageName': imageName,
     'createdAt': createdAt.toIso8601String(),
@@ -33,6 +36,8 @@ class MerchantReviewComment {
       id: json['id']?.toString() ?? '',
       userId: json['userId']?.toString() ?? '',
       displayName: json['displayName']?.toString() ?? '',
+      avatarName:
+          json['avatarName']?.toString() ?? json['avatar']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
       imageName: json['imageName']?.toString() ?? '',
       createdAt: _asDateTime(json['createdAt']),

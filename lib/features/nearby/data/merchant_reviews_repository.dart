@@ -221,6 +221,46 @@ class MerchantReviewsRepository {
     return updated;
   }
 
+  Future<MerchantReview> removeComment(
+    String merchantId,
+    String commentId,
+  ) async {
+    final reviews = await load();
+    final index = reviews.indexWhere((item) => item.merchant.id == merchantId);
+    if (index < 0) throw StateError('点评商家不存在');
+
+    final current = reviews[index];
+    final commentIndex = current.comments.indexWhere(
+      (item) => item.id == commentId,
+    );
+    if (commentIndex < 0) throw StateError('评论不存在');
+    if (current.comments[commentIndex].userId != _ownerId) {
+      throw StateError('只能删除自己的评论');
+    }
+
+    if (_apiClient != null && current.entryId.isNotEmpty) {
+      final updated = _parseReview(
+        _requireData(
+          await _apiClient.post('/api/merchantReview/comment/remove', {
+            'entryId': current.entryId,
+            'commentId': commentId,
+          }),
+        ),
+      );
+      await _upsertCache(reviews, updated);
+      return updated;
+    }
+
+    final updated = current.copyWith(
+      comments: current.comments
+          .where((item) => item.id != commentId)
+          .toList(growable: false),
+    );
+    final next = [...reviews]..[index] = updated;
+    await _save(next);
+    return updated;
+  }
+
   Future<void> removeMerchant(String merchantId) async {
     final reviews = await load();
     final index = reviews.indexWhere((item) => item.merchant.id == merchantId);

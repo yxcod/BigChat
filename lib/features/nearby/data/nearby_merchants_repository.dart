@@ -36,7 +36,7 @@ class NearbyMerchantsRepository {
       final merchants = await _baiduLoader(current, query.trim());
       return NearbyMerchantsResult(
         currentCity: _currentCityLabel(current),
-        merchants: List<NearbyMerchant>.unmodifiable(merchants),
+        merchants: _sortByDistance(merchants),
       );
     } catch (error, stackTrace) {
       developer.log(
@@ -66,9 +66,25 @@ class NearbyMerchantsRepository {
           .toList(growable: false);
       return NearbyMerchantsResult(
         currentCity: fallback.currentCity,
-        merchants: merchants,
+        merchants: _sortByDistance(merchants),
       );
     }
+  }
+
+  List<NearbyMerchant> _sortByDistance(Iterable<NearbyMerchant> source) {
+    final merchants = source.toList(growable: false);
+    merchants.sort((left, right) {
+      final leftDistance = left.distanceMeters;
+      final rightDistance = right.distanceMeters;
+      if (leftDistance == null && rightDistance == null) {
+        return left.name.compareTo(right.name);
+      }
+      if (leftDistance == null) return 1;
+      if (rightDistance == null) return -1;
+      final distance = leftDistance.compareTo(rightDistance);
+      return distance != 0 ? distance : left.name.compareTo(right.name);
+    });
+    return List<NearbyMerchant>.unmodifiable(merchants);
   }
 
   String _currentCityLabel(CurrentPlace current) {
