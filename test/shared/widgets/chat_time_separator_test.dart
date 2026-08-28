@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_base/app/theme/app_theme.dart';
 import 'package:flutter_base/model/messageModel.dart';
 import 'package:flutter_base/shared/widgets/chat_time_separator.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +24,18 @@ void main() {
       shouldShowChatTimeSeparator(current: nextDay, previous: later),
       isTrue,
     );
+  });
+
+  testWidgets('好友验证消息分界提示保持居中展示', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: const Scaffold(body: FriendVerificationDivider()),
+      ),
+    );
+
+    expect(find.text('以上为验证消息'), findsOneWidget);
+    expect(find.byType(Center), findsWidgets);
   });
 }
 

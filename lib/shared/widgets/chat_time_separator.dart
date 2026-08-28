@@ -50,3 +50,24 @@ class ChatTimeSeparator extends StatelessWidget {
     );
   }
 }
+
+class FriendVerificationDivider extends StatelessWidget {
+  const FriendVerificationDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: Text(
+          '以上为验证消息',
+          style: TextStyle(
+            color: context.appTextSecondary.withValues(alpha: 0.82),
+            fontSize: 13,
+            height: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+}

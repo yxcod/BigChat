@@ -585,7 +585,7 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     try {
       final response = await handleFriendRequestApi(requestId, 1, userName);
       if (response['code'] != 100) throw Exception('申请已失效');
-      _cacheAutomaticGreeting(response, request, userName);
+      _cacheAcceptedFriendMessages(response, request, userName);
       await _reload();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -604,36 +604,50 @@ class _FriendAddManagerPageState extends State<FriendAddManagerPage> {
     }
   }
 
-  void _cacheAutomaticGreeting(
+  void _cacheAcceptedFriendMessages(
     Map<String, dynamic> response,
     FriendRequestModel request,
     String currentUserName,
   ) {
-    final rawGreeting = response['greeting'];
-    if (rawGreeting is! Map) return;
-    final greeting = Map<String, dynamic>.from(rawGreeting);
     final counterpart = (request.userName ?? request.fromUserId ?? '').trim();
-    final msgId = int.tryParse(greeting['msgId']?.toString() ?? '');
-    final timestamp =
-        int.tryParse(greeting['sendTime']?.toString() ?? '') ??
-        DateTime.now().millisecondsSinceEpoch;
-    if (counterpart.isEmpty || msgId == null || msgId <= 0) return;
-    GlobalUtil().addMessage(
-      counterpart,
-      Message(
-        msgId: msgId,
-        content: greeting['msgContent']?.toString() ?? '我们已经成功添加好友啦!',
-        isMe: true,
-        time: GlobalUtil.formatChatTimestamp(timestamp),
-        isRead: false,
-        conversationId:
-            greeting['sessionId']?.toString() ??
-            GlobalUtil.generateSessionId(currentUserName, counterpart),
-        status: MessageStatus.sent,
-        senderId: currentUserName,
-        timestamp: timestamp,
-      ),
-    );
+    if (counterpart.isEmpty) return;
+
+    void cacheMessage(dynamic rawMessage, {required bool fallbackIsMe}) {
+      if (rawMessage is! Map) return;
+      final data = Map<String, dynamic>.from(rawMessage);
+      final msgId = int.tryParse(data['msgId']?.toString() ?? '');
+      final timestamp =
+          int.tryParse(data['sendTime']?.toString() ?? '') ??
+          DateTime.now().millisecondsSinceEpoch;
+      if (msgId == null || msgId <= 0) return;
+      final senderId = data['sendUserId']?.toString().trim();
+      GlobalUtil().addMessage(
+        counterpart,
+        Message(
+          msgId: msgId,
+          content: data['msgContent']?.toString() ?? '',
+          isMe: senderId?.isNotEmpty == true
+              ? senderId == currentUserName
+              : fallbackIsMe,
+          time: GlobalUtil.formatChatTimestamp(timestamp),
+          isRead: fallbackIsMe,
+          conversationId:
+              data['sessionId']?.toString() ??
+              GlobalUtil.generateSessionId(currentUserName, counterpart),
+          status: fallbackIsMe ? MessageStatus.sent : MessageStatus.read,
+          senderId: senderId?.isNotEmpty == true
+              ? senderId
+              : (fallbackIsMe ? currentUserName : counterpart),
+          timestamp: timestamp,
+          isFriendVerification: isFriendVerificationExtendInfo(
+            data['extendInfo'],
+          ),
+        ),
+      );
+    }
+
+    cacheMessage(response['verificationMessage'], fallbackIsMe: false);
+    cacheMessage(response['greeting'], fallbackIsMe: true);
   }
 
   Future<bool> _deleteExpiredRequest(FriendRequestModel request) async {

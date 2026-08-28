@@ -65,6 +65,21 @@ class MessageQuote {
   String encodeExtendInfo() => jsonEncode({'quote': toJson()});
 }
 
+bool isFriendVerificationExtendInfo(dynamic value) {
+  try {
+    dynamic decoded = value;
+    if (decoded is String) {
+      final normalized = decoded.trim();
+      if (normalized.isEmpty || normalized == '无') return false;
+      decoded = jsonDecode(normalized);
+    }
+    if (decoded is! Map) return false;
+    return decoded['kind']?.toString() == 'friend_verification';
+  } catch (_) {
+    return false;
+  }
+}
+
 String messageQuotePreview(Message message) {
   final value = switch (message.messageType) {
     MessageType.image => '[图片]',
@@ -158,6 +173,7 @@ class Message {
   final String? senderId;
   final int timestamp;
   final MessageQuote? quote;
+  final bool isFriendVerification;
   final bool isPrivacy;
   final int privacyReadDelaySeconds;
   final int privacyUnreadDelaySeconds;
@@ -174,6 +190,7 @@ class Message {
     this.senderId,
     int? timestamp,
     this.quote,
+    this.isFriendVerification = false,
     this.isPrivacy = false,
     this.privacyReadDelaySeconds = 10,
     this.privacyUnreadDelaySeconds = 180,
@@ -192,6 +209,7 @@ class Message {
       senderId: senderId,
       timestamp: timestamp,
       quote: value,
+      isFriendVerification: isFriendVerification,
       isPrivacy: isPrivacy,
       privacyReadDelaySeconds: privacyReadDelaySeconds,
       privacyUnreadDelaySeconds: privacyUnreadDelaySeconds,
@@ -212,6 +230,7 @@ class Message {
       'senderId': senderId,
       'timestamp': timestamp,
       'quote': quote?.toJson(),
+      'isFriendVerification': isFriendVerification,
       'isPrivacy': isPrivacy,
       'privacyReadDelaySeconds': privacyReadDelaySeconds,
       'privacyUnreadDelaySeconds': privacyUnreadDelaySeconds,
@@ -244,6 +263,9 @@ class Message {
       quote: json['quote'] is Map
           ? MessageQuote.fromJson(Map<String, dynamic>.from(json['quote']))
           : null,
+      isFriendVerification: JsonValueParser.boolValue(
+        json['isFriendVerification'],
+      ),
       isPrivacy: JsonValueParser.boolValue(json['isPrivacy']),
       privacyReadDelaySeconds: JsonValueParser.intValue(
         json['privacyReadDelaySeconds'],

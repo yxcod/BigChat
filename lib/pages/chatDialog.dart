@@ -774,6 +774,9 @@ class _ChatDialogPageState extends State<ChatDialogPage>
       status: MessageStatus.sent,
       senderId: sender,
       quote: MessageQuote.fromExtendInfo(messageData['extendInfo']),
+      isFriendVerification: isFriendVerificationExtendInfo(
+        messageData['extendInfo'],
+      ),
       isPrivacy: messageData['privacyMode'] == true,
       privacyReadDelaySeconds:
           int.tryParse(
@@ -1469,6 +1472,8 @@ class _ChatDialogPageState extends State<ChatDialogPage>
                           onDelete: () => _deleteLocalMessage(message),
                           onQuote: () => _quoteMessage(message),
                         ),
+                        if (message.isFriendVerification)
+                          const FriendVerificationDivider(),
                       ],
                     );
                   },

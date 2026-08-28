@@ -23,6 +23,7 @@ class ChatMessageMapper {
       senderId: record.senderName,
       timestamp: record.timestamp ?? 0,
       quote: MessageQuote.fromExtendInfo(record.extendInfo),
+      isFriendVerification: isFriendVerificationExtendInfo(record.extendInfo),
     );
   }
 
@@ -57,6 +58,7 @@ class ChatMessageMapper {
       senderId: record.senderId,
       timestamp: record.sendTime,
       quote: MessageQuote.fromExtendInfo(record.extendInfo),
+      isFriendVerification: isFriendVerificationExtendInfo(record.extendInfo),
     );
   }
 
@@ -76,6 +78,7 @@ class ChatMessageMapper {
       senderId: message.senderId,
       timestamp: message.timestamp,
       quote: message.quote,
+      isFriendVerification: message.isFriendVerification,
       isPrivacy: message.isPrivacy,
       privacyReadDelaySeconds: message.privacyReadDelaySeconds,
       privacyUnreadDelaySeconds: message.privacyUnreadDelaySeconds,

@@ -28,6 +28,29 @@ void main() {
     expect(message.status, MessageStatus.delivered);
   });
 
+  test('maps and persists friend verification presentation metadata', () {
+    final record = MessageModel(
+      senderName: 'alice',
+      receiverName: 'me',
+      msgId: 13,
+      timestamp: 1000,
+      content: '我申请添加你为好友',
+      messageType: MessageType.text,
+      messageStatus: MessageStatus.read,
+      conversationId: 'alice_me',
+      extendInfo: '{"kind":"friend_verification"}',
+    );
+
+    final mapped = ChatMessageMapper.fromPrivateRecord(
+      record,
+      currentUserId: 'me',
+    );
+    final restored = Message.fromJSON(mapped.toJSON());
+
+    expect(mapped.isFriendVerification, isTrue);
+    expect(restored.isFriendVerification, isTrue);
+  });
+
   test('maps group read state for incoming and outgoing records', () {
     final outgoing = MessageDetailModel(
       msgId: 20,
