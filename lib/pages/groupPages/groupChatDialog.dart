@@ -68,7 +68,7 @@ class GroupChatDialogPage extends StatefulWidget {
 }
 
 class _GroupChatDialogPageState extends State<GroupChatDialogPage>
-    with RouteAware {
+    with RouteAware, WidgetsBindingObserver {
   PrivacySettingsService get _privacy => PrivacySettingsService.instance;
   String get _conversationKey =>
       GlobalUtil.groupConversationKey(widget.groupId);
@@ -142,6 +142,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     GlobalUtil().privacyMessagesRevision.addListener(_refreshPrivacyMessages);
     _textFieldFocusNode.addListener(_handleComposerFocusChanged);
     GroupRouteRegistry.enter(widget.groupId);
@@ -184,6 +185,13 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
       RefreshIntervals.groupFallback,
       (timer) => _checkGroupMembership(),
     );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _activateCurrentConversation();
+    }
   }
 
   @override
@@ -1411,6 +1419,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     appRouteObserver.unsubscribe(this);
     GlobalUtil().privacyMessagesRevision.removeListener(
       _refreshPrivacyMessages,

@@ -306,6 +306,8 @@ class _ChatpageState extends State<Chatpage> {
 
     if (event.type == ChatRealtimeEventType.other ||
         event.type == ChatRealtimeEventType.friendRequestUpdated ||
+        event.type == ChatRealtimeEventType.readReceipt ||
+        event.type == ChatRealtimeEventType.groupReadReceipt ||
         event.type == ChatRealtimeEventType.groupHistoryDeleted ||
         event.type == ChatRealtimeEventType.groupMemberRemoved) {
       return;
@@ -333,9 +335,7 @@ class _ChatpageState extends State<Chatpage> {
     final groupId = int.tryParse(message['groupId']?.toString() ?? '') ?? 0;
     if (groupId <= 0) return;
     final conversationKey = GlobalUtil.groupConversationKey(groupId);
-    final isOpenChat =
-        globalUtil.isChatting == true &&
-        globalUtil.currentChatUserName == conversationKey;
+    final isOpenChat = globalUtil.isConversationVisible(conversationKey);
 
     await globalUtil.deleteChatRecords(conversationKey);
     _locallyReadGroupIds.remove(groupId);

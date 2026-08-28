@@ -46,6 +46,7 @@ import '../app/theme/app_colors.dart';
 import '../app/theme/app_theme_context.dart';
 import '../features/privacy/application/privacy_settings_service.dart';
 import '../core/navigation/app_route_observer.dart';
+import '../features/chat/domain/private_delivery_failure.dart';
 
 class ChatDialogPage extends StatefulWidget {
   ChatDialogPage({Key? key}) : super(key: key);
@@ -53,10 +54,22 @@ class ChatDialogPage extends StatefulWidget {
   _ChatDialogPageState createState() => _ChatDialogPageState();
 }
 
-class _ChatDialogPageState extends State<ChatDialogPage> with RouteAware {
+class _ChatDialogPageState extends State<ChatDialogPage>
+    with RouteAware, WidgetsBindingObserver {
   PrivacySettingsService get _privacy => PrivacySettingsService.instance;
 
   bool _canSendInCurrentMode() {
+    if (_peerNoLongerFriend) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('信息发送失败，对方已不是你的好友'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return false;
+    }
     if (!_privacy.enabled || friendInfo?.isOnline == true) return true;
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -102,6 +115,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> with RouteAware {
   int? _distanceMeters;
   bool _distanceLoading = false;
   String? _distanceStatus;
+  bool _peerNoLongerFriend = false;
   static const int _distanceMaxAttempts = 2;
   static const Duration _distanceAttemptTimeout = Duration(seconds: 5);
   PageRoute<dynamic>? _observedRoute;
@@ -145,6 +159,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> with RouteAware {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     GlobalUtil().privacyMessagesRevision.addListener(_refreshPrivacyMessages);
     _textFieldFocusNode.addListener(_handleComposerFocusChanged);
 
@@ -165,6 +180,13 @@ class _ChatDialogPageState extends State<ChatDialogPage> with RouteAware {
         _loadMoreChatRecords();
       }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _activateCurrentConversation();
+    }
   }
 
   void _refreshPrivacyMessages() {
@@ -832,6 +854,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> with RouteAware {
       msgId = int.tryParse(msgIdValue);
     }
 
+    final isNotFriends = PrivateDeliveryFailure.isNotFriends(messageData);
     if (msgId != null && id != null) {
       // 使用全局聊天记录管理功能更新消息状态
       final globalUtil = GlobalUtil();
@@ -844,11 +867,23 @@ class _ChatDialogPageState extends State<ChatDialogPage> with RouteAware {
           if (failed && message.messageType == MessageType.video) {
             _failedVideoMessageIds.add(msgId);
           }
+          if (failed && message.messageType == MessageType.file) {
+            _failedFileMessageIds.add(msgId);
+          }
           break;
         }
       }
+      if (isNotFriends) _peerNoLongerFriend = true;
       // 更新UI
       setState(() {});
+      if (isNotFriends) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('信息发送失败，对方已不是你的好友'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -1437,6 +1472,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> with RouteAware {
                   },
                 ),
               ),
+              if (_peerNoLongerFriend) _buildFriendshipInvalidNotice(),
               Divider(height: 1, color: context.appDivider),
               ChatComposerPanel(
                 composer: _buildTextComposer(),
@@ -1451,6 +1487,44 @@ class _ChatDialogPageState extends State<ChatDialogPage> with RouteAware {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildFriendshipInvalidNotice() {
+    return Container(
+      key: const ValueKey('private_chat_friendship_invalid_notice'),
+      width: double.infinity,
+      color: context.appSurface.withValues(alpha: 0.96),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '对方已不是你的好友，消息无法送达',
+              style: TextStyle(color: context.appTextSecondary, fontSize: 12.5),
+            ),
+          ),
+          TextButton(
+            key: const ValueKey('private_chat_readd_friend_button'),
+            onPressed: _openReaddFriendPage,
+            child: const Text('添加对方为好友'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openReaddFriendPage() {
+    final peer = friendInfo?.userName ?? id ?? '';
+    if (peer.isEmpty) return;
+    Navigator.of(context).pushNamed(
+      '/addFriendRequestPage',
+      arguments: <String, dynamic>{
+        'phone': peer,
+        'nickname': friendInfo?.nickName ?? peer,
+        'avatar': friendInfo?.avatar ?? '',
+        'region': friendInfo?.region ?? '',
+      },
     );
   }
 
@@ -1719,6 +1793,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> with RouteAware {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     appRouteObserver.unsubscribe(this);
     GlobalUtil().privacyMessagesRevision.removeListener(
       _refreshPrivacyMessages,
