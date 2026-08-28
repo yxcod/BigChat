@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/notifications/push_notification_service.dart';
 
 import '../api/getInfoAPI.dart';
 import '../app/theme/app_colors.dart';
@@ -112,6 +113,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     }
 
     WebSocketManager().disconnect();
+    await PushNotificationService.instance.unregisterCurrentUser();
     final globalUtil = GlobalUtil();
     await globalUtil.flushChatRecordsToLocal();
     globalUtil.resetSessionState();

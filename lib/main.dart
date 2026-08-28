@@ -20,6 +20,7 @@ import './features/groups/application/group_notification_settings_service.dart';
 import './model/friendRequestModel.dart';
 import './core/navigation/app_route_observer.dart';
 import './features/friends/application/friendship_realtime_service.dart';
+import './core/notifications/push_notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +43,9 @@ Future<void> main() async {
       ),
     ),
   );
+  if (hasAuthenticatedSession) {
+    unawaited(PushNotificationService.instance.initialize());
+  }
 }
 
 String appInitialRoute(bool hasAuthenticatedSession) =>
@@ -115,6 +119,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       (_) => _reconcileLocationPreference(),
     );
     _reconcileLocationPreference();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PushNotificationService.instance.flushPendingNavigation();
+    });
   }
 
   void _connectRestoredSession() {
@@ -368,6 +375,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         _connectionMonitor.setAppActive(true);
         WebSocketManager().reconnectNow();
         _reconcileLocationPreference();
+        unawaited(PushNotificationService.instance.updateAppForeground(true));
         if (_privacyLockPending && mounted) {
           // 根节点锁屏必须参与当前帧构建，不能先展示主界面再跳转锁屏页。
           setState(() {});
@@ -381,6 +389,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     GlobalUtil().setAppForeground(false);
     _dismissMessageBanner();
     _connectionMonitor.setAppActive(false);
+    unawaited(PushNotificationService.instance.updateAppForeground(false));
     _connectionNoticeTimer?.cancel();
     _connectionNoticeTimer = null;
     _disconnectionNoticePresented = false;
@@ -406,6 +415,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     } else {
       _privacyLockPending = false;
     }
+    await PushNotificationService.instance.unregisterCurrentUser();
     WebSocketManager().disconnect();
     GlobalUtil().resetSessionState();
     await StorageUtil.logout();

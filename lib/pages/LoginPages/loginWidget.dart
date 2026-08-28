@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +13,7 @@ import '../../features/privacy/application/privacy_settings_service.dart';
 import '../../features/groups/application/group_notification_settings_service.dart';
 import '../../utils/http.dart';
 import '../../utils/storageUtil.dart';
+import '../../core/notifications/push_notification_service.dart';
 import 'forgot_password_page.dart';
 
 typedef LoginHandler =
@@ -114,6 +117,7 @@ class _BigchatLoginPageState extends State<BigchatLoginPage> {
         await GroupNotificationSettingsService.instance.load(ownerId: phone);
         if (!mounted) return;
         _initializeWebSocket();
+        unawaited(PushNotificationService.instance.initialize());
         Navigator.pushNamedAndRemoveUntil(
           context,
           '/mainWidget',

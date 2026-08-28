@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/notifications/push_notification_service.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
@@ -172,6 +173,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (widget.logoutHandler != null) {
       await widget.logoutHandler!();
     } else {
+      await PushNotificationService.instance.unregisterCurrentUser();
       WebSocketManager().disconnect();
       final global = GlobalUtil();
       await global.flushChatRecordsToLocal();

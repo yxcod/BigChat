@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/notifications/push_notification_service.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_context.dart';
@@ -41,6 +42,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   ) async {
     setState(() => _settings = settings);
     await persist();
+    await PushNotificationService.instance.syncAuthenticatedSession(
+      appForeground: true,
+    );
   }
 
   @override
