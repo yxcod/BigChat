@@ -35,10 +35,25 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Baidu's Flutter SDK 4.0.1 uses anonymous Gson TypeToken classes
+            // across its coordinate and POI method channels. AGP full-mode R8
+            // rewrites those reflective generic types and breaks release only.
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // The Flutter wrapper exposes this dependency only internally, while the
+    // app-level bootstrap needs SDKInitializer to enforce privacy-first setup.
+    implementation("com.baidu.lbsyun:base_flutter:8.1.0")
 }

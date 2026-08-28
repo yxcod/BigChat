@@ -25,7 +25,7 @@
     
     <application
         android:label="全信"
-        android:name="com.baidu.mapapi.base.BmfMapApplication"
+        android:name=".QuanxinApplication"
         android:icon="@mipmap/ic_launcher">
         <!-- Replace baidu_map_ak in res/values/baidu_lbs.xml with the Android AK. -->
         <meta-data

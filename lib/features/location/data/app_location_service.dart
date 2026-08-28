@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -99,12 +100,36 @@ class AppLocationService {
             : '未获得定位权限',
       );
     }
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: timeout,
-      ),
-    );
+    late final Position position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: defaultTargetPlatform == TargetPlatform.android
+            ? AndroidSettings(
+                // Google Play Services location frequently stalls on devices
+                // used in mainland China. The platform LocationManager can use
+                // the vendor/network provider and is accurate enough for nearby
+                // POI searches while still falling back to GPS when available.
+                forceLocationManager: true,
+                accuracy: LocationAccuracy.medium,
+                timeLimit: timeout,
+              )
+            : LocationSettings(
+                accuracy: LocationAccuracy.high,
+                timeLimit: timeout,
+              ),
+      );
+    } on TimeoutException {
+      final cached = await Geolocator.getLastKnownPosition();
+      final cacheAge = cached == null
+          ? null
+          : DateTime.now().difference(cached.timestamp).abs();
+      if (cached == null ||
+          cacheAge == null ||
+          cacheAge > const Duration(minutes: 10)) {
+        rethrow;
+      }
+      position = cached;
+    }
     var address =
         '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
     var cityRegion = '';

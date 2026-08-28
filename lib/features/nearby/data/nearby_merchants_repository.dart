@@ -1,3 +1,7 @@
+import 'dart:developer' as developer;
+
+import 'package:flutter/foundation.dart';
+
 import '../../location/data/app_location_service.dart';
 import '../../location/data/nearby_places_service.dart';
 import '../../location/domain/nearby_place.dart';
@@ -34,7 +38,14 @@ class NearbyMerchantsRepository {
         currentCity: _currentCityLabel(current),
         merchants: List<NearbyMerchant>.unmodifiable(merchants),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'Baidu merchant search failed; using system location fallback',
+        name: 'NearbyMerchantsRepository',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      debugPrint('Baidu merchant search failed: $error');
       final fallback = await _fallbackLoader();
       final normalizedQuery = query.trim().toLowerCase();
       final merchants = fallback.places

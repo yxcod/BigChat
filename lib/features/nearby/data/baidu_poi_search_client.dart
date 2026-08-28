@@ -22,6 +22,27 @@ class BaiduPoiSearchClient {
     required String query,
   }) async {
     await _initialize();
+    for (var attempt = 0; attempt < 5; attempt++) {
+      try {
+        return await _searchOnce(current: current, query: query);
+      } on StateError catch (error) {
+        final authenticationPending = error.message.toString().contains(
+          'PERMISSION_UNFINISHED',
+        );
+        if (!authenticationPending || attempt == 4) rethrow;
+        // Android SDK authentication completes asynchronously after
+        // SDKInitializer.initialize(). Do not turn its brief pending state
+        // into a permanent system-geocoder fallback for this page load.
+        await Future<void>.delayed(const Duration(milliseconds: 750));
+      }
+    }
+    throw StateError('百度地点检索鉴权超时');
+  }
+
+  Future<List<NearbyMerchant>> _searchOnce({
+    required CurrentPlace current,
+    required String query,
+  }) async {
     final converted = await BMFCalculateUtils.coordConvert(
       coordinate: BMFCoordinate(current.latitude, current.longitude),
       fromType: BMF_COORD_TYPE.GPS,
