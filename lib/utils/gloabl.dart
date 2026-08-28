@@ -36,6 +36,7 @@ class GlobalUtil {
   final Map<String, Timer> _chatCacheWriteTimers = {};
   final Map<int, Timer> _privacyMessageTimers = {};
   final ValueNotifier<int> privacyMessagesRevision = ValueNotifier<int>(0);
+  final ValueNotifier<int> friendshipRevision = ValueNotifier<int>(0);
 
   static final GlobalUtil _instance = GlobalUtil._internal();
   factory GlobalUtil() {
@@ -113,6 +114,7 @@ class GlobalUtil {
     _chatStore.clearAllUnreadMessages();
     _groupMemberCache.clear();
     _userInfoModel = null;
+    friendshipRevision.value++;
     _isChatting = false;
     _currentChatUserName = null;
     _isAppForeground = true;

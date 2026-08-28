@@ -163,6 +163,7 @@ class _ChatDialogPageState extends State<ChatDialogPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     GlobalUtil().privacyMessagesRevision.addListener(_refreshPrivacyMessages);
+    GlobalUtil().friendshipRevision.addListener(_handleFriendshipChanged);
     _textFieldFocusNode.addListener(_handleComposerFocusChanged);
 
     // 为滚动控制器添加监听器，实现向上滑动加载更多
@@ -193,6 +194,18 @@ class _ChatDialogPageState extends State<ChatDialogPage>
 
   void _refreshPrivacyMessages() {
     if (mounted) setState(() {});
+  }
+
+  void _handleFriendshipChanged() {
+    final peer = id;
+    if (!mounted || peer == null || peer.isEmpty) return;
+    final global = GlobalUtil();
+    if (!global.hasFriend(peer)) return;
+    setState(() {
+      _peerNoLongerFriend = false;
+      friendInfo = global.getFriendInfoByUserName(peer);
+    });
+    _scrollToBottom();
   }
 
   void _handleComposerFocusChanged() {
@@ -682,6 +695,18 @@ class _ChatDialogPageState extends State<ChatDialogPage>
           // 送达确认
           debugPrint('处理送达确认');
           _handleDeliveryAck(message);
+          break;
+        case 'friendRequestUpdated':
+          if (message['action']?.toString() == 'accepted') {
+            final currentUser = GlobalUtil().userName?.trim() ?? '';
+            final fromUser = message['fromUserId']?.toString().trim() ?? '';
+            final toUser = message['toUserId']?.toString().trim() ?? '';
+            if (id != null &&
+                ((fromUser == currentUser && toUser == id) ||
+                    (toUser == currentUser && fromUser == id))) {
+              setState(() => _peerNoLongerFriend = false);
+            }
+          }
           break;
         case 'privacyMessageRead':
           _handleReadAck(message);
@@ -1805,6 +1830,7 @@ class _ChatDialogPageState extends State<ChatDialogPage>
     GlobalUtil().privacyMessagesRevision.removeListener(
       _refreshPrivacyMessages,
     );
+    GlobalUtil().friendshipRevision.removeListener(_handleFriendshipChanged);
     _imageUploadCancelToken?.cancel('聊天页面已关闭');
     _videoUploadCancelToken?.cancel('聊天页面已关闭');
     _audioUploadCancelToken?.cancel('聊天页面已关闭');

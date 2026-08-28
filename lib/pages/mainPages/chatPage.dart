@@ -299,6 +299,23 @@ class _ChatpageState extends State<Chatpage> {
       case ChatRealtimeEventType.groupMemberRoleUpdated:
         break;
       case ChatRealtimeEventType.friendRequestUpdated:
+        if (event.data['action']?.toString() == 'accepted') {
+          final currentUser = globalUtil.userName?.trim() ?? '';
+          final fromUser = event.data['fromUserId']?.toString().trim() ?? '';
+          final toUser = event.data['toUserId']?.toString().trim() ?? '';
+          final counterpart = fromUser == currentUser ? toUser : fromUser;
+          if (counterpart.isNotEmpty) {
+            _unhideConversation('private:$counterpart');
+            _refreshDebounceTimer?.cancel();
+            _refreshDebounceTimer = Timer(
+              const Duration(milliseconds: 150),
+              () {
+                if (mounted) fetchConversations();
+              },
+            );
+          }
+        }
+        break;
       case ChatRealtimeEventType.readReceipt:
       case ChatRealtimeEventType.other:
         break;

@@ -19,6 +19,7 @@ import './features/privacy/presentation/privacy_unlock_page.dart';
 import './features/groups/application/group_notification_settings_service.dart';
 import './model/friendRequestModel.dart';
 import './core/navigation/app_route_observer.dart';
+import './features/friends/application/friendship_realtime_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,6 +89,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _isAppForeground = true;
   bool _disconnectionNoticePresented = false;
   final Set<int> _handlingRemovedGroups = {};
+  final FriendshipRealtimeService _friendshipRealtimeService =
+      const FriendshipRealtimeService();
   late bool _privacyLockPending;
 
   @override
@@ -166,6 +169,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       return;
     }
     final event = ChatRealtimeEvent.parse(rawMessage);
+    if (event.type == ChatRealtimeEventType.friendRequestUpdated) {
+      unawaited(_friendshipRealtimeService.handle(rawMessage));
+    }
     unawaited(_handleIncomingMessageNotification(event));
     if (event.type != ChatRealtimeEventType.groupMemberRemoved ||
         event.groupId <= 0 ||
