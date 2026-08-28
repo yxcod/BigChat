@@ -51,6 +51,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import '../../features/privacy/application/privacy_settings_service.dart';
 import '../../features/privacy/domain/privacy_message_policy.dart';
+import '../../core/navigation/app_route_observer.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -66,7 +67,8 @@ class GroupChatDialogPage extends StatefulWidget {
   _GroupChatDialogPageState createState() => _GroupChatDialogPageState();
 }
 
-class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
+class _GroupChatDialogPageState extends State<GroupChatDialogPage>
+    with RouteAware {
   PrivacySettingsService get _privacy => PrivacySettingsService.instance;
   String get _conversationKey =>
       GlobalUtil.groupConversationKey(widget.groupId);
@@ -105,6 +107,37 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   String _currentGroupName = ''; // 当前显示的群名称
   int? _currentMemberCount; // 当前群成员人数，未加载完成前不显示
   bool _isHandlingHistoryDeletion = false;
+  PageRoute<dynamic>? _observedRoute;
+
+  bool get _isConversationActuallyVisible =>
+      mounted &&
+      ModalRoute.of(context)?.isCurrent == true &&
+      GlobalUtil().isConversationVisible(_conversationKey);
+
+  void _activateCurrentConversation() {
+    GlobalUtil().activateConversation(_conversationKey);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isConversationActuallyVisible) return;
+      GlobalUtil().clearUnreadMessages(_conversationKey);
+      _sendReadAcksForLoadedMessages();
+    });
+  }
+
+  void _deactivateCurrentConversation() {
+    GlobalUtil().deactivateConversation(_conversationKey);
+  }
+
+  @override
+  void didPush() => _activateCurrentConversation();
+
+  @override
+  void didPopNext() => _activateCurrentConversation();
+
+  @override
+  void didPushNext() => _deactivateCurrentConversation();
+
+  @override
+  void didPop() => _deactivateCurrentConversation();
 
   @override
   void initState() {
@@ -113,9 +146,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     _textFieldFocusNode.addListener(_handleComposerFocusChanged);
     GroupRouteRegistry.enter(widget.groupId);
     final globalUtil = GlobalUtil();
-    globalUtil.isChatting = true;
-    globalUtil.currentChatUserName = _conversationKey;
-    globalUtil.clearUnreadMessages(_conversationKey);
+    globalUtil.activateConversation(_conversationKey);
     // isMe 属于当前账号的视图状态，不能直接信任上一个登录账号留下的缓存。
     unawaited(_normalizeCachedMessageOwnership());
 
@@ -153,6 +184,18 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
       RefreshIntervals.groupFallback,
       (timer) => _checkGroupMembership(),
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic> && !identical(route, _observedRoute)) {
+      if (_observedRoute != null) appRouteObserver.unsubscribe(this);
+      _observedRoute = route;
+      appRouteObserver.subscribe(this, route);
+    }
+    _activateCurrentConversation();
   }
 
   void _refreshPrivacyMessages() {
@@ -404,6 +447,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
   }
 
   void _sendReadAcksForLoadedMessages() {
+    if (!_isConversationActuallyVisible) return;
     if (!_wsManager.isConnected) {
       return;
     }
@@ -1073,7 +1117,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
         }
 
         // 发送已读确认（只发送给发送者，不发送给自己发的消息）
-        if (sender != globalUtil.userName) {
+        if (sender != globalUtil.userName && _isConversationActuallyVisible) {
           _sentReadAckMessageIds.add(msgId);
           _sendReadAck(msgId, sender, clientMsgId: clientMsgId);
         }
@@ -1367,6 +1411,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     GlobalUtil().privacyMessagesRevision.removeListener(
       _refreshPrivacyMessages,
     );
@@ -1375,8 +1420,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     _videoUploadCancelToken?.cancel('群聊页面已关闭');
     _audioUploadCancelToken?.cancel('群聊页面已关闭');
     _fileUploadCancelToken?.cancel('群聊页面已关闭');
-    // 离开页面前再次提交已读水位，避免会话列表重新出现已读消息红点。
-    _sendReadAcksForLoadedMessages();
     _textFieldFocusNode.removeListener(_handleComposerFocusChanged);
     _textController.dispose();
     _textFieldFocusNode.dispose();
@@ -1392,9 +1435,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage> {
     debugPrint('群聊页面销毁，已移除WebSocket监听器');
 
     // 离开聊天页面时，更新全局聊天状态
-    final globalUtil = GlobalUtil();
-    globalUtil.isChatting = false;
-    globalUtil.currentChatUserName = null;
+    _deactivateCurrentConversation();
 
     super.dispose();
   }

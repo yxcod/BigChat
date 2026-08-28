@@ -26,6 +26,7 @@ class GlobalUtil {
   bool? _isChatting;
   String? _currentChatUserName;
   bool _isOnChatTab = true;
+  bool _isAppForeground = true;
   Function(String, int)? onUnreadCountChanged;
 
   final ChatStore _chatStore = ChatStore();
@@ -54,6 +55,28 @@ class GlobalUtil {
   bool? get isChatting => _isChatting ?? false;
   String? get currentChatUserName => _currentChatUserName;
   bool get isOnChatTab => _isOnChatTab;
+  bool get isAppForeground => _isAppForeground;
+
+  bool isConversationVisible(String conversationKey) {
+    return _isAppForeground &&
+        (_isChatting ?? false) &&
+        _currentChatUserName == conversationKey;
+  }
+
+  void activateConversation(String conversationKey) {
+    _isChatting = true;
+    _currentChatUserName = conversationKey;
+  }
+
+  void deactivateConversation(String conversationKey) {
+    if (_currentChatUserName != conversationKey) return;
+    _isChatting = false;
+    _currentChatUserName = null;
+  }
+
+  void setAppForeground(bool value) {
+    _isAppForeground = value;
+  }
 
   set token(String? value) {
     _token = value;
@@ -92,6 +115,7 @@ class GlobalUtil {
     _userInfoModel = null;
     _isChatting = false;
     _currentChatUserName = null;
+    _isAppForeground = true;
     onUnreadCountChanged = null;
     _userName = null;
     _token = null;

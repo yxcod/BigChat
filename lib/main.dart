@@ -18,6 +18,7 @@ import './features/privacy/application/privacy_settings_service.dart';
 import './features/privacy/presentation/privacy_unlock_page.dart';
 import './features/groups/application/group_notification_settings_service.dart';
 import './model/friendRequestModel.dart';
+import './core/navigation/app_route_observer.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -82,6 +83,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final WebSocketMessageSubscription _groupEventSubscription;
   Timer? _locationSyncTimer;
   Timer? _connectionNoticeTimer;
+  Timer? _messageBannerTimer;
+  OverlayEntry? _messageBannerEntry;
   bool _isAppForeground = true;
   bool _disconnectionNoticePresented = false;
   final Set<int> _handlingRemovedGroups = {};
@@ -133,6 +136,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _groupEventSubscription.cancel();
     _locationSyncTimer?.cancel();
     _connectionNoticeTimer?.cancel();
+    _messageBannerTimer?.cancel();
+    _messageBannerEntry?.remove();
     super.dispose();
   }
 
@@ -174,11 +179,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     ChatRealtimeEvent event,
   ) async {
     final global = GlobalUtil();
-    final inChatModule = global.isOnChatTab || global.isChatting == true;
+    final conversationKey = event.type == ChatRealtimeEventType.groupMessage
+        ? GlobalUtil.groupConversationKey(event.groupId)
+        : event.senderId;
+    final conversationIsActive =
+        conversationKey.isNotEmpty &&
+        global.isConversationVisible(conversationKey);
     final notice = await _notificationFeedbackService.handle(
       event,
       appIsForeground: _isAppForeground,
-      conversationIsActive: inChatModule,
+      conversationIsActive: conversationIsActive,
     );
     if (!mounted || notice == null) return;
     _showMessageBanner(notice);
@@ -187,65 +197,102 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void _showMessageBanner(AppMessageNotice notice) {
     final navigator = GlobalNavigatorKey.navigatorState;
     if (navigator == null) return;
-    final messenger = ScaffoldMessenger.maybeOf(navigator.context);
-    if (messenger == null) return;
-    messenger
-      ..hideCurrentMaterialBanner()
-      ..showMaterialBanner(
-        MaterialBanner(
-          leading: const CircleAvatar(
-            backgroundColor: Color(0x1F07C160),
-            child: Icon(Icons.notifications_rounded, color: Color(0xFF07C160)),
-          ),
-          content: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              messenger.hideCurrentMaterialBanner();
-              if (notice.event.type ==
-                  ChatRealtimeEventType.friendRequestUpdated) {
-                navigator.pushNamed(
-                  '/friendAddManagerPage',
-                  arguments: const <FriendRequestModel>[],
-                );
-              } else if (notice.event.type ==
-                  ChatRealtimeEventType.groupMessage) {
-                navigator.pushNamed(
-                  '/groupChatDialog',
-                  arguments: {
-                    'groupId': notice.event.groupId,
-                    'groupName': '群聊',
-                  },
-                );
-              } else {
-                navigator.pushNamed(
-                  '/chatDialog',
-                  arguments: notice.event.senderId,
-                );
-              }
-            },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  notice.title,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+    final overlay = navigator.overlay;
+    if (overlay == null) return;
+    _dismissMessageBanner();
+    _messageBannerEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 0,
+        left: 12,
+        right: 12,
+        child: SafeArea(
+          bottom: false,
+          child: Material(
+            elevation: 8,
+            color: Theme.of(context).colorScheme.surface,
+            shadowColor: Colors.black26,
+            borderRadius: BorderRadius.circular(14),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () {
+                _dismissMessageBanner();
+                if (notice.event.type ==
+                    ChatRealtimeEventType.friendRequestUpdated) {
+                  navigator.pushNamed(
+                    '/friendAddManagerPage',
+                    arguments: const <FriendRequestModel>[],
+                  );
+                } else if (notice.event.type ==
+                    ChatRealtimeEventType.groupMessage) {
+                  navigator.pushNamed(
+                    '/groupChatDialog',
+                    arguments: {
+                      'groupId': notice.event.groupId,
+                      'groupName': '群聊',
+                    },
+                  );
+                } else {
+                  navigator.pushNamed(
+                    '/chatDialog',
+                    arguments: notice.event.senderId,
+                  );
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 11, 6, 11),
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      backgroundColor: Color(0x1F07C160),
+                      child: Icon(
+                        Icons.notifications_rounded,
+                        color: Color(0xFF07C160),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            notice.title,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            notice.body,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '关闭',
+                      onPressed: _dismissMessageBanner,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(notice.body, maxLines: 2, overflow: TextOverflow.ellipsis),
-              ],
+              ),
             ),
           ),
-          actions: [
-            IconButton(
-              tooltip: '关闭',
-              onPressed: messenger.hideCurrentMaterialBanner,
-              icon: const Icon(Icons.close_rounded),
-            ),
-          ],
         ),
-      );
-    Timer(const Duration(seconds: 4), messenger.hideCurrentMaterialBanner);
+      ),
+    );
+    overlay.insert(_messageBannerEntry!);
+    _messageBannerTimer = Timer(
+      const Duration(seconds: 4),
+      _dismissMessageBanner,
+    );
+  }
+
+  void _dismissMessageBanner() {
+    _messageBannerTimer?.cancel();
+    _messageBannerTimer = null;
+    _messageBannerEntry?.remove();
+    _messageBannerEntry = null;
   }
 
   Future<void> _handleRemovedFromGroup(ChatRealtimeEvent event) async {
@@ -311,6 +358,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         break;
       case AppLifecycleState.resumed:
         _isAppForeground = true;
+        GlobalUtil().setAppForeground(true);
         _connectionMonitor.setAppActive(true);
         WebSocketManager().reconnectNow();
         _reconcileLocationPreference();
@@ -324,6 +372,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   void _enterBackground() {
     _isAppForeground = false;
+    GlobalUtil().setAppForeground(false);
+    _dismissMessageBanner();
     _connectionMonitor.setAppActive(false);
     _connectionNoticeTimer?.cancel();
     _connectionNoticeTimer = null;
@@ -451,6 +501,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         darkTheme: AppTheme.dark,
         themeMode: _themeController.themeMode,
         navigatorKey: GlobalNavigatorKey.navigatorKey,
+        navigatorObservers: [appRouteObserver],
         initialRoute:
             widget.initialRoute ??
             appInitialRoute(

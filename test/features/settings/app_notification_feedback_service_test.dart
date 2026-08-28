@@ -103,6 +103,38 @@ void main() {
     expect(soundCount, 0);
   });
 
+  test(
+    'read receipts and own echoed messages never trigger feedback',
+    () async {
+      GlobalUtil().userName = 'sender_200';
+      var feedbackCount = 0;
+      final service = AppNotificationFeedbackService(
+        loadSettings: () async => const AppSettings(
+          vibrationEnabled: true,
+          bannerEnabled: true,
+          messageSoundEnabled: true,
+        ),
+        vibrate: () async => feedbackCount++,
+        playSound: (_) async => feedbackCount++,
+      );
+
+      final receipt = ChatRealtimeEvent.parse({
+        'type': 'read_ack',
+        'msgId': 99,
+      });
+      final ownEcho = ChatRealtimeEvent.parse({
+        'type': 'message',
+        'sendUserId': 'sender_200',
+        'msgId': 99,
+        'msgContent': '自己的消息',
+      });
+
+      expect(await service.handle(receipt, appIsForeground: true), isNull);
+      expect(await service.handle(ownEcho, appIsForeground: true), isNull);
+      expect(feedbackCount, 0);
+    },
+  );
+
   test('incoming friend request follows notification settings', () async {
     GlobalUtil().userName = 'receiver_100';
     var vibrationCount = 0;

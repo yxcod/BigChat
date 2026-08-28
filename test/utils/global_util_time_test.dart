@@ -7,6 +7,27 @@ void main() {
     expect(GlobalUtil.groupConversationKey(123), isNot('123'));
   });
 
+  test(
+    'conversation visibility requires foreground and exact conversation',
+    () {
+      final global = GlobalUtil();
+      global.resetSessionState();
+      global.activateConversation('alice');
+
+      expect(global.isConversationVisible('alice'), isTrue);
+      expect(global.isConversationVisible('bob'), isFalse);
+
+      global.setAppForeground(false);
+      expect(global.isConversationVisible('alice'), isFalse);
+
+      global.setAppForeground(true);
+      global.deactivateConversation('bob');
+      expect(global.isConversationVisible('alice'), isTrue);
+      global.deactivateConversation('alice');
+      expect(global.isConversationVisible('alice'), isFalse);
+    },
+  );
+
   group('GlobalUtil.formatChatTimestamp', () {
     final referenceTime = DateTime(2026, 8, 20, 15, 30);
 

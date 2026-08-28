@@ -375,9 +375,7 @@ class _ChatpageState extends State<Chatpage> {
   void _storePrivateRealtimeMessage(ChatRealtimeEvent event) {
     if (event.senderId.isEmpty || event.messageId <= 0) return;
     _unhideConversation('private:${event.senderId}');
-    final isOpenChat =
-        globalUtil.isChatting == true &&
-        globalUtil.currentChatUserName == event.senderId;
+    final isOpenChat = globalUtil.isConversationVisible(event.senderId);
     if (isOpenChat) return;
 
     globalUtil.addMessage(
@@ -425,9 +423,7 @@ class _ChatpageState extends State<Chatpage> {
     final groupId = event.groupId.toString();
     final conversationKey = GlobalUtil.groupConversationKey(groupId);
     _unhideConversation(conversationKey);
-    final isOpenChat =
-        globalUtil.isChatting == true &&
-        globalUtil.currentChatUserName == conversationKey;
+    final isOpenChat = globalUtil.isConversationVisible(conversationKey);
     if (isOpenChat) return;
     _locallyReadGroupIds.remove(event.groupId);
 

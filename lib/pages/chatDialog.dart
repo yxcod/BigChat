@@ -45,6 +45,7 @@ import 'videoCallPage.dart';
 import '../app/theme/app_colors.dart';
 import '../app/theme/app_theme_context.dart';
 import '../features/privacy/application/privacy_settings_service.dart';
+import '../core/navigation/app_route_observer.dart';
 
 class ChatDialogPage extends StatefulWidget {
   ChatDialogPage({Key? key}) : super(key: key);
@@ -52,7 +53,7 @@ class ChatDialogPage extends StatefulWidget {
   _ChatDialogPageState createState() => _ChatDialogPageState();
 }
 
-class _ChatDialogPageState extends State<ChatDialogPage> {
+class _ChatDialogPageState extends State<ChatDialogPage> with RouteAware {
   PrivacySettingsService get _privacy => PrivacySettingsService.instance;
 
   bool _canSendInCurrentMode() {
@@ -103,6 +104,43 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
   String? _distanceStatus;
   static const int _distanceMaxAttempts = 2;
   static const Duration _distanceAttemptTimeout = Duration(seconds: 5);
+  PageRoute<dynamic>? _observedRoute;
+
+  bool get _isConversationActuallyVisible {
+    final peer = id;
+    return peer != null &&
+        mounted &&
+        ModalRoute.of(context)?.isCurrent == true &&
+        GlobalUtil().isConversationVisible(peer);
+  }
+
+  void _activateCurrentConversation() {
+    final peer = id;
+    if (peer == null) return;
+    GlobalUtil().activateConversation(peer);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isConversationActuallyVisible) return;
+      unawaited(_markUnreadMessagesAsRead(peer));
+      _acknowledgeVisibleUnreadMessages();
+    });
+  }
+
+  void _deactivateCurrentConversation() {
+    final peer = id;
+    if (peer != null) GlobalUtil().deactivateConversation(peer);
+  }
+
+  @override
+  void didPush() => _activateCurrentConversation();
+
+  @override
+  void didPopNext() => _activateCurrentConversation();
+
+  @override
+  void didPushNext() => _deactivateCurrentConversation();
+
+  @override
+  void didPop() => _deactivateCurrentConversation();
 
   @override
   void initState() {
@@ -729,9 +767,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     globalUtil.addMessage(sender, newMessage);
 
     // 检查是否在当前聊天界面且是当前聊天对象的消息
-    bool isCurrentChat =
-        globalUtil.isChatting == true &&
-        globalUtil.currentChatUserName == sender;
+    final isCurrentChat = sender == id && _isConversationActuallyVisible;
     if (isCurrentChat) {
       debugPrint('在当前聊天界面，立即发送已读确认');
       // 在当前聊天界面，立即发送已读确认
@@ -859,20 +895,20 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
       "Route settings arguments: ${ModalRoute.of(context)?.settings.arguments}",
     );
     id = ModalRoute.of(context)?.settings.arguments as String?;
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic> && !identical(route, _observedRoute)) {
+      if (_observedRoute != null) appRouteObserver.unsubscribe(this);
+      _observedRoute = route;
+      appRouteObserver.subscribe(this, route);
+    }
     debugPrint("id value: $id");
     if (id != null) {
-      // 更新全局聊天状态
-      final globalUtil = GlobalUtil();
-      globalUtil.isChatting = true;
-      globalUtil.currentChatUserName = id;
+      _activateCurrentConversation();
       // 获取好友信息
       _fetchFriendInfo();
 
       // 确保WebSocket已连接
       _ensureWebSocketConnected();
-
-      // 标记未读消息为已读
-      _markUnreadMessagesAsRead(id!);
 
       // 初始加载100条聊天记录
       _loadInitialChatRecords();
@@ -952,8 +988,13 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     });
     _startDistanceRefresh();
 
-    // 处理未读消息：进入聊天界面时标记所有未读消息为已读
-    if (id != null) {
+    _acknowledgeVisibleUnreadMessages();
+  }
+
+  void _acknowledgeVisibleUnreadMessages() {
+    if (!_isConversationActuallyVisible || id == null) return;
+    final globalUtil = GlobalUtil();
+    {
       // 获取该用户的所有未读消息ID
       List<int> unreadMsgIds = globalUtil.getUnreadMessages(id!);
 
@@ -1678,6 +1719,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     GlobalUtil().privacyMessagesRevision.removeListener(
       _refreshPrivacyMessages,
     );
@@ -1693,9 +1735,7 @@ class _ChatDialogPageState extends State<ChatDialogPage> {
     _scrollController.dispose();
 
     // 离开聊天页面时，更新全局聊天状态
-    final globalUtil = GlobalUtil();
-    globalUtil.isChatting = false;
-    globalUtil.currentChatUserName = null;
+    _deactivateCurrentConversation();
 
     super.dispose();
   }
