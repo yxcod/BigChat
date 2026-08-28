@@ -115,6 +115,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
       GlobalUtil().isConversationVisible(_conversationKey);
 
   void _activateCurrentConversation() {
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
     GlobalUtil().activateConversation(_conversationKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_isConversationActuallyVisible) return;
@@ -147,7 +148,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
     _textFieldFocusNode.addListener(_handleComposerFocusChanged);
     GroupRouteRegistry.enter(widget.groupId);
     final globalUtil = GlobalUtil();
-    globalUtil.activateConversation(_conversationKey);
     // isMe 属于当前账号的视图状态，不能直接信任上一个登录账号留下的缓存。
     unawaited(_normalizeCachedMessageOwnership());
 

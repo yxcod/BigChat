@@ -130,7 +130,9 @@ class _ChatDialogPageState extends State<ChatDialogPage>
 
   void _activateCurrentConversation() {
     final peer = id;
-    if (peer == null) return;
+    if (peer == null || !mounted || ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
     GlobalUtil().activateConversation(peer);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_isConversationActuallyVisible) return;
