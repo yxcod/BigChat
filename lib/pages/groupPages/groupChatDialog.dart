@@ -47,6 +47,7 @@ import '../../core/media/voice_media.dart';
 import '../../shared/widgets/message_action_menu.dart';
 import '../../shared/widgets/quoted_message_view.dart';
 import '../../core/media/chat_media_saver.dart';
+import '../../shared/utils/chat_file_save_ui.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import '../../features/privacy/application/privacy_settings_service.dart';
@@ -2371,10 +2372,13 @@ class GroupMessageBubble extends StatelessWidget {
           icon: Icons.copy_rounded,
         ),
       if (message.messageType == MessageType.image ||
-          message.messageType == MessageType.video)
-        const MessageActionItem(
+          message.messageType == MessageType.video ||
+          (message.messageType == MessageType.file &&
+              !fileUploadFailed &&
+              (fileUploadProgress == null || fileUploadProgress! >= 1)))
+        MessageActionItem(
           type: MessageActionType.save,
-          label: '保存到本地',
+          label: message.messageType == MessageType.file ? '保存文件' : '保存到本地',
           icon: Icons.download_rounded,
         ),
       const MessageActionItem(
@@ -2412,6 +2416,18 @@ class GroupMessageBubble extends StatelessWidget {
 
   Future<void> _saveMedia(BuildContext context) async {
     try {
+      if (message.messageType == MessageType.file) {
+        final payload = ChatFilePayload.parse(message.content);
+        final owner = payload.ownerId.isNotEmpty
+            ? payload.ownerId
+            : message.senderId ?? globalUtil.userName ?? '';
+        await saveChatFileWithFeedback(
+          context,
+          payload: payload,
+          source: globalUtil.getFileURL(owner, payload.storedName),
+        );
+        return;
+      }
       const saver = ChatMediaSaver();
       if (message.messageType == MessageType.image) {
         await saver.saveImage(

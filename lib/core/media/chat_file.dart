@@ -76,3 +76,38 @@ String formatFileSize(int bytes) {
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
   return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 }
+
+/// Produces a user-facing file name that is safe for Android's document
+/// provider and iOS' document picker while preserving Chinese characters.
+String chatFileExportName(String value, {String fallback = '聊天文件'}) {
+  var normalized = value.split('/').last.split('\\').last.trim();
+  normalized = normalized.replaceAll(RegExp(r'[\x00-\x1F<>:"/\\|?*]'), '_');
+  normalized = normalized.replaceAll(RegExp(r'[. ]+$'), '');
+  if (normalized.isEmpty) return fallback;
+
+  // Keep the UTF-8 representation comfortably below common document-provider
+  // limits without dropping a useful extension or splitting an emoji.
+  const maxBytes = 180;
+  if (utf8.encode(normalized).length <= maxBytes) return normalized;
+  final extensionIndex = normalized.lastIndexOf('.');
+  final extension = extensionIndex > 0
+      ? normalized.substring(extensionIndex)
+      : '';
+  final stem = extensionIndex > 0
+      ? normalized.substring(0, extensionIndex)
+      : normalized;
+  final byteBudget = (maxBytes - utf8.encode(extension).length).clamp(
+    1,
+    maxBytes,
+  );
+  final output = StringBuffer();
+  var usedBytes = 0;
+  for (final rune in stem.runes) {
+    final character = String.fromCharCode(rune);
+    final characterBytes = utf8.encode(character).length;
+    if (usedBytes + characterBytes > byteBudget) break;
+    output.write(character);
+    usedBytes += characterBytes;
+  }
+  return '${output.isEmpty ? fallback : output}$extension';
+}

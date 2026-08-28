@@ -3,10 +3,12 @@ import MapKit
 import UIKit
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UIDocumentPickerDelegate {
   private var nearbyPlacesChannel: FlutterMethodChannel?
   private var baiduSetupChannel: FlutterMethodChannel?
+  private var fileExportChannel: FlutterMethodChannel?
   private var nearbyPlacesSearch: MKLocalSearch?
+  private var pendingFileExportResult: FlutterResult?
 
   override func application(
     _ application: UIApplication,
@@ -43,6 +45,76 @@ import UIKit
       result(apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
     }
     baiduSetupChannel = setupChannel
+
+    let exportChannel = FlutterMethodChannel(
+      name: "com.yxcod.bigchat/file_export",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    exportChannel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "saveFile" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      self?.presentFileExporter(call: call, result: result)
+    }
+    fileExportChannel = exportChannel
+  }
+
+  private func presentFileExporter(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard pendingFileExportResult == nil else {
+      result(FlutterError(code: "export_in_progress", message: "另一个文件正在保存", details: nil))
+      return
+    }
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let sourcePath = arguments["sourcePath"] as? String,
+      FileManager.default.fileExists(atPath: sourcePath)
+    else {
+      result(FlutterError(code: "invalid_source", message: "待保存文件不存在", details: nil))
+      return
+    }
+
+    let sourceURL = URL(fileURLWithPath: sourcePath)
+    let picker: UIDocumentPickerViewController
+    if #available(iOS 14.0, *) {
+      picker = UIDocumentPickerViewController(forExporting: [sourceURL], asCopy: true)
+    } else {
+      picker = UIDocumentPickerViewController(url: sourceURL, in: .exportToService)
+    }
+    picker.delegate = self
+    picker.modalPresentationStyle = .formSheet
+    guard let presenter = topViewController() else {
+      result(FlutterError(code: "picker_unavailable", message: "无法打开系统文件选择器", details: nil))
+      return
+    }
+    pendingFileExportResult = result
+    presenter.present(picker, animated: true)
+  }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    let callback = pendingFileExportResult
+    pendingFileExportResult = nil
+    callback?(true)
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    let callback = pendingFileExportResult
+    pendingFileExportResult = nil
+    callback?(false)
+  }
+
+  private func topViewController() -> UIViewController? {
+    let sceneRoot = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap(\.windows)
+      .first(where: \.isKeyWindow)?
+      .rootViewController
+    let root = window?.rootViewController ?? sceneRoot
+    var current = root
+    while let presented = current?.presentedViewController {
+      current = presented
+    }
+    return current
   }
 
   private func loadNearbyPlaces(call: FlutterMethodCall, result: @escaping FlutterResult) {

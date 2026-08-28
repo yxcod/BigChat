@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_base/core/media/chat_file.dart';
@@ -29,6 +30,17 @@ void main() {
         originalName: '报告.PDF',
       ),
       'alice_group_12_3.pdf',
+    );
+  });
+
+  test('export name preserves Chinese text and removes path characters', () {
+    expect(chatFileExportName(r'folder/项目:资料?.pdf'), '项目_资料_.pdf');
+    expect(chatFileExportName('...'), '聊天文件');
+    expect(
+      utf8
+          .encode(chatFileExportName('${List.filled(100, '资').join()}.pdf'))
+          .length,
+      lessThanOrEqualTo(180),
     );
   });
 
