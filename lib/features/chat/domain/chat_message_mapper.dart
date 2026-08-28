@@ -9,6 +9,7 @@ class ChatMessageMapper {
     MessageModel record, {
     required String currentUserId,
   }) {
+    final extensions = MessageExtensions.fromExtendInfo(record.extendInfo);
     return Message(
       msgId: record.msgId ?? 0,
       content: record.content ?? '',
@@ -22,7 +23,7 @@ class ChatMessageMapper {
       status: record.messageStatus ?? MessageStatus.sent,
       senderId: record.senderName,
       timestamp: record.timestamp ?? 0,
-      quote: MessageQuote.fromExtendInfo(record.extendInfo),
+      quote: extensions.quote,
       isFriendVerification: isFriendVerificationExtendInfo(record.extendInfo),
     );
   }
@@ -38,6 +39,7 @@ class ChatMessageMapper {
         .toSet();
     final isMe = record.senderId == currentUserId;
 
+    final extensions = MessageExtensions.fromExtendInfo(record.extendInfo);
     return Message(
       msgId: record.msgId,
       content: record.msgContent,
@@ -52,12 +54,15 @@ class ChatMessageMapper {
         3 => MessageType.audio,
         4 => MessageType.video,
         5 => MessageType.file,
+        6 => MessageType.system,
         _ => MessageType.text,
       },
       status: MessageStatus.sent,
       senderId: record.senderId,
       timestamp: record.sendTime,
-      quote: MessageQuote.fromExtendInfo(record.extendInfo),
+      quote: extensions.quote,
+      mentions: extensions.mentions,
+      groupSystemEvent: extensions.groupSystemEvent,
       isFriendVerification: isFriendVerificationExtendInfo(record.extendInfo),
     );
   }
@@ -78,6 +83,8 @@ class ChatMessageMapper {
       senderId: message.senderId,
       timestamp: message.timestamp,
       quote: message.quote,
+      mentions: message.mentions,
+      groupSystemEvent: message.groupSystemEvent,
       isFriendVerification: message.isFriendVerification,
       isPrivacy: message.isPrivacy,
       privacyReadDelaySeconds: message.privacyReadDelaySeconds,

@@ -175,4 +175,57 @@ void main() {
 
     expect(message.messageType, MessageType.file);
   });
+
+  test('maps group mentions from persisted extension metadata', () {
+    final metadata = MessageExtensions(
+      mentions: const [MessageMention(userId: 'me', label: '小明')],
+    ).encode();
+    final record = MessageDetailModel(
+      msgId: 40,
+      groupId: 5,
+      senderId: 'alice',
+      msgContent: '@小明 下午开会',
+      msgType: 1,
+      extendInfo: metadata,
+      sendTime: 1000,
+    );
+
+    final message = ChatMessageMapper.fromGroupRecord(
+      record,
+      currentUserId: 'me',
+      conversationId: '5',
+    );
+
+    expect(message.mentions.single.userId, 'me');
+    expect(Message.fromJSON(message.toJSON()).mentions.single.label, '小明');
+  });
+
+  test('maps a persisted member join event as a system message', () {
+    const event = GroupSystemEvent(
+      kind: 'group_member_joined',
+      userId: 'new-user',
+      nickname: '新成员',
+      inviterId: 'owner',
+      inviterNickname: '群主',
+    );
+    final record = MessageDetailModel(
+      msgId: 41,
+      groupId: 5,
+      senderId: 'new-user',
+      msgContent: '群主邀请新成员加入了群聊',
+      msgType: 6,
+      extendInfo: const MessageExtensions(groupSystemEvent: event).encode(),
+      sendTime: 1001,
+    );
+
+    final message = ChatMessageMapper.fromGroupRecord(
+      record,
+      currentUserId: 'me',
+      conversationId: '5',
+    );
+
+    expect(message.messageType, MessageType.system);
+    expect(message.groupSystemEvent?.userId, 'new-user');
+    expect(message.groupSystemEvent?.nickname, '新成员');
+  });
 }

@@ -80,6 +80,116 @@ bool isFriendVerificationExtendInfo(dynamic value) {
   }
 }
 
+class MessageMention {
+  const MessageMention({required this.userId, required this.label});
+
+  final String userId;
+  final String label;
+
+  Map<String, dynamic> toJson() => {'userId': userId, 'label': label};
+
+  factory MessageMention.fromJson(Map<String, dynamic> json) {
+    return MessageMention(
+      userId: JsonValueParser.stringValue(json['userId']),
+      label: JsonValueParser.stringValue(json['label']),
+    );
+  }
+}
+
+class GroupSystemEvent {
+  const GroupSystemEvent({
+    required this.kind,
+    required this.userId,
+    required this.nickname,
+    this.inviterId = '',
+    this.inviterNickname = '',
+  });
+
+  final String kind;
+  final String userId;
+  final String nickname;
+  final String inviterId;
+  final String inviterNickname;
+
+  Map<String, dynamic> toJson() => {
+    'kind': kind,
+    'userId': userId,
+    'nickname': nickname,
+    'inviterId': inviterId,
+    'inviterNickname': inviterNickname,
+  };
+
+  factory GroupSystemEvent.fromJson(Map<String, dynamic> json) {
+    return GroupSystemEvent(
+      kind: JsonValueParser.stringValue(json['kind']),
+      userId: JsonValueParser.stringValue(json['userId']),
+      nickname: JsonValueParser.stringValue(json['nickname']),
+      inviterId: JsonValueParser.stringValue(json['inviterId']),
+      inviterNickname: JsonValueParser.stringValue(json['inviterNickname']),
+    );
+  }
+}
+
+class MessageExtensions {
+  const MessageExtensions({
+    this.quote,
+    this.mentions = const [],
+    this.groupSystemEvent,
+  });
+
+  final MessageQuote? quote;
+  final List<MessageMention> mentions;
+  final GroupSystemEvent? groupSystemEvent;
+
+  static MessageExtensions fromExtendInfo(dynamic value) {
+    try {
+      dynamic decoded = value;
+      if (decoded is String) {
+        final normalized = decoded.trim();
+        if (normalized.isEmpty || normalized == '无') {
+          return const MessageExtensions();
+        }
+        decoded = jsonDecode(normalized);
+      }
+      if (decoded is! Map) return const MessageExtensions();
+      final root = Map<String, dynamic>.from(decoded);
+      final quote = root['quote'] is Map
+          ? MessageQuote.fromJson(Map<String, dynamic>.from(root['quote']))
+          : null;
+      final mentions = root['mentions'] is List
+          ? (root['mentions'] as List)
+                .whereType<Map>()
+                .map(
+                  (item) =>
+                      MessageMention.fromJson(Map<String, dynamic>.from(item)),
+                )
+                .where((mention) => mention.userId.isNotEmpty)
+                .toList(growable: false)
+          : const <MessageMention>[];
+      final systemEvent = root['kind'] == 'group_member_joined'
+          ? GroupSystemEvent.fromJson(root)
+          : null;
+      return MessageExtensions(
+        quote: quote,
+        mentions: mentions,
+        groupSystemEvent: systemEvent,
+      );
+    } catch (_) {
+      return const MessageExtensions();
+    }
+  }
+
+  String encode() {
+    final result = <String, dynamic>{};
+    if (quote != null) result['quote'] = quote!.toJson();
+    if (mentions.isNotEmpty) {
+      result['mentions'] = mentions.map((mention) => mention.toJson()).toList();
+    }
+    if (groupSystemEvent != null) result.addAll(groupSystemEvent!.toJson());
+    return jsonEncode(result);
+  }
+}
+
 String messageQuotePreview(Message message) {
   final value = switch (message.messageType) {
     MessageType.image => '[图片]',
@@ -173,6 +283,8 @@ class Message {
   final String? senderId;
   final int timestamp;
   final MessageQuote? quote;
+  final List<MessageMention> mentions;
+  final GroupSystemEvent? groupSystemEvent;
   final bool isFriendVerification;
   final bool isPrivacy;
   final int privacyReadDelaySeconds;
@@ -190,6 +302,8 @@ class Message {
     this.senderId,
     int? timestamp,
     this.quote,
+    this.mentions = const [],
+    this.groupSystemEvent,
     this.isFriendVerification = false,
     this.isPrivacy = false,
     this.privacyReadDelaySeconds = 10,
@@ -209,6 +323,8 @@ class Message {
       senderId: senderId,
       timestamp: timestamp,
       quote: value,
+      mentions: mentions,
+      groupSystemEvent: groupSystemEvent,
       isFriendVerification: isFriendVerification,
       isPrivacy: isPrivacy,
       privacyReadDelaySeconds: privacyReadDelaySeconds,
@@ -230,6 +346,8 @@ class Message {
       'senderId': senderId,
       'timestamp': timestamp,
       'quote': quote?.toJson(),
+      'mentions': mentions.map((mention) => mention.toJson()).toList(),
+      'groupSystemEvent': groupSystemEvent?.toJson(),
       'isFriendVerification': isFriendVerification,
       'isPrivacy': isPrivacy,
       'privacyReadDelaySeconds': privacyReadDelaySeconds,
@@ -262,6 +380,20 @@ class Message {
       timestamp: JsonValueParser.timestampMillis(json['timestamp']),
       quote: json['quote'] is Map
           ? MessageQuote.fromJson(Map<String, dynamic>.from(json['quote']))
+          : null,
+      mentions: json['mentions'] is List
+          ? (json['mentions'] as List)
+                .whereType<Map>()
+                .map(
+                  (item) =>
+                      MessageMention.fromJson(Map<String, dynamic>.from(item)),
+                )
+                .toList(growable: false)
+          : const [],
+      groupSystemEvent: json['groupSystemEvent'] is Map
+          ? GroupSystemEvent.fromJson(
+              Map<String, dynamic>.from(json['groupSystemEvent']),
+            )
           : null,
       isFriendVerification: JsonValueParser.boolValue(
         json['isFriendVerification'],

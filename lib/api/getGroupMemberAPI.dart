@@ -30,12 +30,20 @@ Future<List<GroupMemberModel>> getGroupMembers(int groupId) async {
 }
 
 // 拉人进群
-Future<int> addGroup(int groupId, List<String> userNames) async {
+Future<int> addGroup(
+  int groupId,
+  List<String> userNames, {
+  required String operatorId,
+}) async {
   try {
     final httpUtil = HttpUtil();
     final response = await httpUtil.post(
       '/api/group/addGroup',
-      data: {'groupId': groupId, 'userNames': userNames},
+      data: {
+        'groupId': groupId,
+        'userNames': userNames,
+        'operatorId': operatorId,
+      },
     );
 
     if (response.statusCode == 200) {

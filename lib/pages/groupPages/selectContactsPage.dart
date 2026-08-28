@@ -223,7 +223,11 @@ class _SelectContactsPageState extends State<SelectContactsPage> {
       }
 
       // 调用 addGroup 接口
-      int code = await addGroup(groupIdInt, selectedUserNames);
+      int code = await addGroup(
+        groupIdInt,
+        selectedUserNames,
+        operatorId: GlobalUtil().userName ?? '',
+      );
 
       if (code == 100) {
         // 检查页面是否仍然可见

@@ -135,8 +135,15 @@ class AppNotificationFeedbackService {
       5 => '[文件]',
       _ => event.content.trim(),
     };
-    if (preview.isEmpty) return '收到一条新消息';
-    return preview.length <= 48 ? preview : '${preview.substring(0, 48)}…';
+    final currentUser = GlobalUtil().userName?.trim() ?? '';
+    final mentionPrefix =
+        event.type == ChatRealtimeEventType.groupMessage &&
+            event.mentionsUser(currentUser)
+        ? '[@我] '
+        : '';
+    if (preview.isEmpty) return '$mentionPrefix收到一条新消息';
+    final result = '$mentionPrefix$preview';
+    return result.length <= 48 ? result : '${result.substring(0, 48)}…';
   }
 
   static Future<void> _defaultVibrate() => HapticFeedback.mediumImpact();

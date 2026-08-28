@@ -1,6 +1,7 @@
 import 'package:flutter_base/features/chat/domain/chat_realtime_event.dart';
 import 'package:flutter_base/features/settings/application/app_notification_feedback_service.dart';
 import 'package:flutter_base/features/settings/domain/app_settings.dart';
+import 'package:flutter_base/model/messageModel.dart';
 import 'package:flutter_base/utils/gloabl.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -101,6 +102,32 @@ void main() {
     expect(notice, isNull);
     expect(vibrationCount, 0);
     expect(soundCount, 0);
+  });
+
+  test('group mention notification is marked as at-me', () async {
+    GlobalUtil().userName = 'receiver_100';
+    final service = AppNotificationFeedbackService(
+      loadSettings: () async => const AppSettings(
+        vibrationEnabled: false,
+        bannerEnabled: true,
+        messageSoundEnabled: false,
+      ),
+      isGroupMuted: (_) async => false,
+    );
+    final event = ChatRealtimeEvent.parse({
+      'type': 'groupChat',
+      'sendUserId': 'sender_200',
+      'groupId': 123456,
+      'msgContent': '@小明 你好',
+      'msgType': 1,
+      'extendInfo': const MessageExtensions(
+        mentions: [MessageMention(userId: 'receiver_100', label: '小明')],
+      ).encode(),
+    });
+
+    final notice = await service.handle(event, appIsForeground: true);
+
+    expect(notice?.body, '[@我] @小明 你好');
   });
 
   test(

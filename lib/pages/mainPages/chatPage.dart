@@ -427,6 +427,9 @@ class _ChatpageState extends State<Chatpage> {
     if (isOpenChat) return;
     _locallyReadGroupIds.remove(event.groupId);
 
+    final extensions = MessageExtensions.fromExtendInfo(
+      event.data['extendInfo'],
+    );
     globalUtil.addMessage(
       conversationKey,
       Message(
@@ -441,11 +444,15 @@ class _ChatpageState extends State<Chatpage> {
           3 => MessageType.audio,
           4 => MessageType.video,
           5 => MessageType.file,
+          6 => MessageType.system,
           _ => MessageType.text,
         },
         status: MessageStatus.sent,
         senderId: event.senderId,
         timestamp: event.timestamp,
+        quote: extensions.quote,
+        mentions: extensions.mentions,
+        groupSystemEvent: extensions.groupSystemEvent,
         isPrivacy: event.data['privacyMode'] == true,
         privacyReadDelaySeconds:
             int.tryParse(
@@ -1101,40 +1108,15 @@ class _ChatpageState extends State<Chatpage> {
           final groupMessageModel = await getGroupChatRecord(groupId, 100);
 
           // 转换为Message对象并保存到_chatRecords
-          final messages = groupMessageModel.messages.map((model) {
-            // 转换消息类型：0 -> text, 1 -> image
-            MessageType messageType;
-            switch (model.msgType) {
-              case 1:
-                messageType = MessageType.text;
-                break;
-              case 2:
-                messageType = MessageType.image;
-                break;
-              case 3:
-                messageType = MessageType.audio;
-                break;
-              case 4:
-                messageType = MessageType.video;
-                break;
-              default:
-                messageType = MessageType.text;
-                break;
-            }
-
-            return Message(
-              msgId: model.msgId,
-              content: model.msgContent,
-              isMe: model.senderId == currentUserName,
-              time: GlobalUtil.formatChatTimestamp(model.sendTime),
-              isRead: true,
-              conversationId: groupIdStr,
-              messageType: messageType,
-              status: MessageStatus.sent, // 简化处理，使用默认值
-              senderId: model.senderId,
-              timestamp: model.sendTime,
-            );
-          }).toList();
+          final messages = groupMessageModel.messages
+              .map(
+                (model) => ChatMessageMapper.fromGroupRecord(
+                  model,
+                  currentUserId: currentUserName,
+                  conversationId: groupIdStr,
+                ),
+              )
+              .toList();
 
           await globalUtil.mergeChatRecords(conversationKey, messages);
 

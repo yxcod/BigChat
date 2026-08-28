@@ -1,4 +1,5 @@
 import '../../../core/parsing/json_value_parser.dart';
+import '../../../model/messageModel.dart';
 
 enum ChatRealtimeEventType {
   privateMessage,
@@ -61,4 +62,11 @@ class ChatRealtimeEvent {
   String get readerId => JsonValueParser.stringValue(data['reader']);
   int get readThroughMessageId =>
       JsonValueParser.intValue(data['readThroughMsgId']);
+
+  bool mentionsUser(String userId) {
+    if (userId.trim().isEmpty) return false;
+    return MessageExtensions.fromExtendInfo(
+      data['extendInfo'],
+    ).mentions.any((mention) => mention.userId == userId);
+  }
 }

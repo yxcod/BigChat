@@ -99,6 +99,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
   bool _isResolvingLocation = false;
   bool _isMoreActionsVisible = false;
   MessageQuote? _pendingQuote;
+  final Map<String, MessageMention> _pendingMentions = {};
   List<Map<String, dynamic>> _messageReadStatus = []; // 存储每条消息的已读状态
   final Set<int> _sentReadAckMessageIds = {};
   int _loadedMessageLimit = 100;
@@ -1079,6 +1080,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
 
       if (!messageExists) {
         // 创建新消息
+        final extensions = MessageExtensions.fromExtendInfo(
+          messageData['extendInfo'],
+        );
         Message newMessage = Message(
           msgId: msgId,
           content: content,
@@ -1091,12 +1095,15 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
             3 => MessageType.audio,
             4 => MessageType.video,
             5 => MessageType.file,
+            6 => MessageType.system,
             _ => MessageType.text,
           },
           status: MessageStatus.sent,
           senderId: sender,
           timestamp: normalizedTimestamp,
-          quote: MessageQuote.fromExtendInfo(messageData['extendInfo']),
+          quote: extensions.quote,
+          mentions: extensions.mentions,
+          groupSystemEvent: extensions.groupSystemEvent,
           isPrivacy: messageData['privacyMode'] == true,
           privacyReadDelaySeconds: _parseInt(
             messageData['privacyReadDelaySeconds'],
@@ -1571,6 +1578,44 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
     _textFieldFocusNode.requestFocus();
   }
 
+  void _mentionMember(String userId, String label) {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty || normalizedUserId == GlobalUtil().userName) {
+      return;
+    }
+    final normalizedLabel = label.trim().isEmpty
+        ? normalizedUserId
+        : label.trim();
+    final token = '@$normalizedLabel ';
+    final value = _textController.value;
+    final selection = value.selection.isValid
+        ? value.selection
+        : TextSelection.collapsed(offset: value.text.length);
+    final start = selection.start.clamp(0, value.text.length);
+    final end = selection.end.clamp(0, value.text.length);
+    final updatedText = value.text.replaceRange(start, end, token);
+    _textController.value = TextEditingValue(
+      text: updatedText,
+      selection: TextSelection.collapsed(offset: start + token.length),
+    );
+    _pendingMentions[normalizedUserId] = MessageMention(
+      userId: normalizedUserId,
+      label: normalizedLabel,
+    );
+    setState(() {
+      _isComposing = updatedText.trim().isNotEmpty;
+      _isMoreActionsVisible = false;
+    });
+    _textFieldFocusNode.requestFocus();
+  }
+
+  void _handleComposerChanged(String text) {
+    _pendingMentions.removeWhere(
+      (_, mention) => !text.contains('@${mention.label}'),
+    );
+    setState(() => _isComposing = text.trim().isNotEmpty);
+  }
+
   void _deleteLocalMessage(Message message) {
     GlobalUtil().deleteMessage(_conversationKey, message.msgId);
     setState(() {
@@ -1742,30 +1787,46 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
                           previous: previous,
                         ))
                           ChatTimeSeparator(label: message.time),
-                        GroupMessageBubble(
-                          message: message,
-                          currentUserAvatar: globalUtil.userInfoModel.avatar,
-                          onReadStatusTap: () {
-                            _showReadStatusList(message.msgId);
-                          },
-                          unreadCount: unreadCount,
-                          groupMembers: globalUtil.getGroupMembers(
-                            widget.groupId,
+                        if (message.groupSystemEvent != null)
+                          GroupSystemMessageTile(
+                            message: message,
+                            onTap: () {
+                              final event = message.groupSystemEvent!;
+                              unawaited(
+                                openUserProfile(
+                                  context,
+                                  userName: event.userId,
+                                  fallbackNickname: event.nickname,
+                                ),
+                              );
+                            },
+                          )
+                        else
+                          GroupMessageBubble(
+                            message: message,
+                            currentUserAvatar: globalUtil.userInfoModel.avatar,
+                            onReadStatusTap: () {
+                              _showReadStatusList(message.msgId);
+                            },
+                            unreadCount: unreadCount,
+                            groupMembers: globalUtil.getGroupMembers(
+                              widget.groupId,
+                            ),
+                            localVideoPath: _localVideoPaths[message.msgId],
+                            videoUploadProgress:
+                                _videoMessageProgress[message.msgId],
+                            videoUploadFailed: _failedVideoMessageIds.contains(
+                              message.msgId,
+                            ),
+                            fileUploadProgress:
+                                _fileMessageProgress[message.msgId],
+                            fileUploadFailed: _failedFileMessageIds.contains(
+                              message.msgId,
+                            ),
+                            onDelete: () => _deleteLocalMessage(message),
+                            onQuote: () => _quoteMessage(message),
+                            onMention: _mentionMember,
                           ),
-                          localVideoPath: _localVideoPaths[message.msgId],
-                          videoUploadProgress:
-                              _videoMessageProgress[message.msgId],
-                          videoUploadFailed: _failedVideoMessageIds.contains(
-                            message.msgId,
-                          ),
-                          fileUploadProgress:
-                              _fileMessageProgress[message.msgId],
-                          fileUploadFailed: _failedFileMessageIds.contains(
-                            message.msgId,
-                          ),
-                          onDelete: () => _deleteLocalMessage(message),
-                          onQuote: () => _quoteMessage(message),
-                        ),
                       ],
                     );
                   },
@@ -1807,8 +1868,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
               controller: _textController,
               focusNode: _textFieldFocusNode,
               enabled: !_isUploadingAudio,
-              onChanged: (text) =>
-                  setState(() => _isComposing = text.trim().isNotEmpty),
+              onChanged: _handleComposerChanged,
               onSubmitted: _handleSubmitted,
               onRecorded: _handleVoiceRecorded,
               onError: _showVoiceError,
@@ -1908,6 +1968,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
 
   void _handleSubmitted(String text) {
     final quote = _pendingQuote;
+    final mentions = _pendingMentions.values
+        .where((mention) => text.contains('@${mention.label}'))
+        .toList(growable: false);
     _textController.clear();
 
     // 获取当前时间和消息ID
@@ -1934,6 +1997,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
       status: MessageStatus.sending,
       senderId: globalUtil.userName,
       quote: quote,
+      mentions: mentions,
       isPrivacy: _privacy.enabled,
       privacyReadDelaySeconds: _privacy.settings.readDestroySeconds,
       privacyUnreadDelaySeconds: _privacy.settings.unreadDestroySeconds,
@@ -1958,7 +2022,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
         receiver: widget.groupId,
         conversationId: conversationId,
         messageType: MessageType.text,
-        extendInfo: quote?.encodeExtendInfo(),
+        extendInfo: MessageExtensions(
+          quote: quote,
+          mentions: mentions,
+        ).encode(),
       );
 
       if (!queued) newMessage.status = MessageStatus.failed;
@@ -1971,6 +2038,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
       newMessage.status = MessageStatus.failed;
       setState(() {});
     }
+    _pendingMentions.clear();
   }
 
   // 发送WebSocket消息的通用方法
@@ -2188,6 +2256,67 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
   }
 }
 
+class GroupSystemMessageTile extends StatelessWidget {
+  const GroupSystemMessageTile({
+    super.key,
+    required this.message,
+    required this.onTap,
+  });
+
+  final Message message;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final event = message.groupSystemEvent;
+    final nickname = event?.nickname ?? '';
+    final splitIndex = nickname.isEmpty
+        ? -1
+        : message.content.indexOf(nickname);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 7),
+      child: Center(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Text.rich(
+              splitIndex < 0
+                  ? TextSpan(text: message.content)
+                  : TextSpan(
+                      children: [
+                        TextSpan(
+                          text: message.content.substring(0, splitIndex),
+                        ),
+                        TextSpan(
+                          text: nickname,
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        TextSpan(
+                          text: message.content.substring(
+                            splitIndex + nickname.length,
+                          ),
+                        ),
+                      ],
+                    ),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: context.appTextSecondary,
+                fontSize: 12.5,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class GroupMessageBubble extends StatelessWidget {
   final Message message;
   final String? currentUserAvatar;
@@ -2201,6 +2330,7 @@ class GroupMessageBubble extends StatelessWidget {
   final bool fileUploadFailed;
   final VoidCallback onDelete;
   final VoidCallback onQuote;
+  final void Function(String userId, String label) onMention;
   final globalUtil = GlobalUtil();
   final dio = Dio();
   // 静态缓存自己的头像 URL，用于避免重复加载
@@ -2225,6 +2355,7 @@ class GroupMessageBubble extends StatelessWidget {
     this.fileUploadFailed = false,
     required this.onDelete,
     required this.onQuote,
+    required this.onMention,
   });
 
   Future<void> _showMessageActions(
@@ -2514,6 +2645,8 @@ class GroupMessageBubble extends StatelessWidget {
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => _openSenderProfile(context),
+                  onLongPress: () =>
+                      onMention(message.senderId ?? '', _getSenderName()),
                   child: Container(
                     margin: EdgeInsets.only(right: 8.0),
                     padding: const EdgeInsets.all(2),
@@ -2539,6 +2672,21 @@ class GroupMessageBubble extends StatelessWidget {
                     : CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (!message.isMe &&
+                      message.mentions.any(
+                        (mention) => mention.userId == globalUtil.userName,
+                      ))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '有人@我',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   GestureDetector(
                     behavior: HitTestBehavior.translucent,
                     onLongPressStart: message.messageType == MessageType.audio
