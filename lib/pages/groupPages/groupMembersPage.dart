@@ -9,6 +9,7 @@ import '../../api/getGroupMemberAPI.dart';
 import '../../utils/gloabl.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
 import '../../features/groups/domain/group_role_policy.dart';
+import '../../features/groups/application/group_membership_verifier.dart';
 import '../../features/chat/domain/chat_realtime_event.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../shared/widgets/app_back_button.dart';
@@ -75,23 +76,30 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
 
       List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
 
-      final currentUserId = globalUtil.userName;
-      final currentMember = members.where(
-        (member) => member.userId == currentUserId,
+      final currentUserId = globalUtil.userName?.trim() ?? '';
+      if (currentUserId.isEmpty) return;
+      final membership = await resolveGroupMembership(
+        userId: currentUserId,
+        groupId: groupIdInt,
+        members: members,
       );
-      final myRole = currentMember.isEmpty
-          ? GroupRolePolicy.member
-          : currentMember.first.role;
+      if (!membership.hasAccess) return;
+      final myRole =
+          membership.currentMember?.role ??
+          (membership.visibleGroup?.creatorId == currentUserId
+              ? GroupRolePolicy.owner
+              : GroupRolePolicy.member);
 
       // 确保成员列表不为空
       if (members.isEmpty) {
-        print('获取到的成员列表为空，使用模拟数据');
+        print('获取到的成员列表为空，保留上一次成功加载的数据');
       }
       if (!mounted) return;
       setState(() {
-        _groupMembers = members;
-        // 直接设置 _filteredMembers，避免 _filterMembers 方法可能的问题
-        _filteredMembers = members;
+        if (members.isNotEmpty) {
+          _groupMembers = members;
+          _filteredMembers = members;
+        }
         _myRole = myRole;
         print('更新状态成功，_filteredMembers 数量: ${_filteredMembers.length}');
       });

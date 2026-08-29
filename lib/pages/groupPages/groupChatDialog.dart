@@ -33,7 +33,7 @@ import '../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../shared/utils/chat_scroll_util.dart';
 import '../../shared/widgets/chat_background.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
-import '../../features/groups/domain/group_membership_access.dart';
+import '../../features/groups/application/group_membership_verifier.dart';
 import '../../features/location/data/app_location_service.dart';
 import '../../features/location/presentation/chat_location_draft.dart';
 import '../../core/media/video_media.dart';
@@ -1400,26 +1400,23 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
       // 导入getGroupMemberAPI.dart中的getGroupMembers函数
       List<GroupMemberModel> members = await getGroupMembers(widget.groupId);
 
-      // 更新全局群成员列表
-      globalUtil.addGroupMembers(widget.groupId, members);
-      _reconcileIncompleteReadStatuses();
+      final membership = await resolveGroupMembership(
+        userId: currentUserId,
+        groupId: widget.groupId,
+        members: members,
+      );
 
-      // 触发UI重建，确保聊天记录显示最新的群成员信息（头像和昵称）
-      if (mounted) {
-        setState(() {
-          _currentMemberCount = members.length;
-        });
-      }
-
-      // 遍历群成员列表，检查当前用户是否在列表中
-      bool currentUserMuted = false;
-
-      for (var member in members) {
-        if (member.userId == currentUserId && member.isQuit == 0) {
-          currentUserMuted = member.isMuted;
-          break;
+      // 服务端异常曾被错误转换为空数组。空数组不能覆盖已经加载成功的成员
+      // 缓存与人数，否则标题会短暂或永久显示为 0 人。
+      if (members.isNotEmpty) {
+        globalUtil.addGroupMembers(widget.groupId, members);
+        _reconcileIncompleteReadStatuses();
+        if (mounted) {
+          setState(() => _currentMemberCount = members.length);
         }
       }
+
+      final currentUserMuted = membership.currentMember?.isMuted ?? false;
 
       if (mounted && _isCurrentUserMuted != currentUserMuted) {
         setState(() {
@@ -1432,25 +1429,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
         });
       }
 
-      var foundUser = hasGroupAccess(
-        userId: currentUserId,
-        groupId: widget.groupId,
-        members: members,
-        visibleGroups: const <GroupInfoModel>[],
-      );
-      if (!foundUser) {
-        // 群主在部分后端版本中不包含于成员列表；同时用当前用户可见群列表
-        // 进行二次确认，避免把群主或接口短暂不同步误判为已退群。
-        final visibleGroups = await getGroups(currentUserId);
-        foundUser = hasGroupAccess(
-          userId: currentUserId,
-          groupId: widget.groupId,
-          members: members,
-          visibleGroups: visibleGroups,
-        );
-      }
-
-      if (!foundUser) {
+      if (membership.removalConfirmed) {
         debugPrint('未找到当前用户在群成员列表中');
         // 停止所有定时器，防止重复触发
         _groupInfoTimer.cancel();

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_base/model/userInfoModel.dart';
+import 'package:flutter_base/model/groupMemberModel.dart';
 import 'package:flutter_base/pages/groupPages/groupChatSettingsPage.dart';
 import 'package:flutter_base/shared/pages/app_text_editor_page.dart';
 import 'package:flutter_base/utils/gloabl.dart';
@@ -74,5 +75,35 @@ void main() {
     await tester.tap(switchFinder);
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(switchFinder).value, isTrue);
+  });
+
+  testWidgets('群设置优先展示已缓存成员且群主权限不会降级', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GroupChatSettingsPage(
+          groupId: '10003',
+          groupName: '成员缓存群',
+          loadRemoteData: false,
+          groupMembers: [
+            GroupMemberModel(
+              groupId: 10003,
+              userId: 'group-settings-user',
+              groupNickName: '群主',
+              role: 2,
+            ),
+            GroupMemberModel(
+              groupId: 10003,
+              userId: 'member-user',
+              groupNickName: '成员',
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('查看2名成员'), findsOneWidget);
+    expect(find.text('群主'), findsWidgets);
+    expect(find.text('成员'), findsOneWidget);
   });
 }

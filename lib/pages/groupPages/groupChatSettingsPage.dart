@@ -25,6 +25,7 @@ import '../../features/group_resources/domain/group_resource.dart';
 import '../../app/theme/app_theme_context.dart';
 import '../../shared/pages/app_text_editor_page.dart';
 import '../../features/groups/application/group_notification_settings_service.dart';
+import '../../features/groups/application/group_membership_verifier.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
@@ -264,6 +265,17 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     _groupName = widget.groupName;
     _groupAnnouncement = '未设置';
     _groupDescription = '未设置';
+    if (widget.groupMembers.isNotEmpty) {
+      _members = _memberViewModels(widget.groupMembers);
+      final currentUserId = globalUtil.userName?.trim() ?? '';
+      for (final member in widget.groupMembers) {
+        if (member.userId == currentUserId && member.isQuit == 0) {
+          _myNickname = member.groupNickName;
+          _myRole = member.role;
+          break;
+        }
+      }
+    }
     unawaited(_loadGroupNotificationSetting());
     // 初始化时不需要手动设置群头像 URL，会在 _fetchGroupInfo 中自动设置
     // 群头像 URL 会根据 GroupInfoModel 中的 groupAvatar 字段动态生成
@@ -380,100 +392,71 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
       int groupIdInt = int.parse(widget.groupId);
       List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
 
-      // 遍历群成员列表，找到当前用户并设置相关信息
-      try {
-        // 根据用户要求，userId 就是 userName
-        String? currentUserId = globalUtil.userName;
-        bool foundUser = false;
-        String? userGroupNickName = '';
-        int myRole = GroupRolePolicy.member;
-
-        for (var member in members) {
-          print(
-            '群成员: userId=${member.userId}, groupNickName=${member.groupNickName}, role=${member.role},createTime=${member.joinTime}',
+      // 根据用户要求，userId 就是 userName。成员列表缺失时必须再通过
+      // 当前账号可见群资料确认，不能直接把群主误判成已被移除。
+      final currentUserId = globalUtil.userName?.trim() ?? '';
+      if (currentUserId.isEmpty) return;
+      final membership = await resolveGroupMembership(
+        userId: currentUserId,
+        groupId: groupIdInt,
+        members: members,
+      );
+      if (membership.removalConfirmed) {
+        print('未找到当前用户在群成员列表中');
+        // 停止所有定时器，防止重复触发弹窗
+        _timer?.cancel();
+        _groupInfoTimer?.cancel();
+        // 用户不在群成员列表中，说明已被移除出群聊
+        if (mounted) {
+          // 导航到主界面并传递被移除群聊的信号，同时清除导航栈
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/mainWidget',
+            (route) => false, // 清除所有路由，使mainWidget成为根页面
+            arguments: {'isRemovedFromGroup': true},
           );
-          if (currentUserId != null && member.userId == currentUserId) {
-            // 获取当前用户的本群昵称
-            userGroupNickName = member.groupNickName;
-            myRole = member.role;
-            foundUser = true;
-            break;
-          }
         }
-
-        if (!foundUser) {
-          print('未找到当前用户在群成员列表中');
-          // 停止所有定时器，防止重复触发弹窗
-          _timer?.cancel();
-          _groupInfoTimer?.cancel();
-          // 用户不在群成员列表中，说明已被移除出群聊
-          if (mounted) {
-            // 导航到主界面并传递被移除群聊的信号，同时清除导航栈
-            Navigator.of(context).pushNamedAndRemoveUntil(
-              '/mainWidget',
-              (route) => false, // 清除所有路由，使mainWidget成为根页面
-              arguments: {'isRemovedFromGroup': true},
-            );
-          }
-          return;
-        }
-
-        // 在 setState 中更新 UI 相关的变量
-        setState(() {
-          _myNickname = userGroupNickName ?? '';
-          _myRole = myRole;
-        });
-
-        print('更新后的 _myNickname: $_myNickname');
-      } catch (e) {
-        print('获取当前用户 ID 失败: $e');
+        return;
       }
 
-      // 将 GroupMemberModel 转换为 Map<String, dynamic> 类型的 _members 列表
-      setState(() {
-        _members = members.map((member) {
-          String avatarUrl;
-          try {
-            // 使用 member.avatar 作为头像文件名
-            String avatarName = member.avatar.isNotEmpty
-                ? member.avatar
-                : 'head.jpg';
-            // 生成新的头像 URL
-            String newAvatarUrl = globalUtil.getImageURL(
-              member.userId,
-              avatarName,
-            );
+      final currentMember = membership.currentMember;
+      final myRole =
+          currentMember?.role ??
+          (membership.visibleGroup?.creatorId == currentUserId
+              ? GroupRolePolicy.owner
+              : GroupRolePolicy.member);
 
-            // 检查缓存中是否已有该用户的头像，并且 URL 是否相同
-            if (_avatarCache.containsKey(member.userId)) {
-              String cachedUrl = _avatarCache[member.userId]!;
-              if (cachedUrl == newAvatarUrl) {
-                // URL 相同，使用缓存的头像 URL
-                avatarUrl = cachedUrl;
-              } else {
-                // URL 不同，使用新的头像 URL 并更新缓存
-                avatarUrl = newAvatarUrl;
-                _avatarCache[member.userId] = newAvatarUrl;
-              }
-            } else {
-              // 缓存中没有，使用新的头像 URL 并加入缓存
-              avatarUrl = newAvatarUrl;
-              _avatarCache[member.userId] = newAvatarUrl;
-            }
-          } catch (e) {
-            // 如果获取失败（例如 token 为 null），使用默认头像
-            avatarUrl = 'https://via.placeholder.com/40';
-          }
-          return {
-            'id': member.userId,
-            'name': member.groupNickName,
-            'avatar': avatarUrl,
-          };
-        }).toList();
+      if (!mounted) return;
+      setState(() {
+        _myNickname = currentMember?.groupNickName ?? '';
+        _myRole = myRole;
+        if (members.isNotEmpty) _members = _memberViewModels(members);
       });
     } catch (e) {
       print('获取群聊成员列表失败: $e');
     }
+  }
+
+  List<Map<String, dynamic>> _memberViewModels(List<GroupMemberModel> members) {
+    return members.map((member) {
+      String avatarUrl;
+      try {
+        final avatarName = member.avatar.isNotEmpty
+            ? member.avatar
+            : 'head.jpg';
+        final newAvatarUrl = globalUtil.getImageURL(member.userId, avatarName);
+        avatarUrl = _avatarCache[member.userId] == newAvatarUrl
+            ? _avatarCache[member.userId]!
+            : newAvatarUrl;
+        _avatarCache[member.userId] = newAvatarUrl;
+      } catch (_) {
+        avatarUrl = 'https://via.placeholder.com/40';
+      }
+      return {
+        'id': member.userId,
+        'name': member.groupNickName,
+        'avatar': avatarUrl,
+      };
+    }).toList();
   }
 
   void _editGroupName() async {

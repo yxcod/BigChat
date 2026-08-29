@@ -5,6 +5,7 @@ import '../../utils/gloabl.dart';
 import '../../core/cache/app_image_cache.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
 import '../../features/groups/domain/group_role_policy.dart';
+import '../../features/groups/application/group_membership_verifier.dart';
 import '../../app/theme/app_theme_context.dart';
 
 class SelectGroupMembersToRemovePage extends StatefulWidget {
@@ -66,9 +67,14 @@ class _SelectGroupMembersToRemovePageState
       List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
 
       // 检查当前用户是否在群成员列表中
-      String? currentUserName = GlobalUtil().userName;
-      if (currentUserName != null &&
-          !members.any((member) => member.userId == currentUserName)) {
+      final currentUserName = GlobalUtil().userName?.trim() ?? '';
+      if (currentUserName.isEmpty) return;
+      final membership = await resolveGroupMembership(
+        userId: currentUserName,
+        groupId: groupIdInt,
+        members: members,
+      );
+      if (membership.removalConfirmed) {
         // 用户不在群成员列表中，说明已被移除出群聊
         if (mounted) {
           // 显示弹窗提示
@@ -93,8 +99,11 @@ class _SelectGroupMembersToRemovePageState
         return;
       }
 
-      final actor = members.where((member) => member.userId == currentUserName);
-      _actorRole = actor.isEmpty ? GroupRolePolicy.member : actor.first.role;
+      _actorRole =
+          membership.currentMember?.role ??
+          (membership.visibleGroup?.creatorId == currentUserName
+              ? GroupRolePolicy.owner
+              : GroupRolePolicy.member);
 
       if (!mounted) return;
       setState(() {

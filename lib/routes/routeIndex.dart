@@ -104,11 +104,12 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       return MaterialPageRoute(builder: (context) => GroupChatListPage());
     case '/groupChatSettings':
       final groupData = settings.arguments as Map<String, dynamic>;
+      final groupId = _parseIntRouteArgument(groupData['groupId']);
       return MaterialPageRoute(
         builder: (context) => GroupChatSettingsPage(
-          groupId: groupData['groupId'] ?? '',
+          groupId: groupId.toString(),
           groupName: groupData['groupName'] ?? '',
-          groupMembers: [],
+          groupMembers: GlobalUtil().getGroupMembers(groupId),
         ),
       );
     case '/groupCreatePage':
