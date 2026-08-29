@@ -22,6 +22,7 @@ import './model/friendRequestModel.dart';
 import './core/navigation/app_route_observer.dart';
 import './features/friends/application/friendship_realtime_service.dart';
 import './core/notifications/push_notification_service.dart';
+import './core/permissions/initial_permission_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +45,9 @@ Future<void> main() async {
       ),
     ),
   );
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(InitialPermissionService.instance.requestOnFirstLaunch());
+  });
   if (hasAuthenticatedSession) {
     unawaited(PushNotificationService.instance.initialize());
   }
