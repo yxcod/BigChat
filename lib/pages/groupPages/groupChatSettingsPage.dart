@@ -681,8 +681,17 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                   int code = await minuGroup(groupIdInt, [currentUserId]);
 
                   if (code == 100) {
-                    // 退出群聊设置页面
-                    Navigator.pop(context);
+                    // 主动退群后立即清理本地群状态，并离开该群相关的全部页面。
+                    // 仅 pop 设置页会重新露出仍在栈中的群聊页，也会让“我的群聊”
+                    // 暂时保留旧数据，直到下一次定时刷新。
+                    globalUtil.clearGroupMembers(groupIdInt);
+                    await globalUtil.deleteChatRecords(
+                      GlobalUtil.groupConversationKey(groupIdInt),
+                    );
+                    if (!context.mounted) return;
+                    Navigator.of(
+                      context,
+                    ).pushNamedAndRemoveUntil('/mainWidget', (route) => false);
                   } else {
                     throw Exception('退出群聊失败，错误码: $code');
                   }
