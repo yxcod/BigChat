@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_context.dart';
+import '../../../core/cache/app_image_cache.dart';
+import '../../../shared/widgets/fullscreen_image_viewer.dart';
+import '../../../utils/gloabl.dart';
 import '../data/baidu_poi_search_client.dart';
+import '../domain/merchant_review.dart';
 import '../domain/nearby_merchant.dart';
 import 'merchant_category_placeholder.dart';
 
@@ -15,10 +21,15 @@ class NearbyMerchantDetailPage extends StatefulWidget {
     super.key,
     required this.merchant,
     this.loader,
+    this.uploadedImages = const <MerchantReviewImage>[],
+    this.uploadedImageProviderBuilder,
   });
 
   final NearbyMerchant merchant;
   final NearbyMerchantDetailLoader? loader;
+  final List<MerchantReviewImage> uploadedImages;
+  final ImageProvider Function(MerchantReviewImage image)?
+  uploadedImageProviderBuilder;
 
   @override
   State<NearbyMerchantDetailPage> createState() =>
@@ -120,7 +131,11 @@ class _NearbyMerchantDetailPageState extends State<NearbyMerchantDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _MerchantGallery(merchant: _merchant),
+          _MerchantGallery(
+            merchant: _merchant,
+            uploadedImages: widget.uploadedImages,
+            uploadedImageProviderBuilder: widget.uploadedImageProviderBuilder,
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 17),
             child: Column(
@@ -273,24 +288,153 @@ class _NearbyMerchantDetailPageState extends State<NearbyMerchantDetailPage> {
   }
 }
 
-class _MerchantGallery extends StatelessWidget {
-  const _MerchantGallery({required this.merchant});
+class _MerchantGallery extends StatefulWidget {
+  const _MerchantGallery({
+    required this.merchant,
+    required this.uploadedImages,
+    this.uploadedImageProviderBuilder,
+  });
 
   final NearbyMerchant merchant;
+  final List<MerchantReviewImage> uploadedImages;
+  final ImageProvider Function(MerchantReviewImage image)?
+  uploadedImageProviderBuilder;
+
+  @override
+  State<_MerchantGallery> createState() => _MerchantGalleryState();
+}
+
+class _MerchantGalleryState extends State<_MerchantGallery> {
+  late final PageController _pageController;
+  Timer? _timer;
+  int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _startTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MerchantGallery oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uploadedImages.length != widget.uploadedImages.length) {
+      _page = 0;
+      if (_pageController.hasClients) _pageController.jumpToPage(0);
+      _startTimer();
+    }
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (widget.uploadedImages.length < 2) return;
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || !_pageController.hasClients) return;
+      final next = (_page + 1) % widget.uploadedImages.length;
+      _pageController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  ImageProvider<Object> _uploadedImageProvider(MerchantReviewImage image) {
+    final builder = widget.uploadedImageProviderBuilder;
+    if (builder != null) return builder(image);
+    return AppImageCache.provider(
+      GlobalUtil().getImageURL(image.ownerId, image.imageName),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final images = merchant.availableImageUrls;
+    if (widget.uploadedImages.isNotEmpty) {
+      return SizedBox(
+        key: const ValueKey('nearby_detail_uploaded_gallery'),
+        height: 210,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              itemCount: widget.uploadedImages.length,
+              onPageChanged: (value) => setState(() => _page = value),
+              itemBuilder: (context, index) {
+                final image = widget.uploadedImages[index];
+                final provider = _uploadedImageProvider(image);
+                final heroTag =
+                    'merchant-detail-${image.ownerId}-${image.imageName}';
+                return GestureDetector(
+                  key: ValueKey('nearby_detail_uploaded_image_$index'),
+                  onTap: () => showFullscreenImage(
+                    context,
+                    imageProvider: provider,
+                    heroTag: heroTag,
+                  ),
+                  child: Hero(
+                    tag: heroTag,
+                    child: Image(
+                      image: provider,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => MerchantCategoryPlaceholder(
+                        merchant: widget.merchant,
+                        showLabel: true,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            if (widget.uploadedImages.length > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 10,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    widget.uploadedImages.length,
+                    (index) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: index == _page ? 15 : 6,
+                      height: 6,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        color: index == _page
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    final images = widget.merchant.availableImageUrls;
     if (images.isEmpty) {
       return SizedBox(
         height: 190,
         width: double.infinity,
         child: MerchantCategoryPlaceholder(
-          merchant: merchant,
+          merchant: widget.merchant,
           showLabel: true,
-          caption: merchant.imageCount > 0
+          caption: widget.merchant.imageCount > 0
               ? '商家图片暂不可读取'
-              : merchantCategoryVisual(merchant).label,
+              : merchantCategoryVisual(widget.merchant).label,
         ),
       );
     }
@@ -299,7 +443,7 @@ class _MerchantGallery extends StatelessWidget {
       child: PageView.builder(
         itemCount: images.length,
         itemBuilder: (context, index) => MerchantImageView(
-          merchant: merchant,
+          merchant: widget.merchant,
           imageUrl: images[index],
           showFallbackLabel: true,
         ),

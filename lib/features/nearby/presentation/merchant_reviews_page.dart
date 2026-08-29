@@ -349,8 +349,12 @@ class _MerchantReviewsPageState extends State<MerchantReviewsPage> {
             review: review,
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) =>
-                    NearbyMerchantDetailPage(merchant: review.merchant),
+                builder: (_) => NearbyMerchantDetailPage(
+                  merchant: review.merchant,
+                  uploadedImages: review.uploadedImages,
+                  uploadedImageProviderBuilder:
+                      widget.merchantImageProviderBuilder,
+                ),
               ),
             ),
             onLike: () => _toggleReaction(review, MerchantReviewReaction.like),

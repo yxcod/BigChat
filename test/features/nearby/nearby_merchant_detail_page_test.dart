@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_base/features/nearby/domain/nearby_merchant.dart';
+import 'package:flutter_base/features/nearby/domain/merchant_review.dart';
 import 'package:flutter_base/features/nearby/presentation/nearby_merchant_detail_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -97,5 +98,105 @@ void main() {
 
     expect(clipboardText, '蓝鲸咖啡');
     expect(find.text('商家名称已复制'), findsOneWidget);
+  });
+
+  testWidgets('uploaded review image replaces unreadable merchant artwork', (
+    tester,
+  ) async {
+    const uploaded = MerchantReviewImage(
+      ownerId: 'owner-1',
+      imageName: 'merchant.png',
+    );
+    const pixel = <int>[
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a,
+      0x00,
+      0x00,
+      0x00,
+      0x0d,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1f,
+      0x15,
+      0xc4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0d,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x08,
+      0xd7,
+      0x63,
+      0xf8,
+      0xcf,
+      0xc0,
+      0xf0,
+      0x1f,
+      0x00,
+      0x05,
+      0x00,
+      0x01,
+      0xff,
+      0x89,
+      0x99,
+      0x3d,
+      0x1d,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4e,
+      0x44,
+      0xae,
+      0x42,
+      0x60,
+      0x82,
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NearbyMerchantDetailPage(
+          merchant: merchant,
+          loader: (value) async => value,
+          uploadedImages: const [uploaded],
+          uploadedImageProviderBuilder: (_) =>
+              MemoryImage(Uint8List.fromList(pixel)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('nearby_detail_uploaded_gallery')),
+      findsOneWidget,
+    );
+    expect(find.text('商家图片暂不可读取'), findsNothing);
   });
 }
