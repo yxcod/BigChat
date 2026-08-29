@@ -190,6 +190,8 @@ class _ChatDialogPageState extends State<ChatDialogPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _activateCurrentConversation();
+      _fetchFriendInfo();
+      unawaited(_refreshDistance());
     }
   }
 
@@ -672,13 +674,8 @@ class _ChatDialogPageState extends State<ChatDialogPage>
             if (mounted) {
               setState(() {
                 friendInfo?.isOnline = event.isOnline;
-                if (!event.isOnline) {
-                  _distanceMeters = null;
-                  _distanceStatus = '未知';
-                  _distanceLoading = false;
-                }
               });
-              if (event.isOnline) unawaited(_refreshDistance());
+              unawaited(_refreshDistance());
             }
           }
           break;
@@ -1099,18 +1096,6 @@ class _ChatDialogPageState extends State<ChatDialogPage>
   Future<void> _refreshDistance() async {
     final peer = id;
     if (peer == null || peer.isEmpty || _distanceLoading) return;
-    // Never request GPS or the distance API for an offline peer.
-    if (friendInfo?.isOnline != true) {
-      if (mounted) {
-        setState(() {
-          _distanceMeters = null;
-          _distanceStatus = '未知';
-          _distanceLoading = false;
-        });
-      }
-      if (mounted) _scheduleNextDistanceRefresh();
-      return;
-    }
     if (mounted) {
       setState(() {
         _distanceLoading = true;
@@ -1121,26 +1106,19 @@ class _ChatDialogPageState extends State<ChatDialogPage>
       final distance = await runDistanceAttempts<int?>(
         maxAttempts: _distanceMaxAttempts,
         attemptTimeout: _distanceAttemptTimeout,
-        operation: () {
-          if (friendInfo?.isOnline != true) {
-            throw StateError('好友已离线');
-          }
-          return AppLocationService().refreshDistance(
-            peer,
-            timeout: _distanceAttemptTimeout,
-          );
-        },
+        operation: () => AppLocationService().refreshDistance(
+          peer,
+          timeout: _distanceAttemptTimeout,
+        ),
         shouldRetry: (error) {
           final message = error.toString();
           // Permission/settings failures cannot be fixed by an immediate retry.
           return !message.contains('设置中开启') &&
               !message.contains('权限') &&
-              !message.contains('定位服务') &&
-              !message.contains('好友已离线');
+              !message.contains('定位服务');
         },
       );
       if (!mounted) return;
-      if (friendInfo?.isOnline != true) return;
       setState(() {
         _distanceMeters = distance;
         _distanceStatus = distance == null ? '对方暂无位置' : null;
@@ -1318,13 +1296,26 @@ class _ChatDialogPageState extends State<ChatDialogPage>
   }
 
   String get _privateChatStatus {
-    if (friendInfo?.isOnline != true) return '';
-    if (_distanceLoading) return '在线 · 距离计算中';
+    final onlinePrefix = friendInfo?.isOnline == true ? '在线 · ' : '';
+    if (_distanceLoading) return '${onlinePrefix}距离计算中';
     if (_distanceMeters != null) {
-      return '在线 · 距你 ${formatDistance(_distanceMeters!)}';
+      return '${onlinePrefix}距你 ${formatDistance(_distanceMeters!)}';
     }
     final status = _distanceStatus?.trim() ?? '';
-    return status.isEmpty ? '在线' : '在线 · $status';
+    return '$onlinePrefix${status.isEmpty ? '位置未知' : status}';
+  }
+
+  String get _privateChatTitle {
+    for (final candidate in <String?>[
+      friendInfo?.remarks,
+      friendInfo?.nickName,
+      friendInfo?.userName,
+      id,
+    ]) {
+      final value = candidate?.trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '未知用户';
   }
 
   @override
@@ -1342,17 +1333,12 @@ class _ChatDialogPageState extends State<ChatDialogPage>
         ),
         title: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: friendInfo?.isOnline == true && !_distanceLoading
-              ? _refreshDistance
-              : null,
+          onTap: !_distanceLoading ? _refreshDistance : null,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                friendInfo?.remarks ??
-                    friendInfo?.nickName ??
-                    friendInfo?.userName ??
-                    '未知用户',
+                _privateChatTitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -1362,12 +1348,12 @@ class _ChatDialogPageState extends State<ChatDialogPage>
                   letterSpacing: 0.1,
                 ),
               ),
-              if (_privateChatStatus.isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Row(
-                  key: const Key('private_chat_online_status'),
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+              const SizedBox(height: 3),
+              Row(
+                key: const Key('private_chat_online_status'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (friendInfo?.isOnline == true) ...[
                     const SizedBox.square(
                       dimension: 7,
                       child: DecoratedBox(
@@ -1378,20 +1364,26 @@ class _ChatDialogPageState extends State<ChatDialogPage>
                       ),
                     ),
                     const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        _privateChatStatus,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: context.appTextSecondary,
-                          fontSize: 11.5,
-                        ),
+                  ],
+                  Icon(
+                    Icons.location_on_outlined,
+                    size: 13,
+                    color: context.appTextSecondary,
+                  ),
+                  const SizedBox(width: 2),
+                  Flexible(
+                    child: Text(
+                      _privateChatStatus,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: context.appTextSecondary,
+                        fontSize: 11.5,
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ],
           ),
         ),
