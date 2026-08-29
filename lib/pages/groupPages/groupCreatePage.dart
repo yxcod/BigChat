@@ -10,6 +10,7 @@ import '../../app/theme/app_theme_context.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../utils/gloabl.dart';
 import '../../utils/http.dart';
+import '../../core/media/image_file_format.dart';
 
 class GroupCreatePage extends StatefulWidget {
   const GroupCreatePage({super.key});
@@ -79,13 +80,8 @@ class _GroupCreatePageState extends State<GroupCreatePage> {
     }
   }
 
-  String _avatarFileName(String path) {
-    final extensionMatch = RegExp(r'\.([A-Za-z0-9]+)$').firstMatch(path);
-    final rawExtension = extensionMatch?.group(1)?.toLowerCase();
-    final extension = switch (rawExtension) {
-      'png' || 'webp' || 'jpeg' || 'jpg' => rawExtension!,
-      _ => 'jpg',
-    };
+  Future<String> _avatarFileName(String path) async {
+    final extension = await supportedImageExtension(path);
     return 'head_${DateTime.now().millisecondsSinceEpoch}.$extension';
   }
 
@@ -94,7 +90,7 @@ class _GroupCreatePageState extends State<GroupCreatePage> {
     required String groupName,
     required XFile avatar,
   }) async {
-    final avatarName = _avatarFileName(avatar.path);
+    final avatarName = await _avatarFileName(avatar.path);
     final uploaded = await HttpUtil().uploadImageFile(
       avatarName,
       avatar.path,

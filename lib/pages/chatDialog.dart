@@ -47,6 +47,7 @@ import '../app/theme/app_colors.dart';
 import '../app/theme/app_theme_context.dart';
 import '../features/privacy/application/privacy_settings_service.dart';
 import '../core/navigation/app_route_observer.dart';
+import '../core/media/image_file_format.dart';
 import '../features/chat/domain/private_delivery_failure.dart';
 
 class ChatDialogPage extends StatefulWidget {
@@ -284,7 +285,8 @@ class _ChatDialogPageState extends State<ChatDialogPage>
       String conversationId = _generateConversationId();
 
       // 生成图片文件名：当前用户的UserName_发送用户的UserName_时间戳
-      String imageName = '${globalUtil.userName}_${receiver}_$msgId.jpg';
+      final extension = await supportedImageExtension(imageFile.path);
+      String imageName = '${globalUtil.userName}_${receiver}_$msgId.$extension';
 
       // 上传图片到服务器
       await _uploadImage(imageFile, imageName, cancelToken);

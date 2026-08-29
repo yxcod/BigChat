@@ -26,6 +26,7 @@ import '../../app/theme/app_theme_context.dart';
 import '../../shared/pages/app_text_editor_page.dart';
 import '../../features/groups/application/group_notification_settings_service.dart';
 import '../../features/groups/application/group_membership_verifier.dart';
+import '../../core/media/image_file_format.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
@@ -94,7 +95,8 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
 
         // 生成带时间戳的图片名
         String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-        String imageName = 'head_$timestamp.jpg';
+        final extension = await supportedImageExtension(image.path);
+        String imageName = 'head_$timestamp.$extension';
 
         // 创建 HttpUtil 实例
         final httpUtil = HttpUtil();

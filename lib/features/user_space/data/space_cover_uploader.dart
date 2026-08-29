@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../../../utils/http.dart';
+import '../../../core/media/image_file_format.dart';
 
 abstract class SpaceCoverUploader {
   Future<String> upload({
@@ -25,7 +26,7 @@ class ServerSpaceCoverUploader implements SpaceCoverUploader {
     if (await file.length() > 5 * 1024 * 1024) {
       throw Exception('封面图片不能超过5MB');
     }
-    final extension = _extension(localPath);
+    final extension = await supportedImageExtension(localPath);
     final name =
         '${ownerUserName}_space_cover_${DateTime.now().microsecondsSinceEpoch}.$extension';
     final success = await _httpUtil.uploadImageFile(
@@ -37,12 +38,5 @@ class ServerSpaceCoverUploader implements SpaceCoverUploader {
     // Persist a stable resource identity. Download URLs contain a login token
     // and must be regenerated whenever the space is opened again.
     return name;
-  }
-
-  String _extension(String path) {
-    final value = path.split('.').last.toLowerCase();
-    if (value == 'jpeg') return 'jpg';
-    if (value == 'png' || value == 'webp' || value == 'jpg') return value;
-    return 'jpg';
   }
 }

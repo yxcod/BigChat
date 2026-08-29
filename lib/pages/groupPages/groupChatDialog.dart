@@ -54,6 +54,7 @@ import '../../app/theme/app_theme_context.dart';
 import '../../features/privacy/application/privacy_settings_service.dart';
 import '../../features/privacy/domain/privacy_message_policy.dart';
 import '../../core/navigation/app_route_observer.dart';
+import '../../core/media/image_file_format.dart';
 
 class GroupChatDialogPage extends StatefulWidget {
   final int groupId;
@@ -583,7 +584,9 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
       String conversationId = widget.groupId.toString();
 
       // 生成图片文件名
-      String imageName = '${globalUtil.userName}_${widget.groupId}_$msgId.jpg';
+      final extension = await supportedImageExtension(imageFile.path);
+      String imageName =
+          '${globalUtil.userName}_${widget.groupId}_$msgId.$extension';
       // 上传图片到服务器
       await _uploadImage(imageFile, imageName, cancelToken);
       // 创建消息对象
