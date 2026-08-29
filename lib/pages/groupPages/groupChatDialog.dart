@@ -937,7 +937,8 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
           _handleGroupReadCallback(parsedMessage);
           break;
         case 'groupChatHistoryDeleted':
-          unawaited(_handleGroupHistoryDeleted(parsedMessage));
+          // 服务端删除事件由根层统一处理，确保位于群聊、群设置
+          // 或其它群相关页面时都能弹出确认并安全返回主页。
           break;
         case 'privacyMessageRead':
           final msgId = _parseInt(parsedMessage['msgId']);
@@ -991,35 +992,24 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
     _sentReadAckMessageIds.clear();
     if (!mounted) return;
 
-    final navigator = Navigator.of(context);
-    var removedGroupChatRoute = false;
-    navigator.popUntil((route) {
-      if (route.settings.name == '/groupChatDialog') {
-        removedGroupChatRoute = true;
-        return false;
-      }
-      if (route.settings.name == '/groupChatSettings') return false;
-      // 先关闭可能存在的已读列表、图片预览等匿名弹层，再移除群聊页面。
-      return removedGroupChatRoute;
-    });
     final notification =
         messageData['message']?.toString() ?? '群主或管理员已删除当前群聊的全部聊天记录';
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!navigator.mounted) return;
-      showDialog<void>(
-        context: navigator.context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('群聊通知'),
-          content: Text(notification),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('知道了'),
-            ),
-          ],
-        ),
-      );
-    });
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('群聊通知'),
+        content: Text(notification),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/mainWidget', (_) => false);
   }
 
   // 处理聊天消息

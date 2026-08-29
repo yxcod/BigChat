@@ -103,4 +103,34 @@ void main() {
     expect(find.byIcon(Icons.notifications_off_outlined), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('@我的群会话使用独立颜色摘要', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Chatpage(
+          autoRefresh: false,
+          chatList: [
+            Chat(
+              name: '测试群',
+              avatar: '',
+              lastMessage: '@叶翔 提醒信息',
+              time: '10:40',
+              unreadCount: 1,
+              userName: '12002',
+              isGroup: true,
+              lastSenderName: '王瑞',
+              mentionedMe: true,
+              updateTime: 400,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('[有人@我]'), findsOneWidget);
+    expect(find.textContaining('王瑞：@叶翔 提醒信息'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

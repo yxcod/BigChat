@@ -131,6 +131,35 @@ void main() {
   });
 
   test(
+    'group banner includes group and sender names with a bounded preview',
+    () async {
+      GlobalUtil().userName = 'receiver_100';
+      final service = AppNotificationFeedbackService(
+        loadSettings: () async => const AppSettings(
+          vibrationEnabled: false,
+          bannerEnabled: true,
+          messageSoundEnabled: false,
+        ),
+        isGroupMuted: (_) async => false,
+      );
+      final event = ChatRealtimeEvent.parse({
+        'type': 'groupChat',
+        'sendUserId': 'sender_200',
+        'senderName': '叶翔',
+        'groupName': '测试群',
+        'groupId': 123456,
+        'msgContent': '这是一条群消息',
+        'msgType': 1,
+      });
+
+      final notice = await service.handle(event, appIsForeground: true);
+
+      expect(notice?.title, '测试群');
+      expect(notice?.body, '叶翔：这是一条群消息');
+    },
+  );
+
+  test(
     'read receipts and own echoed messages never trigger feedback',
     () async {
       GlobalUtil().userName = 'sender_200';

@@ -42,7 +42,7 @@ class Chatpage extends StatefulWidget {
   State<Chatpage> createState() => _ChatpageState();
 }
 
-class _ChatpageState extends State<Chatpage> {
+class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
   final List<Chat> _chats = [];
 
   Timer? _fallbackRefreshTimer;
@@ -67,6 +67,7 @@ class _ChatpageState extends State<Chatpage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     globalUtil.privacyMessagesRevision.addListener(_refreshPrivacyMessages);
     _groupNotificationSettings.addListener(
       _handleGroupNotificationSettingsChanged,
@@ -202,6 +203,7 @@ class _ChatpageState extends State<Chatpage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     globalUtil.privacyMessagesRevision.removeListener(_refreshPrivacyMessages);
     _groupNotificationSettings.removeListener(
       _handleGroupNotificationSettingsChanged,
@@ -212,6 +214,14 @@ class _ChatpageState extends State<Chatpage> {
     _searchController.dispose();
     _conversationScrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !widget.autoRefresh) return;
+    // 后台期间 WebSocket 可能被系统挂起；恢复后立即从服务端补拉，
+    // 保证文件、视频等大消息不会看起来像“被吞掉”。
+    unawaited(fetchConversations());
   }
 
   void _startFallbackRefreshTimer() {
@@ -796,6 +806,7 @@ class _ChatpageState extends State<Chatpage> {
               isMuted: muted,
               hasMutedUnread: muted && rawUnreadCount > 0,
               lastSenderName: lastSenderName,
+              mentionedMe: groupConversation.mentionedMe && rawUnreadCount > 0,
               updateTime: groupConversation.updateTime,
             ),
           );
@@ -1383,6 +1394,21 @@ class _ChatpageState extends State<Chatpage> {
                     size: 25,
                   ),
           ),
+          if (!chat.isGroup && chat.isOnline)
+            Positioned(
+              key: ValueKey('chat_online_${chat.userName}'),
+              right: -1,
+              bottom: -1,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: context.appSurface, width: 2),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1393,6 +1419,38 @@ class _ChatpageState extends State<Chatpage> {
       return '${chat.lastSenderName}：${chat.lastMessage}';
     }
     return chat.lastMessage;
+  }
+
+  Widget _buildConversationPreview(Chat chat) {
+    final preview = _conversationPreview(chat);
+    if (!chat.mentionedMe) {
+      return Text(
+        preview,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: context.appTextSecondary, fontSize: 13),
+      );
+    }
+    return Text.rich(
+      TextSpan(
+        children: [
+          const TextSpan(
+            text: '[有人@我] ',
+            style: TextStyle(
+              color: AppColors.danger,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          TextSpan(
+            text: preview,
+            style: TextStyle(color: context.appTextSecondary),
+          ),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(fontSize: 13),
+    );
   }
 
   Widget _buildUnreadBadge(Chat chat) {
@@ -1485,17 +1543,7 @@ class _ChatpageState extends State<Chatpage> {
                       const SizedBox(height: 7),
                       Row(
                         children: [
-                          Expanded(
-                            child: Text(
-                              _conversationPreview(chat),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: context.appTextSecondary,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
+                          Expanded(child: _buildConversationPreview(chat)),
                           if (chat.hasMutedUnread) ...[
                             const SizedBox(width: 10),
                             _buildMutedUnreadDot(chat),
@@ -1661,6 +1709,7 @@ class Chat {
   final int updateTime;
   final bool isMuted;
   final bool hasMutedUnread;
+  final bool mentionedMe;
 
   Chat({
     required this.name,
@@ -1676,6 +1725,7 @@ class Chat {
     required this.updateTime,
     this.isMuted = false,
     this.hasMutedUnread = false,
+    this.mentionedMe = false,
   }) : rawUnreadCount = rawUnreadCount ?? unreadCount;
 
   Chat copyWith({
@@ -1688,6 +1738,7 @@ class Chat {
     int? updateTime,
     bool? isMuted,
     bool? hasMutedUnread,
+    bool? mentionedMe,
   }) {
     return Chat(
       name: name,
@@ -1703,6 +1754,7 @@ class Chat {
       updateTime: updateTime ?? this.updateTime,
       isMuted: isMuted ?? this.isMuted,
       hasMutedUnread: hasMutedUnread ?? this.hasMutedUnread,
+      mentionedMe: mentionedMe ?? this.mentionedMe,
     );
   }
 }

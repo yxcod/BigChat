@@ -173,7 +173,10 @@ class PushNotificationService {
         if (groupId != null && groupId > 0) {
           navigator.pushNamed(
             '/groupChatDialog',
-            arguments: {'groupId': groupId, 'groupName': '群聊'},
+            arguments: {
+              'groupId': groupId,
+              'groupName': extras['groupName']?.toString() ?? '群聊',
+            },
           );
         }
       } else if (eventType == 'privateMessage') {

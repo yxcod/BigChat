@@ -7,6 +7,7 @@ class GroupConversationModel {
   String lastSenderId; // 最后发送者ID
   String lastMsg; // 最后一条消息内容
   int unreadCount; // 未读数量
+  bool mentionedMe; // 最新未读消息是否 @ 了当前用户
 
   GroupConversationModel({
     this.id = 0,
@@ -15,6 +16,7 @@ class GroupConversationModel {
     this.lastSenderId = '',
     this.lastMsg = '',
     this.unreadCount = 0,
+    this.mentionedMe = false,
   });
 
   factory GroupConversationModel.fromJson(Map<String, dynamic> json) {
@@ -25,6 +27,7 @@ class GroupConversationModel {
       lastSenderId: JsonValueParser.stringValue(json['lastSenderId']),
       lastMsg: JsonValueParser.stringValue(json['lastMsg']),
       unreadCount: JsonValueParser.intValue(json['unreadCount']),
+      mentionedMe: JsonValueParser.boolValue(json['mentionedMe']),
     );
   }
 
@@ -36,6 +39,7 @@ class GroupConversationModel {
       'lastSenderId': lastSenderId,
       'lastMsg': lastMsg,
       'unreadCount': unreadCount,
+      'mentionedMe': mentionedMe,
     };
   }
 }

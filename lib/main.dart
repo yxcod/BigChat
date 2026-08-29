@@ -93,6 +93,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _isAppForeground = true;
   bool _disconnectionNoticePresented = false;
   final Set<int> _handlingRemovedGroups = {};
+  final Set<int> _handlingHistoryDeletedGroups = {};
   final FriendshipRealtimeService _friendshipRealtimeService =
       const FriendshipRealtimeService();
   late bool _privacyLockPending;
@@ -180,6 +181,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       unawaited(_friendshipRealtimeService.handle(rawMessage));
     }
     unawaited(_handleIncomingMessageNotification(event));
+    if (event.type == ChatRealtimeEventType.groupHistoryDeleted &&
+        event.groupId > 0 &&
+        _handlingHistoryDeletedGroups.add(event.groupId)) {
+      unawaited(_handleGroupHistoryDeleted(event));
+      return;
+    }
     if (event.type != ChatRealtimeEventType.groupMemberRemoved ||
         event.groupId <= 0 ||
         !_handlingRemovedGroups.add(event.groupId)) {
@@ -341,6 +348,53 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         );
       }
       _handlingRemovedGroups.remove(groupId);
+    });
+  }
+
+  Future<void> _handleGroupHistoryDeleted(ChatRealtimeEvent event) async {
+    final groupId = event.groupId;
+    await GlobalUtil().deleteChatRecords(
+      GlobalUtil.groupConversationKey(groupId),
+    );
+    if (!mounted) {
+      _handlingHistoryDeletedGroups.remove(groupId);
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final navigator = GlobalNavigatorKey.navigatorState;
+      if (navigator == null || !navigator.mounted) {
+        _handlingHistoryDeletedGroups.remove(groupId);
+        return;
+      }
+      final message =
+          event.data['message']?.toString() ?? '群主或管理员已删除当前群聊的全部聊天记录';
+      if (GroupRouteRegistry.isActive(groupId)) {
+        await showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('群聊通知'),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('知道了'),
+              ),
+            ],
+          ),
+        );
+        if (navigator.mounted) {
+          navigator.pushNamedAndRemoveUntil('/mainWidget', (_) => false);
+        }
+      } else {
+        ScaffoldMessenger.maybeOf(navigator.context)?.showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      _handlingHistoryDeletedGroups.remove(groupId);
     });
   }
 

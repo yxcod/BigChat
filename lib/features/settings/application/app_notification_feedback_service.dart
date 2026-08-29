@@ -104,15 +104,22 @@ class AppNotificationFeedbackService {
 
   String _titleFor(ChatRealtimeEvent event) {
     final friend = GlobalUtil().getFriendInfoByUserName(event.senderId);
-    final displayName = (friend.nickName ?? '').trim().isNotEmpty
+    final eventSenderName = event.data['senderName']?.toString().trim() ?? '';
+    final displayName = eventSenderName.isNotEmpty
+        ? eventSenderName
+        : (friend.remarks ?? '').trim().isNotEmpty
+        ? friend.remarks!.trim()
+        : (friend.nickName ?? '').trim().isNotEmpty
         ? friend.nickName!.trim()
         : event.senderId;
     if (event.type == ChatRealtimeEventType.friendRequestUpdated) {
       return event.data['action'] == 'rejected' ? '好友申请已被拒绝' : '新的好友申请';
     }
-    return event.type == ChatRealtimeEventType.groupMessage
-        ? '群聊消息 · $displayName'
-        : displayName;
+    if (event.type == ChatRealtimeEventType.groupMessage) {
+      final groupName = event.data['groupName']?.toString().trim() ?? '';
+      return groupName.isEmpty ? '群聊消息' : groupName;
+    }
+    return displayName;
   }
 
   String _previewFor(ChatRealtimeEvent event) {
@@ -141,8 +148,16 @@ class AppNotificationFeedbackService {
             event.mentionsUser(currentUser)
         ? '[@我] '
         : '';
-    if (preview.isEmpty) return '$mentionPrefix收到一条新消息';
-    final result = '$mentionPrefix$preview';
+    final senderName = event.data['senderName']?.toString().trim() ?? '';
+    final groupSenderPrefix =
+        event.type == ChatRealtimeEventType.groupMessage &&
+            senderName.isNotEmpty
+        ? '$senderName：'
+        : '';
+    if (preview.isEmpty) {
+      return '$mentionPrefix${groupSenderPrefix}收到一条新消息';
+    }
+    final result = '$mentionPrefix$groupSenderPrefix$preview';
     return result.length <= 48 ? result : '${result.substring(0, 48)}…';
   }
 
