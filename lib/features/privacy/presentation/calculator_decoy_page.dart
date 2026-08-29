@@ -72,53 +72,56 @@ class _CalculatorDecoyPageState extends State<CalculatorDecoyPage> {
       '0',
       '.',
     ];
-    return Scaffold(
-      backgroundColor: const Color(0xFF111214),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Align(
-                alignment: Alignment.bottomRight,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    _display,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 52,
-                      fontWeight: FontWeight.w300,
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF111214),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: Alignment.bottomRight,
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      _display,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 52,
+                        fontWeight: FontWeight.w300,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: GridView.builder(
-                shrinkWrap: true,
-                itemCount: keys.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  itemCount: keys.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                  ),
+                  itemBuilder: (context, index) {
+                    final key = keys[index];
+                    return FilledButton(
+                      style: FilledButton.styleFrom(
+                        shape: const CircleBorder(),
+                        backgroundColor: '+-×÷='.contains(key)
+                            ? Colors.orange
+                            : const Color(0xFF2B2D31),
+                      ),
+                      onPressed: () => _tap(key),
+                      child: Text(key, style: const TextStyle(fontSize: 25)),
+                    );
+                  },
                 ),
-                itemBuilder: (context, index) {
-                  final key = keys[index];
-                  return FilledButton(
-                    style: FilledButton.styleFrom(
-                      shape: const CircleBorder(),
-                      backgroundColor: '+-×÷='.contains(key)
-                          ? Colors.orange
-                          : const Color(0xFF2B2D31),
-                    ),
-                    onPressed: () => _tap(key),
-                    child: Text(key, style: const TextStyle(fontSize: 25)),
-                  );
-                },
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

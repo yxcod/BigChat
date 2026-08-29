@@ -2,7 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_base/main.dart';
 import 'package:flutter_base/core/network/app_connection_monitor.dart';
+import 'package:flutter_base/features/privacy/presentation/calculator_decoy_page.dart';
+import 'package:flutter_base/features/privacy/presentation/gesture_pattern_pad.dart';
 import 'package:flutter_base/features/privacy/presentation/privacy_unlock_page.dart';
+
+Future<void> drawPrivacyGesture(WidgetTester tester) async {
+  final pad = find.byType(GesturePatternPad);
+  final rect = tester.getRect(pad);
+  Offset point(int index) => Offset(
+    rect.left + rect.width * ((index % 3) + .5) / 3,
+    rect.top + rect.height * ((index ~/ 3) + .5) / 3,
+  );
+  final gesture = await tester.startGesture(point(0));
+  for (final index in const [3, 6, 7]) {
+    await gesture.moveTo(point(index));
+  }
+  await gesture.up();
+  await tester.pump();
+}
 
 void main() {
   testWidgets('应用只创建一个 MaterialApp 并显示登录页', (tester) async {
@@ -66,6 +83,81 @@ void main() {
 
     expect(find.byType(PrivacyUnlockPage), findsOneWidget);
     expect(find.text('隐私模式已锁定'), findsOneWidget);
+    expect(find.text('登录'), findsNothing);
+  });
+
+  testWidgets('手势错误直接进入计算器且下次恢复重新要求手势', (tester) async {
+    final monitor = AppConnectionMonitor(
+      backendProbe: () async => true,
+      probeInterval: const Duration(hours: 1),
+    );
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MyApp(
+        initialRoute: '/login',
+        initiallyPrivacyLocked: true,
+        connectionMonitor: monitor,
+        privacyLockRequired: () => true,
+        privacyGestureVerifier: (_) => false,
+      ),
+    );
+    await tester.pump();
+
+    await drawPrivacyGesture(tester);
+    expect(find.byType(CalculatorDecoyPage), findsOneWidget);
+    expect(find.textContaining('手势错误'), findsNothing);
+    expect(find.text('登录'), findsNothing);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    expect(find.byType(PrivacyUnlockPage), findsOneWidget);
+    expect(find.byType(CalculatorDecoyPage), findsNothing);
+    expect(find.text('登录'), findsNothing);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await drawPrivacyGesture(tester);
+    expect(find.byType(CalculatorDecoyPage), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    monitor.dispose();
+  });
+
+  testWidgets('解锁后再次进入后台会在业务页暴露前切换到手势锁', (tester) async {
+    final monitor = AppConnectionMonitor(
+      backendProbe: () async => true,
+      probeInterval: const Duration(hours: 1),
+    );
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MyApp(
+        initialRoute: '/login',
+        initiallyPrivacyLocked: true,
+        connectionMonitor: monitor,
+        privacyLockRequired: () => true,
+        privacyGestureVerifier: (_) => true,
+      ),
+    );
+    await tester.pump();
+
+    await drawPrivacyGesture(tester);
+    expect(find.byType(PrivacyUnlockPage), findsNothing);
+    expect(find.text('登录'), findsWidgets);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    expect(find.byType(PrivacyUnlockPage), findsOneWidget);
+    expect(find.text('登录'), findsNothing);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(find.byType(PrivacyUnlockPage), findsOneWidget);
+    expect(find.text('登录'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    monitor.dispose();
   });
 
   testWidgets('断线和恢复时分别显示一次全局提示弹窗', (tester) async {

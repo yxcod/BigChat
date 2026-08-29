@@ -16,6 +16,7 @@ import './features/location/data/app_location_service.dart';
 import './features/settings/application/app_notification_feedback_service.dart';
 import './features/privacy/application/privacy_settings_service.dart';
 import './features/privacy/presentation/privacy_unlock_page.dart';
+import './features/privacy/presentation/calculator_decoy_page.dart';
 import './features/groups/application/group_notification_settings_service.dart';
 import './model/friendRequestModel.dart';
 import './core/navigation/app_route_observer.dart';
@@ -66,6 +67,8 @@ class MyApp extends StatefulWidget {
     this.themeController,
     this.notificationFeedbackService,
     this.initiallyPrivacyLocked = false,
+    this.privacyLockRequired,
+    this.privacyGestureVerifier,
   });
 
   final AppConnectionMonitor? connectionMonitor;
@@ -74,6 +77,8 @@ class MyApp extends StatefulWidget {
   final AppThemeController? themeController;
   final AppNotificationFeedbackService? notificationFeedbackService;
   final bool initiallyPrivacyLocked;
+  final bool Function()? privacyLockRequired;
+  final bool Function(List<int> pattern)? privacyGestureVerifier;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -97,6 +102,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final FriendshipRealtimeService _friendshipRealtimeService =
       const FriendshipRealtimeService();
   late bool _privacyLockPending;
+  bool _privacyDecoyVisible = false;
+  int _privacyFailedAttempts = 0;
 
   @override
   void initState() {
@@ -447,27 +454,59 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _connectionNoticeTimer?.cancel();
     _connectionNoticeTimer = null;
     _disconnectionNoticePresented = false;
-    final privacy = PrivacySettingsService.instance.settings;
-    if (privacy.enabled &&
-        privacy.hasGesturePassword &&
-        (GlobalUtil().userName ?? '').isNotEmpty) {
+    var privacyGateChanged = false;
+    if (_requiresPrivacyGate()) {
+      privacyGateChanged = !_privacyLockPending || _privacyDecoyVisible;
       _privacyLockPending = true;
+      _privacyDecoyVisible = false;
     }
     if (_connectionNoticeStatus != null && mounted) {
       setState(() => _connectionNoticeStatus = null);
+    } else if (privacyGateChanged && mounted) {
+      // 在应用真正进入后台前绘制隐私锁，保证系统保留的最后一帧不是业务界面。
+      setState(() {});
     }
+  }
+
+  bool _requiresPrivacyGate() {
+    final override = widget.privacyLockRequired;
+    if (override != null) return override();
+    final privacy = PrivacySettingsService.instance.settings;
+    return privacy.enabled &&
+        privacy.hasGesturePassword &&
+        (GlobalUtil().userName ?? '').isNotEmpty;
   }
 
   Future<void> _completePrivacyUnlock() async {
     if (!mounted) return;
-    setState(() => _privacyLockPending = false);
+    setState(() {
+      _privacyLockPending = false;
+      _privacyDecoyVisible = false;
+      _privacyFailedAttempts = 0;
+    });
+  }
+
+  Future<void> _rejectPrivacyUnlock() async {
+    _privacyFailedAttempts++;
+    if (_privacyFailedAttempts >= 3) {
+      await _forcePrivacyLogout();
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _privacyDecoyVisible = true);
   }
 
   Future<void> _forcePrivacyLogout() async {
     if (mounted) {
-      setState(() => _privacyLockPending = false);
+      setState(() {
+        _privacyLockPending = false;
+        _privacyDecoyVisible = false;
+        _privacyFailedAttempts = 0;
+      });
     } else {
       _privacyLockPending = false;
+      _privacyDecoyVisible = false;
+      _privacyFailedAttempts = 0;
     }
     await PushNotificationService.instance.unregisterCurrentUser();
     WebSocketManager().disconnect();
@@ -586,15 +625,27 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               builder: (context) => SelectionArea(
                 child: Stack(
                   children: [
-                    if (child != null) child,
+                    if (child != null)
+                      Positioned.fill(
+                        child: TickerMode(
+                          enabled: !_privacyLockPending,
+                          child: Offstage(
+                            offstage: _privacyLockPending,
+                            child: child,
+                          ),
+                        ),
+                      ),
                     if (_connectionNoticeStatus != null)
                       _buildConnectionNotice(),
                     if (_privacyLockPending)
                       Positioned.fill(
-                        child: PrivacyUnlockPage(
-                          onUnlocked: _completePrivacyUnlock,
-                          onForceLogout: _forcePrivacyLogout,
-                        ),
+                        child: _privacyDecoyVisible
+                            ? const CalculatorDecoyPage()
+                            : PrivacyUnlockPage(
+                                onUnlocked: _completePrivacyUnlock,
+                                onRejected: _rejectPrivacyUnlock,
+                                verifyGesture: widget.privacyGestureVerifier,
+                              ),
                       ),
                   ],
                 ),
