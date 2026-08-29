@@ -369,7 +369,8 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     if (rawMessage is! Map<String, dynamic>) return;
     final event = ChatRealtimeEvent.parse(rawMessage);
     if (event.groupId != int.tryParse(widget.groupId)) return;
-    if (event.type == ChatRealtimeEventType.groupMemberRoleUpdated) {
+    if (event.type == ChatRealtimeEventType.groupMemberRoleUpdated ||
+        event.type == ChatRealtimeEventType.groupMemberMuteUpdated) {
       unawaited(_fetchGroupMembers());
     }
   }

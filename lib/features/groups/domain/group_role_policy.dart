@@ -15,4 +15,17 @@ class GroupRolePolicy {
   static bool canChangeRole({required int actorRole, required int targetRole}) {
     return actorRole == owner && targetRole != owner;
   }
+
+  static bool canMute({required int actorRole, required int targetRole}) {
+    if (actorRole == owner) return targetRole < owner;
+    return actorRole == administrator && targetRole == member;
+  }
+
+  static bool canManageTarget({
+    required int actorRole,
+    required int targetRole,
+  }) {
+    return canChangeRole(actorRole: actorRole, targetRole: targetRole) ||
+        canMute(actorRole: actorRole, targetRole: targetRole);
+  }
 }

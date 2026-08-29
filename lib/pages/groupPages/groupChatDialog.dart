@@ -108,6 +108,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
   late Timer _groupMembersTimer; // 定时器，用于定期检查群成员列表
   String _currentGroupName = ''; // 当前显示的群名称
   int? _currentMemberCount; // 当前群成员人数，未加载完成前不显示
+  bool _isCurrentUserMuted = false;
   bool _isHandlingHistoryDeletion = false;
   PageRoute<dynamic>? _observedRoute;
 
@@ -940,6 +941,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
           // 服务端删除事件由根层统一处理，确保位于群聊、群设置
           // 或其它群相关页面时都能弹出确认并安全返回主页。
           break;
+        case 'groupMemberMuteUpdated':
+          if (_parseInt(parsedMessage['groupId']) == widget.groupId) {
+            unawaited(_checkGroupMembership());
+          }
+          break;
         case 'privacyMessageRead':
           final msgId = _parseInt(parsedMessage['msgId']);
           final reader = parsedMessage['reader']?.toString() ?? '';
@@ -1387,12 +1393,25 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
       // 遍历群成员列表，检查当前用户是否在列表中
       String? currentUserId = globalUtil.userName;
       bool foundUser = false;
+      bool currentUserMuted = false;
 
       for (var member in members) {
         if (currentUserId != null && member.userId == currentUserId) {
           foundUser = true;
+          currentUserMuted = member.isMuted;
           break;
         }
+      }
+
+      if (mounted && _isCurrentUserMuted != currentUserMuted) {
+        setState(() {
+          _isCurrentUserMuted = currentUserMuted;
+          if (currentUserMuted) {
+            _isMoreActionsVisible = false;
+            _pendingQuote = null;
+            _textFieldFocusNode.unfocus();
+          }
+        });
       }
 
       if (!foundUser) {
@@ -1824,15 +1843,18 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
                 ),
               ),
               Divider(height: 1, color: context.appDivider),
-              ChatComposerPanel(
-                composer: _buildTextComposer(),
-                moreActionsVisible: _isMoreActionsVisible,
-                moreActions: ChatMoreActionsSheet(
-                  onSelected: (action) {
-                    unawaited(_handleMoreAction(action));
-                  },
+              if (_isCurrentUserMuted)
+                _buildMutedComposer()
+              else
+                ChatComposerPanel(
+                  composer: _buildTextComposer(),
+                  moreActionsVisible: _isMoreActionsVisible,
+                  moreActions: ChatMoreActionsSheet(
+                    onSelected: (action) {
+                      unawaited(_handleMoreAction(action));
+                    },
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -1878,6 +1900,32 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
             onSend: () => _handleSubmitted(_textController.text),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMutedComposer() {
+    return SafeArea(
+      top: false,
+      child: Container(
+        width: double.infinity,
+        color: context.appSurface,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.notifications_off_outlined,
+              size: 20,
+              color: context.appTextSecondary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '您已被群主/管理员禁言',
+              style: TextStyle(color: context.appTextSecondary, fontSize: 15),
+            ),
+          ],
+        ),
       ),
     );
   }

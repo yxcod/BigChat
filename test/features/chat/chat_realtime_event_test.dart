@@ -76,9 +76,16 @@ void main() {
       'groupId': 1001,
       'role': 1,
     });
+    final muteUpdated = ChatRealtimeEvent.parse({
+      'type': 'groupMemberMuteUpdated',
+      'groupId': 1001,
+      'muted': true,
+    });
 
     expect(removed.type, ChatRealtimeEventType.groupMemberRemoved);
     expect(removed.groupId, 1001);
     expect(roleUpdated.type, ChatRealtimeEventType.groupMemberRoleUpdated);
+    expect(muteUpdated.type, ChatRealtimeEventType.groupMemberMuteUpdated);
+    expect(muteUpdated.groupId, 1001);
   });
 }

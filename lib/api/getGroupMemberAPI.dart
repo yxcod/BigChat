@@ -118,3 +118,21 @@ Future<int> updateGroupMemberRole(
     rethrow;
   }
 }
+
+Future<int> updateGroupMemberMute(
+  String userName,
+  int groupId,
+  bool muted,
+) async {
+  try {
+    final response = await HttpUtil().post(
+      '/api/group/updateGroupMemberInfo',
+      data: {'userName': userName, 'groupId': groupId, 'muted': muted},
+    );
+    if (response.statusCode == 200) return response.data['code'] ?? 0;
+    throw Exception('更新群成员禁言状态失败: ${response.statusCode}');
+  } catch (e) {
+    debugPrint('更新群成员禁言状态失败: $e');
+    rethrow;
+  }
+}

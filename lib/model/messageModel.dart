@@ -166,7 +166,8 @@ class MessageExtensions {
                 .where((mention) => mention.userId.isNotEmpty)
                 .toList(growable: false)
           : const <MessageMention>[];
-      final systemEvent = root['kind'] == 'group_member_joined'
+      final systemEvent =
+          JsonValueParser.stringValue(root['kind']).startsWith('group_member_')
           ? GroupSystemEvent.fromJson(root)
           : null;
       return MessageExtensions(

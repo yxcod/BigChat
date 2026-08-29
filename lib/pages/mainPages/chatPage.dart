@@ -307,6 +307,7 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
         unawaited(_handleRemovedGroup(event.groupId));
         break;
       case ChatRealtimeEventType.groupMemberRoleUpdated:
+      case ChatRealtimeEventType.groupMemberMuteUpdated:
         break;
       case ChatRealtimeEventType.friendRequestUpdated:
         if (event.data['action']?.toString() == 'accepted') {

@@ -14,6 +14,8 @@ import '../../utils/WebSocketManager.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../app/theme/app_theme_context.dart';
 
+enum _MemberAction { changeRole, toggleMute }
+
 class GroupMembersPage extends StatefulWidget {
   final String groupId;
   final String groupName;
@@ -102,54 +104,84 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
     if (rawMessage is! Map<String, dynamic>) return;
     final event = ChatRealtimeEvent.parse(rawMessage);
     if (event.groupId == int.tryParse(widget.groupId) &&
-        event.type == ChatRealtimeEventType.groupMemberRoleUpdated) {
+        (event.type == ChatRealtimeEventType.groupMemberRoleUpdated ||
+            event.type == ChatRealtimeEventType.groupMemberMuteUpdated)) {
       unawaited(_fetchGroupMembers());
     }
   }
 
-  Future<void> _showRoleAction(GroupMemberModel member) async {
-    if (!GroupRolePolicy.canChangeRole(
+  Future<void> _showMemberActions(GroupMemberModel member) async {
+    final canChangeRole = GroupRolePolicy.canChangeRole(
       actorRole: _myRole,
       targetRole: member.role,
-    )) {
+    );
+    final canMute = GroupRolePolicy.canMute(
+      actorRole: _myRole,
+      targetRole: member.role,
+    );
+    if (!canChangeRole && !canMute) {
       return;
     }
     final promote = member.role == GroupRolePolicy.member;
-    final confirmed = await showModalBottomSheet<bool>(
+    final action = await showModalBottomSheet<_MemberAction>(
       context: context,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              title: Text(
-                promote ? '设为管理员' : '取消管理员',
-                textAlign: TextAlign.center,
+            if (canChangeRole)
+              ListTile(
+                title: Text(
+                  promote ? '设为管理员' : '取消管理员',
+                  textAlign: TextAlign.center,
+                ),
+                onTap: () =>
+                    Navigator.pop(sheetContext, _MemberAction.changeRole),
               ),
-              onTap: () => Navigator.pop(sheetContext, true),
-            ),
+            if (canMute)
+              ListTile(
+                title: Text(
+                  member.isMuted ? '取消禁言' : '禁言',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: member.isMuted ? Colors.green : Colors.red,
+                  ),
+                ),
+                onTap: () =>
+                    Navigator.pop(sheetContext, _MemberAction.toggleMute),
+              ),
             ListTile(
               title: const Text('取消', textAlign: TextAlign.center),
-              onTap: () => Navigator.pop(sheetContext, false),
+              onTap: () => Navigator.pop(sheetContext),
             ),
           ],
         ),
       ),
     );
-    if (confirmed != true) return;
+    if (action == null) return;
 
     try {
-      final code = await updateGroupMemberRole(
-        member.userId,
-        int.parse(widget.groupId),
-        promote ? GroupRolePolicy.administrator : GroupRolePolicy.member,
-      );
+      final code = action == _MemberAction.changeRole
+          ? await updateGroupMemberRole(
+              member.userId,
+              int.parse(widget.groupId),
+              promote ? GroupRolePolicy.administrator : GroupRolePolicy.member,
+            )
+          : await updateGroupMemberMute(
+              member.userId,
+              int.parse(widget.groupId),
+              !member.isMuted,
+            );
       if (code != 100) throw Exception('服务器返回错误码 $code');
       await _fetchGroupMembers();
       if (!mounted) return;
+      final successMessage = switch (action) {
+        _MemberAction.changeRole => promote ? '已设为管理员' : '已取消管理员',
+        _MemberAction.toggleMute => member.isMuted ? '已取消禁言' : '已禁言',
+      };
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(promote ? '已设为管理员' : '已取消管理员'),
+          content: Text(successMessage),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -157,7 +189,7 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('修改成员角色失败：$error'),
+          content: Text('修改群成员设置失败：$error'),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -275,15 +307,19 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
                         ),
                       ],
                     ),
-                    subtitle: Text('ID: ${member.userId}'),
+                    subtitle: Text(
+                      member.isMuted
+                          ? 'ID: ${member.userId} · 已禁言'
+                          : 'ID: ${member.userId}',
+                    ),
                     trailing:
-                        GroupRolePolicy.canChangeRole(
+                        GroupRolePolicy.canManageTarget(
                           actorRole: _myRole,
                           targetRole: member.role,
                         )
                         ? const Icon(Icons.chevron_right)
                         : null,
-                    onTap: () => _showRoleAction(member),
+                    onTap: () => _showMemberActions(member),
                   );
                 },
               ),

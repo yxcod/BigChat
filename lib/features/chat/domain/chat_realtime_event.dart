@@ -10,6 +10,7 @@ enum ChatRealtimeEventType {
   groupHistoryDeleted,
   groupMemberRemoved,
   groupMemberRoleUpdated,
+  groupMemberMuteUpdated,
   friendRequestUpdated,
   readReceipt,
   other,
@@ -34,6 +35,7 @@ class ChatRealtimeEvent {
       'groupChatHistoryDeleted' => ChatRealtimeEventType.groupHistoryDeleted,
       'groupMemberRemoved' => ChatRealtimeEventType.groupMemberRemoved,
       'groupMemberRoleUpdated' => ChatRealtimeEventType.groupMemberRoleUpdated,
+      'groupMemberMuteUpdated' => ChatRealtimeEventType.groupMemberMuteUpdated,
       'friendRequestUpdated' => ChatRealtimeEventType.friendRequestUpdated,
       'read_ack' ||
       'chatCallback' ||

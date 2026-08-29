@@ -59,4 +59,45 @@ void main() {
       isFalse,
     );
   });
+
+  test('owner can mute administrators and members', () {
+    expect(
+      GroupRolePolicy.canMute(
+        actorRole: GroupRolePolicy.owner,
+        targetRole: GroupRolePolicy.administrator,
+      ),
+      isTrue,
+    );
+    expect(
+      GroupRolePolicy.canMute(
+        actorRole: GroupRolePolicy.owner,
+        targetRole: GroupRolePolicy.member,
+      ),
+      isTrue,
+    );
+    expect(
+      GroupRolePolicy.canMute(
+        actorRole: GroupRolePolicy.owner,
+        targetRole: GroupRolePolicy.owner,
+      ),
+      isFalse,
+    );
+  });
+
+  test('administrator can mute only ordinary members', () {
+    expect(
+      GroupRolePolicy.canMute(
+        actorRole: GroupRolePolicy.administrator,
+        targetRole: GroupRolePolicy.member,
+      ),
+      isTrue,
+    );
+    expect(
+      GroupRolePolicy.canMute(
+        actorRole: GroupRolePolicy.administrator,
+        targetRole: GroupRolePolicy.administrator,
+      ),
+      isFalse,
+    );
+  });
 }

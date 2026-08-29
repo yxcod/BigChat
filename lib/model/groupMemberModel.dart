@@ -9,6 +9,9 @@ class GroupMemberModel {
   int isQuit; // 是否退出：0-未退出 1-已退出
   String groupNickName; // 在群里的昵称
   String avatar; // 用户头像
+  bool isMuted; // 是否被禁言
+  String mutedBy; // 执行禁言的成员账号
+  int mutedAt; // 禁言时间戳
 
   GroupMemberModel({
     this.groupId = 0,
@@ -19,6 +22,9 @@ class GroupMemberModel {
     this.isQuit = 0,
     this.groupNickName = '',
     this.avatar = '',
+    this.isMuted = false,
+    this.mutedBy = '',
+    this.mutedAt = 0,
   });
 
   factory GroupMemberModel.fromJson(Map<String, dynamic> json) {
@@ -31,6 +37,11 @@ class GroupMemberModel {
       isQuit: JsonValueParser.intValue(json['isQuit']),
       groupNickName: JsonValueParser.stringValue(json['groupNickName']),
       avatar: JsonValueParser.stringValue(json['avatar']),
+      isMuted:
+          JsonValueParser.intValue(json['isMuted']) == 1 ||
+          json['isMuted'] == true,
+      mutedBy: JsonValueParser.stringValue(json['mutedBy']),
+      mutedAt: JsonValueParser.timestampMillis(json['mutedAt']),
     );
   }
 
@@ -44,6 +55,9 @@ class GroupMemberModel {
       'isQuit': isQuit,
       'groupNickName': groupNickName,
       'avatar': avatar,
+      'isMuted': isMuted,
+      'mutedBy': mutedBy,
+      'mutedAt': mutedAt,
     };
   }
 }
