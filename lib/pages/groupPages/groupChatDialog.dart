@@ -111,14 +111,20 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
   bool _isCurrentUserMuted = false;
   bool _isHandlingHistoryDeletion = false;
   PageRoute<dynamic>? _observedRoute;
+  bool _routeDependenciesReady = false;
 
   bool get _isConversationActuallyVisible =>
       mounted &&
+      _routeDependenciesReady &&
       ModalRoute.of(context)?.isCurrent == true &&
       GlobalUtil().isConversationVisible(_conversationKey);
 
   void _activateCurrentConversation() {
-    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+    if (!mounted ||
+        !_routeDependenciesReady ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
     GlobalUtil().activateConversation(_conversationKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_isConversationActuallyVisible) return;
@@ -200,6 +206,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _routeDependenciesReady = true;
     final route = ModalRoute.of(context);
     if (route is PageRoute<dynamic> && !identical(route, _observedRoute)) {
       if (_observedRoute != null) appRouteObserver.unsubscribe(this);
@@ -1336,7 +1343,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
     _statusSubscription = _wsManager.addStatusListener((status) {
       debugPrint('WebSocket状态: $status');
       if (status == WebSocketStatus.connected) {
-        _sendReadAcksForLoadedMessages();
+        _scheduleReadAcksForLoadedMessages();
       }
     });
 
@@ -1347,8 +1354,16 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
       );
     } else {
       debugPrint('WebSocket已连接，只更新监听器');
-      _sendReadAcksForLoadedMessages();
+      // initState 阶段不能读取 ModalRoute；首帧完成后再判断页面是否真正可见。
+      _scheduleReadAcksForLoadedMessages();
     }
+  }
+
+  void _scheduleReadAcksForLoadedMessages() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_routeDependenciesReady) return;
+      _sendReadAcksForLoadedMessages();
+    });
   }
 
   // 滚动到底部的辅助方法
@@ -1436,6 +1451,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
 
   @override
   void dispose() {
+    _routeDependenciesReady = false;
     WidgetsBinding.instance.removeObserver(this);
     appRouteObserver.unsubscribe(this);
     GlobalUtil().privacyMessagesRevision.removeListener(
