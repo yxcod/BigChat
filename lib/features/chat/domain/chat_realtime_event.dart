@@ -62,6 +62,7 @@ class ChatRealtimeEvent {
   String get conversationId => JsonValueParser.stringValue(data['sessionId']);
   String get deliveryStatus => JsonValueParser.stringValue(data['status']);
   String get readerId => JsonValueParser.stringValue(data['reader']);
+  bool get isPrivacy => data['privacyMode'] == true;
   int get readThroughMessageId =>
       JsonValueParser.intValue(data['readThroughMsgId']);
 

@@ -11,6 +11,7 @@ import '../../../utils/gloabl.dart';
 import '../data/app_settings_repository.dart';
 import '../domain/app_settings.dart';
 import '../../groups/application/group_notification_settings_service.dart';
+import '../../privacy/domain/privacy_message_policy.dart';
 
 typedef NotificationSettingsLoader = Future<AppSettings> Function();
 typedef NotificationVibrator = Future<void> Function();
@@ -135,6 +136,7 @@ class AppNotificationFeedbackService {
       final prefix = nickname.isEmpty ? event.senderId : nickname;
       return message.isEmpty ? '$prefix 请求添加你为好友' : '$prefix：$message';
     }
+    if (event.isPrivacy) return privacyMessagePreviewLabel;
     final preview = switch (event.messageType) {
       2 => '[图片]',
       3 => '[语音]',

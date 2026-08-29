@@ -25,6 +25,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import '../../utils/presence_event.dart';
 import '../../features/groups/application/group_notification_settings_service.dart';
+import '../../features/privacy/domain/privacy_message_policy.dart';
 
 class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
@@ -155,12 +156,10 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
     final message = _latestPrivacyMessage(conversationKey);
     if (message == null || message.timestamp < chat.updateTime) return chat;
     return chat.copyWith(
-      lastMessage: messageQuotePreview(message),
+      lastMessage: privacyMessagePreviewLabel,
       time: _conversationTime(message.timestamp),
       updateTime: message.timestamp,
-      lastSenderName: chat.isGroup
-          ? _messageSenderLabel(chat, message)
-          : chat.lastSenderName,
+      clearLastSenderName: chat.isGroup,
     );
   }
 
@@ -1441,10 +1440,7 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
   }
 
   String _conversationPreview(Chat chat) {
-    if (chat.isGroup && chat.lastSenderName?.isNotEmpty == true) {
-      return '${chat.lastSenderName}：${chat.lastMessage}';
-    }
-    return chat.lastMessage;
+    return conversationPreviewText(chat);
   }
 
   Widget _buildConversationPreview(Chat chat) {
@@ -1819,11 +1815,24 @@ Chat applyVisibleLocalMessagePreview(
   }
   final formatted = GlobalUtil.formatTimestamp(latest.timestamp);
   return chat.copyWith(
-    lastMessage: messageQuotePreview(latest),
+    lastMessage: latest.isPrivacy
+        ? privacyMessagePreviewLabel
+        : messageQuotePreview(latest),
     time: formatted.length >= 16 ? formatted.substring(11, 16) : formatted,
     updateTime: latest.timestamp,
-    lastSenderName: senderLabel?.call(latest),
-    clearLastSenderName: chat.isGroup && senderLabel == null,
+    lastSenderName: latest.isPrivacy ? null : senderLabel?.call(latest),
+    clearLastSenderName:
+        latest.isPrivacy || (chat.isGroup && senderLabel == null),
     mentionedMe: false,
   );
+}
+
+String conversationPreviewText(Chat chat) {
+  if (chat.lastMessage == privacyMessagePreviewLabel) {
+    return privacyMessagePreviewLabel;
+  }
+  if (chat.isGroup && chat.lastSenderName?.isNotEmpty == true) {
+    return '${chat.lastSenderName}：${chat.lastMessage}';
+  }
+  return chat.lastMessage;
 }

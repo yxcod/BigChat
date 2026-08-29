@@ -191,6 +191,33 @@ void main() {
     },
   );
 
+  test('privacy message banner never exposes message content', () async {
+    GlobalUtil().userName = 'receiver_100';
+    final service = AppNotificationFeedbackService(
+      loadSettings: () async => const AppSettings(
+        vibrationEnabled: false,
+        bannerEnabled: true,
+        messageSoundEnabled: false,
+      ),
+      isGroupMuted: (_) async => false,
+    );
+    final event = ChatRealtimeEvent.parse({
+      'type': 'groupChat',
+      'sendUserId': 'sender_200',
+      'senderName': '发送者',
+      'groupName': '测试群',
+      'groupId': 123456,
+      'msgContent': '绝不能出现在横幅里的隐私正文',
+      'msgType': 1,
+      'privacyMode': true,
+    });
+
+    final notice = await service.handle(event, appIsForeground: true);
+
+    expect(notice?.title, '测试群');
+    expect(notice?.body, '[隐私信息]');
+  });
+
   test('incoming friend request follows notification settings', () async {
     GlobalUtil().userName = 'receiver_100';
     var vibrationCount = 0;

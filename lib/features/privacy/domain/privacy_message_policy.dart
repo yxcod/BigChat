@@ -1,5 +1,7 @@
 import '../../../model/messageModel.dart';
 
+const String privacyMessagePreviewLabel = '[隐私信息]';
+
 /// Returns in-memory privacy messages that still require an individual read
 /// acknowledgement. Privacy messages never participate in the persisted group
 /// read watermark, so they must be acknowledged one by one.

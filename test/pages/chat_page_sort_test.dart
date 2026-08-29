@@ -23,7 +23,7 @@ void main() {
     expect(sorted.map((item) => item.userName), ['latest', 'middle', 'oldest']);
   });
 
-  test('内存隐私消息可以更新会话摘要而不丢失其它状态', () {
+  test('内存隐私消息会话摘要不泄露正文和发送者', () {
     final original = Chat(
       name: '测试群',
       avatar: 'avatar.png',
@@ -36,18 +36,27 @@ void main() {
       updateTime: 1000,
     );
 
-    final updated = original.copyWith(
-      lastMessage: '隐私消息正文',
-      time: '10:00',
-      lastSenderName: '新成员',
-      updateTime: 2000,
+    final privateMessage = Message(
+      msgId: 11,
+      content: '隐私消息正文',
+      isMe: false,
+      time: '',
+      isRead: false,
+      conversationId: '5',
+      senderId: 'new-member',
+      timestamp: 2000,
+      isPrivacy: true,
     );
+    final updated = applyVisibleLocalMessagePreview(original, [
+      privateMessage,
+    ], senderLabel: (_) => '新成员');
 
-    expect(updated.lastMessage, '隐私消息正文');
-    expect(updated.time, '10:00');
-    expect(updated.lastSenderName, '新成员');
+    expect(updated.lastMessage, '[隐私信息]');
+    expect(updated.time, isNotEmpty);
+    expect(updated.lastSenderName, isNull);
     expect(updated.updateTime, 2000);
     expect(updated.unreadCount, 1);
+    expect(conversationPreviewText(updated), '[隐私信息]');
   });
 
   test('本地删除最新消息后会话摘要回退到实际最后一条', () {
