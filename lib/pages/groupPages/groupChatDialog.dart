@@ -33,6 +33,7 @@ import '../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../shared/utils/chat_scroll_util.dart';
 import '../../shared/widgets/chat_background.dart';
 import '../../features/groups/presentation/group_route_registry.dart';
+import '../../features/groups/domain/group_membership_access.dart';
 import '../../features/location/data/app_location_service.dart';
 import '../../features/location/presentation/chat_location_draft.dart';
 import '../../core/media/video_media.dart';
@@ -1390,11 +1391,16 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
   // 检查用户是否在群成员列表中
   Future<void> _checkGroupMembership() async {
     try {
+      final globalUtil = GlobalUtil();
+      final currentUserId = globalUtil.userName?.trim() ?? '';
+      // Session restoration may still be in progress. Missing identity is not
+      // evidence that the user has left the group.
+      if (currentUserId.isEmpty) return;
+
       // 导入getGroupMemberAPI.dart中的getGroupMembers函数
       List<GroupMemberModel> members = await getGroupMembers(widget.groupId);
 
       // 更新全局群成员列表
-      final globalUtil = GlobalUtil();
       globalUtil.addGroupMembers(widget.groupId, members);
       _reconcileIncompleteReadStatuses();
 
@@ -1406,13 +1412,10 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
       }
 
       // 遍历群成员列表，检查当前用户是否在列表中
-      String? currentUserId = globalUtil.userName;
-      bool foundUser = false;
       bool currentUserMuted = false;
 
       for (var member in members) {
-        if (currentUserId != null && member.userId == currentUserId) {
-          foundUser = true;
+        if (member.userId == currentUserId && member.isQuit == 0) {
           currentUserMuted = member.isMuted;
           break;
         }
@@ -1427,6 +1430,24 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
             _textFieldFocusNode.unfocus();
           }
         });
+      }
+
+      var foundUser = hasGroupAccess(
+        userId: currentUserId,
+        groupId: widget.groupId,
+        members: members,
+        visibleGroups: const <GroupInfoModel>[],
+      );
+      if (!foundUser) {
+        // 群主在部分后端版本中不包含于成员列表；同时用当前用户可见群列表
+        // 进行二次确认，避免把群主或接口短暂不同步误判为已退群。
+        final visibleGroups = await getGroups(currentUserId);
+        foundUser = hasGroupAccess(
+          userId: currentUserId,
+          groupId: widget.groupId,
+          members: members,
+          visibleGroups: visibleGroups,
+        );
       }
 
       if (!foundUser) {
