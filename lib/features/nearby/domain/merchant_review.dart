@@ -2,6 +2,22 @@ import 'nearby_merchant.dart';
 
 enum MerchantReviewReaction { none, like, dislike }
 
+class MerchantReviewImage {
+  const MerchantReviewImage({required this.ownerId, required this.imageName});
+
+  final String ownerId;
+  final String imageName;
+
+  Map<String, dynamic> toJson() => {'ownerId': ownerId, 'imageName': imageName};
+
+  factory MerchantReviewImage.fromJson(Map<String, dynamic> json) {
+    return MerchantReviewImage(
+      ownerId: json['ownerId']?.toString() ?? '',
+      imageName: json['imageName']?.toString() ?? '',
+    );
+  }
+}
+
 class MerchantReviewComment {
   const MerchantReviewComment({
     required this.id,
@@ -55,6 +71,7 @@ class MerchantReview {
     this.dislikes = 0,
     this.reaction = MerchantReviewReaction.none,
     this.comments = const [],
+    this.uploadedImages = const [],
   });
 
   final NearbyMerchant merchant;
@@ -65,6 +82,7 @@ class MerchantReview {
   final int dislikes;
   final MerchantReviewReaction reaction;
   final List<MerchantReviewComment> comments;
+  final List<MerchantReviewImage> uploadedImages;
 
   MerchantReview copyWith({
     NearbyMerchant? merchant,
@@ -75,6 +93,7 @@ class MerchantReview {
     int? dislikes,
     MerchantReviewReaction? reaction,
     List<MerchantReviewComment>? comments,
+    List<MerchantReviewImage>? uploadedImages,
   }) {
     return MerchantReview(
       merchant: merchant ?? this.merchant,
@@ -85,6 +104,7 @@ class MerchantReview {
       dislikes: dislikes ?? this.dislikes,
       reaction: reaction ?? this.reaction,
       comments: comments ?? this.comments,
+      uploadedImages: uploadedImages ?? this.uploadedImages,
     );
   }
 
@@ -97,10 +117,12 @@ class MerchantReview {
     'dislikes': dislikes,
     'reaction': reaction.name,
     'comments': comments.map((item) => item.toJson()).toList(),
+    'uploadedImages': uploadedImages.map((item) => item.toJson()).toList(),
   };
 
   factory MerchantReview.fromJson(Map<String, dynamic> json) {
     final rawComments = json['comments'];
+    final rawUploadedImages = json['uploadedImages'];
     final reactionName = json['reaction']?.toString();
     return MerchantReview(
       entryId: json['entryId']?.toString() ?? '',
@@ -123,6 +145,21 @@ class MerchantReview {
                     Map<String, dynamic>.from(item),
                   ),
                 )
+                .toList(growable: false)
+          : const [],
+      uploadedImages: rawUploadedImages is List
+          ? rawUploadedImages
+                .whereType<Map>()
+                .map(
+                  (item) => MerchantReviewImage.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .where(
+                  (item) =>
+                      item.ownerId.isNotEmpty && item.imageName.isNotEmpty,
+                )
+                .take(4)
                 .toList(growable: false)
           : const [],
     );

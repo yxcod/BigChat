@@ -261,6 +261,44 @@ class MerchantReviewsRepository {
     return updated;
   }
 
+  Future<MerchantReview> setMerchantImages(
+    String merchantId,
+    List<String> imageNames,
+  ) async {
+    final normalized = imageNames
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .take(4)
+        .toList(growable: false);
+    final reviews = await load();
+    final index = reviews.indexWhere((item) => item.merchant.id == merchantId);
+    if (index < 0) throw StateError('点评商家不存在');
+    final current = reviews[index];
+    if (_apiClient != null && current.entryId.isNotEmpty) {
+      final updated = _parseReview(
+        _requireData(
+          await _apiClient.post('/api/merchantReview/images', {
+            'entryId': current.entryId,
+            'imageNames': normalized,
+          }),
+        ),
+      );
+      await _upsertCache(reviews, updated);
+      return updated;
+    }
+    final updated = current.copyWith(
+      uploadedImages: normalized
+          .map(
+            (imageName) =>
+                MerchantReviewImage(ownerId: _ownerId, imageName: imageName),
+          )
+          .toList(growable: false),
+    );
+    final next = [...reviews]..[index] = updated;
+    await _save(next);
+    return updated;
+  }
+
   Future<void> removeMerchant(String merchantId) async {
     final reviews = await load();
     final index = reviews.indexWhere((item) => item.merchant.id == merchantId);

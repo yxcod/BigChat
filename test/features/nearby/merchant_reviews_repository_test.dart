@@ -72,21 +72,36 @@ void main() {
     ]);
   });
 
-  test('removes a collected merchant from local storage', () async {
-    String? storedValue;
-    final repository = MerchantReviewsRepository(
-      ownerId: 'tester',
-      read: (_) => storedValue,
-      write: (_, value) async => storedValue = value,
-    );
-    await repository.addMerchant(
-      const NearbyMerchant(id: 'remove-local', name: '待移除商家'),
-    );
+  test(
+    'removing a local merchant clears comments and uploaded images',
+    () async {
+      String? storedValue;
+      final repository = MerchantReviewsRepository(
+        ownerId: 'tester',
+        read: (_) => storedValue,
+        write: (_, value) async => storedValue = value,
+      );
+      await repository.addMerchant(
+        const NearbyMerchant(id: 'remove-local', name: '待移除商家'),
+      );
+      await repository.addComment('remove-local', '待删除评论');
+      await repository.setMerchantImages('remove-local', [
+        'shop-1.jpg',
+        'shop-2.jpg',
+        'shop-3.jpg',
+        'shop-4.jpg',
+        'shop-5.jpg',
+      ]);
 
-    await repository.removeMerchant('remove-local');
+      final beforeRemoval = (await repository.load()).single;
+      expect(beforeRemoval.comments, hasLength(1));
+      expect(beforeRemoval.uploadedImages, hasLength(4));
 
-    expect(await repository.load(), isEmpty);
-  });
+      await repository.removeMerchant('remove-local');
+
+      expect(await repository.load(), isEmpty);
+    },
+  );
 
   test('persists merchant, reaction and comment through server API', () async {
     String? storedValue;
@@ -108,6 +123,14 @@ void main() {
       imageName: 'review_photo.jpg',
     );
     expect(commented.comments.single.imageName, 'review_photo.jpg');
+    final withImages = await repository.setMerchantImages('food-2', [
+      'shop-front.jpg',
+      'shop-menu.jpg',
+    ]);
+    expect(withImages.uploadedImages.map((item) => item.imageName), [
+      'shop-front.jpg',
+      'shop-menu.jpg',
+    ]);
     await repository.removeComment('food-2', commented.comments.single.id);
     await repository.removeMerchant('food-2');
 
@@ -118,6 +141,7 @@ void main() {
         '/api/merchantReview/reaction',
         '/api/merchantReview/comment',
         '/api/merchantReview/comment/remove',
+        '/api/merchantReview/images',
         '/api/merchantReview/remove',
       ]),
     );
@@ -182,6 +206,7 @@ class _FakeMerchantReviewsApiClient implements MerchantReviewsApiClient {
           'dislikes': 0,
           'reaction': 'none',
           'comments': <Map<String, dynamic>>[],
+          'uploadedImages': <Map<String, dynamic>>[],
         };
         return _success(_review!);
       case '/api/merchantReview/reaction':
@@ -211,6 +236,12 @@ class _FakeMerchantReviewsApiClient implements MerchantReviewsApiClient {
         comments.removeWhere(
           (item) => item['id'].toString() == data['commentId'].toString(),
         );
+        return _success(_review!);
+      case '/api/merchantReview/images':
+        final imageNames = (data['imageNames'] as List).cast<String>();
+        _review!['uploadedImages'] = imageNames
+            .map((imageName) => {'ownerId': 'tester', 'imageName': imageName})
+            .toList();
         return _success(_review!);
       case '/api/merchantReview/remove':
         _review = null;

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_base/features/nearby/data/merchant_reviews_repository.dart';
 import 'package:flutter_base/features/nearby/domain/nearby_merchant.dart';
@@ -46,7 +48,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: MerchantReviewsPage(repository: repository)),
+      MaterialApp(
+        home: MerchantReviewsPage(
+          repository: repository,
+          merchantImageProviderBuilder: (_) => MemoryImage(
+            base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC'
+              'AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+            ),
+          ),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -88,5 +100,65 @@ void main() {
 
     expect(find.text('待移除商家'), findsNothing);
     expect(await repository.load(), isEmpty);
+  });
+
+  testWidgets('merchant images can be swiped and opened fullscreen', (
+    tester,
+  ) async {
+    String? storedValue;
+    final repository = MerchantReviewsRepository(
+      ownerId: 'tester',
+      read: (_) => storedValue,
+      write: (_, value) async => storedValue = value,
+    );
+    await repository.addMerchant(
+      const NearbyMerchant(id: 'gallery-1', name: '图片商家'),
+    );
+    await repository.setMerchantImages('gallery-1', [
+      'gallery-1.jpg',
+      'gallery-2.jpg',
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MerchantReviewsPage(
+          repository: repository,
+          merchantImageProviderBuilder: (_) => MemoryImage(
+            base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC'
+              'AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.byKey(const ValueKey('merchant_review_gallery_gallery-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('merchant_review_gallery_image_0')),
+      findsOneWidget,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('merchant_review_gallery_image_0')),
+      const Offset(-400, 0),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(
+      find.byKey(const ValueKey('merchant_review_gallery_image_1')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('merchant_review_gallery_image_1')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(InteractiveViewer), findsOneWidget);
   });
 }

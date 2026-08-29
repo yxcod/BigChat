@@ -18,17 +18,22 @@ class ServerMerchantReviewImageUploader implements MerchantReviewImageUploader {
     required String localPath,
   }) async {
     final file = File(localPath);
-    if (!await file.exists()) throw Exception('评论图片不存在');
+    if (!await file.exists()) throw Exception('点评图片不存在');
     if (await file.length() > 5 * 1024 * 1024) {
-      throw Exception('评论图片不能超过5MB');
+      throw Exception('点评图片不能超过5MB');
     }
     final extension = await _detectExtension(file);
     if (extension == null) {
-      throw Exception('评论图片格式不受支持，请选择JPEG、PNG或WebP');
+      throw Exception('点评图片格式不受支持，请选择JPEG、PNG或WebP');
     }
     final imageName =
         '${authorId}_merchant_review_${DateTime.now().microsecondsSinceEpoch}.$extension';
-    await _httpUtil.uploadImageFile(imageName, localPath, userName: authorId);
+    final uploaded = await _httpUtil.uploadImageFile(
+      imageName,
+      localPath,
+      userName: authorId,
+    );
+    if (!uploaded) throw Exception('服务器未接收图片');
     return imageName;
   }
 

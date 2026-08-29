@@ -1,8 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_context.dart';
+import '../../../core/cache/app_image_cache.dart';
+import '../../../shared/widgets/fullscreen_image_viewer.dart';
+import '../../../utils/gloabl.dart';
 import '../../../utils/storageUtil.dart';
+import '../data/merchant_review_image_uploader.dart';
 import '../data/merchant_reviews_repository.dart';
 import '../domain/merchant_review.dart';
 import '../domain/nearby_merchant.dart';
@@ -17,12 +24,15 @@ class MerchantReviewsPage extends StatefulWidget {
     this.userId,
     this.pageTitle,
     this.allowRemoval,
+    this.merchantImageProviderBuilder,
   });
 
   final MerchantReviewsRepository? repository;
   final String? userId;
   final String? pageTitle;
   final bool? allowRemoval;
+  final ImageProvider Function(MerchantReviewImage image)?
+  merchantImageProviderBuilder;
 
   @override
   State<MerchantReviewsPage> createState() => _MerchantReviewsPageState();
@@ -37,13 +47,16 @@ class _MerchantReviewsPageState extends State<MerchantReviewsPage> {
   String _selectedFilter = '全部';
   bool _loading = true;
   bool _searching = false;
+  final Set<String> _uploadingMerchantIds = <String>{};
   late final bool _canRemove;
+  late final MerchantReviewImageUploader _imageUploader;
 
   @override
   void initState() {
     super.initState();
     _repository =
         widget.repository ?? MerchantReviewsRepository(ownerId: widget.userId);
+    _imageUploader = ServerMerchantReviewImageUploader();
     final currentUserId = StorageUtil.getUserId();
     _canRemove =
         widget.allowRemoval ??
@@ -142,6 +155,46 @@ class _MerchantReviewsPageState extends State<MerchantReviewsPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('移除失败：$error')));
+    }
+  }
+
+  Future<void> _uploadMerchantImages(MerchantReview review) async {
+    if (_uploadingMerchantIds.contains(review.merchant.id)) return;
+    final replaceExisting = review.uploadedImages.length >= 4;
+    final remaining = replaceExisting ? 4 : 4 - review.uploadedImages.length;
+    final picked = await ImagePicker().pickMultiImage(
+      imageQuality: 85,
+      maxWidth: 2048,
+      maxHeight: 2048,
+    );
+    if (!mounted || picked.isEmpty) return;
+    final userId = GlobalUtil().userName?.trim() ?? '';
+    if (userId.isEmpty) return;
+    setState(() => _uploadingMerchantIds.add(review.merchant.id));
+    try {
+      final imageNames = replaceExisting
+          ? <String>[]
+          : review.uploadedImages.map((item) => item.imageName).toList();
+      for (final image in picked.take(remaining)) {
+        imageNames.add(
+          await _imageUploader.upload(authorId: userId, localPath: image.path),
+        );
+      }
+      await _repository.setMerchantImages(review.merchant.id, imageNames);
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('商家图片已更新')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('图片上传失败：$error')));
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingMerchantIds.remove(review.merchant.id));
+      }
     }
   }
 
@@ -304,6 +357,11 @@ class _MerchantReviewsPageState extends State<MerchantReviewsPage> {
             onDislike: () =>
                 _toggleReaction(review, MerchantReviewReaction.dislike),
             onComment: () => _openComments(review),
+            onUploadImages: _canRemove
+                ? () => _uploadMerchantImages(review)
+                : null,
+            uploadingImages: _uploadingMerchantIds.contains(review.merchant.id),
+            merchantImageProviderBuilder: widget.merchantImageProviderBuilder,
             onRemove: _canRemove ? () => _removeReview(review) : null,
           );
         },
@@ -319,6 +377,9 @@ class _ReviewMerchantCard extends StatelessWidget {
     required this.onLike,
     required this.onDislike,
     required this.onComment,
+    this.onUploadImages,
+    this.uploadingImages = false,
+    this.merchantImageProviderBuilder,
     this.onRemove,
   });
 
@@ -327,6 +388,10 @@ class _ReviewMerchantCard extends StatelessWidget {
   final VoidCallback onLike;
   final VoidCallback onDislike;
   final VoidCallback onComment;
+  final VoidCallback? onUploadImages;
+  final bool uploadingImages;
+  final ImageProvider Function(MerchantReviewImage image)?
+  merchantImageProviderBuilder;
   final VoidCallback? onRemove;
 
   @override
@@ -394,10 +459,47 @@ class _ReviewMerchantCard extends StatelessWidget {
                                     ),
                                   ),
                                   onSelected: (value) {
+                                    if (value == 'upload') {
+                                      onUploadImages?.call();
+                                    }
                                     if (value == 'remove') onRemove?.call();
                                   },
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem(
+                                  itemBuilder: (_) => [
+                                    if (onUploadImages != null)
+                                      PopupMenuItem(
+                                        value: 'upload',
+                                        enabled: !uploadingImages,
+                                        child: Row(
+                                          children: [
+                                            uploadingImages
+                                                ? const SizedBox.square(
+                                                    dimension: 20,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  )
+                                                : const Icon(
+                                                    Icons
+                                                        .add_photo_alternate_outlined,
+                                                    color: AppColors.primary,
+                                                    size: 20,
+                                                  ),
+                                            const SizedBox(width: 9),
+                                            Text(
+                                              uploadingImages
+                                                  ? '正在上传'
+                                                  : review
+                                                            .uploadedImages
+                                                            .length >=
+                                                        4
+                                                  ? '更换商家图片'
+                                                  : '上传商家图片',
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    const PopupMenuItem(
                                       value: 'remove',
                                       child: Row(
                                         children: [
@@ -445,6 +547,12 @@ class _ReviewMerchantCard extends StatelessWidget {
               ),
             ),
           ),
+          if (review.uploadedImages.isNotEmpty)
+            _MerchantUploadedImageCarousel(
+              key: ValueKey('merchant_review_gallery_${merchant.id}'),
+              images: review.uploadedImages,
+              imageProviderBuilder: merchantImageProviderBuilder,
+            ),
           Divider(
             height: 1,
             indent: 12,
@@ -509,6 +617,151 @@ class _ReviewMerchantImage extends StatelessWidget {
       child: SizedBox.square(
         dimension: 92,
         child: MerchantImageView(merchant: merchant),
+      ),
+    );
+  }
+}
+
+class _MerchantUploadedImageCarousel extends StatefulWidget {
+  const _MerchantUploadedImageCarousel({
+    super.key,
+    required this.images,
+    this.imageProviderBuilder,
+  });
+
+  final List<MerchantReviewImage> images;
+  final ImageProvider Function(MerchantReviewImage image)? imageProviderBuilder;
+
+  @override
+  State<_MerchantUploadedImageCarousel> createState() =>
+      _MerchantUploadedImageCarouselState();
+}
+
+class _MerchantUploadedImageCarouselState
+    extends State<_MerchantUploadedImageCarousel> {
+  late final PageController _pageController;
+  Timer? _timer;
+  int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(viewportFraction: 0.92);
+    _startTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MerchantUploadedImageCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.images.length != widget.images.length) {
+      _page = 0;
+      if (_pageController.hasClients) _pageController.jumpToPage(0);
+      _startTimer();
+    }
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (widget.images.length < 2) return;
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || !_pageController.hasClients) return;
+      final next = (_page + 1) % widget.images.length;
+      _pageController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  ImageProvider<Object> _provider(MerchantReviewImage image) {
+    final builder = widget.imageProviderBuilder;
+    if (builder != null) return builder(image);
+    return AppImageCache.provider(
+      GlobalUtil().getImageURL(image.ownerId, image.imageName),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 178,
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.images.length,
+              onPageChanged: (value) => setState(() => _page = value),
+              itemBuilder: (context, index) {
+                final image = widget.images[index];
+                final provider = _provider(image);
+                final heroTag =
+                    'merchant-review-${image.ownerId}-${image.imageName}';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: GestureDetector(
+                    key: ValueKey('merchant_review_gallery_image_$index'),
+                    onTap: () => showFullscreenImage(
+                      context,
+                      imageProvider: provider,
+                      heroTag: heroTag,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(13),
+                      child: Hero(
+                        tag: heroTag,
+                        child: Image(
+                          image: provider,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: const Color(0xFFE8EDF0),
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.broken_image_outlined,
+                              color: Color(0xFF98A0A6),
+                              size: 38,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          if (widget.images.length > 1) ...[
+            const SizedBox(height: 7),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                widget.images.length,
+                (index) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: index == _page ? 16 : 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                  decoration: BoxDecoration(
+                    color: index == _page
+                        ? AppColors.primary
+                        : context.appDivider,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
