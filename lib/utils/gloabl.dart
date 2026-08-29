@@ -486,6 +486,12 @@ class GlobalUtil {
     return _hiddenMessagesStore.isHidden(ownerId, conversationId, messageId);
   }
 
+  bool hasLocallyDeletedMessages(String conversationId) {
+    final ownerId = userName ?? '';
+    if (ownerId.isEmpty || conversationId.isEmpty) return false;
+    return _hiddenMessagesStore.load(ownerId, conversationId).isNotEmpty;
+  }
+
   List<Message> _filterHiddenMessages(
     String conversationId,
     Iterable<Message> messages,

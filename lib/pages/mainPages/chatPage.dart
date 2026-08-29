@@ -128,7 +128,7 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
     return formatted.length >= 16 ? formatted.substring(11, 16) : formatted;
   }
 
-  String _privacySenderLabel(Chat chat, Message message) {
+  String _messageSenderLabel(Chat chat, Message message) {
     final senderId = message.senderId?.trim() ?? '';
     if (senderId.isEmpty) return chat.lastSenderName ?? '';
     if (senderId == globalUtil.userName) return '我';
@@ -159,9 +159,35 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
       time: _conversationTime(message.timestamp),
       updateTime: message.timestamp,
       lastSenderName: chat.isGroup
-          ? _privacySenderLabel(chat, message)
+          ? _messageSenderLabel(chat, message)
           : chat.lastSenderName,
     );
+  }
+
+  Chat _applyConversationPreview(Chat chat) {
+    final conversationKey = chat.isGroup
+        ? GlobalUtil.groupConversationKey(chat.userName)
+        : chat.userName;
+    if (!globalUtil.hasLocallyDeletedMessages(conversationKey)) {
+      return _applyPrivacyConversationPreview(chat);
+    }
+    return applyVisibleLocalMessagePreview(
+      chat,
+      globalUtil.getChatRecords(conversationKey),
+      senderLabel: chat.isGroup
+          ? (message) => _messageSenderLabel(chat, message)
+          : null,
+    );
+  }
+
+  void _refreshLocalConversationPreviews() {
+    if (!mounted) return;
+    setState(() {
+      for (var index = 0; index < _chats.length; index++) {
+        _chats[index] = _applyConversationPreview(_chats[index]);
+      }
+      _chats.sort((left, right) => right.updateTime.compareTo(left.updateTime));
+    });
   }
 
   void _showRealtimePrivacyPreview(String conversationKey) {
@@ -173,7 +199,7 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
     });
     if (index < 0 || !mounted) return;
     setState(() {
-      _chats[index] = _applyPrivacyConversationPreview(_chats[index]);
+      _chats[index] = _applyConversationPreview(_chats[index]);
       _chats.sort((left, right) => right.updateTime.compareTo(left.updateTime));
     });
   }
@@ -821,7 +847,7 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
       // 继续处理，不中断整个流程
     }
 
-    return sortChatsByLatest(chatList.map(_applyPrivacyConversationPreview));
+    return sortChatsByLatest(chatList.map(_applyConversationPreview));
   }
 
   Future<void> fetchConversations() async {
@@ -885,9 +911,7 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
         currentUserName,
       );
 
-      if (mounted && _searchQuery.isNotEmpty) {
-        setState(() {});
-      }
+      _refreshLocalConversationPreviews();
     } catch (e) {
       debugPrint('获取会话列表失败：$e');
     } finally {
@@ -947,6 +971,7 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
         '/chatDialog',
         arguments: chat.userName,
       );
+      _refreshLocalConversationPreviews();
     }
   }
 
@@ -1736,6 +1761,7 @@ class Chat {
     int? rawUnreadCount,
     bool? isOnline,
     String? lastSenderName,
+    bool clearLastSenderName = false,
     int? updateTime,
     bool? isMuted,
     bool? hasMutedUnread,
@@ -1751,7 +1777,9 @@ class Chat {
       userName: userName,
       isGroup: isGroup,
       isOnline: isOnline ?? this.isOnline,
-      lastSenderName: lastSenderName ?? this.lastSenderName,
+      lastSenderName: clearLastSenderName
+          ? null
+          : lastSenderName ?? this.lastSenderName,
       updateTime: updateTime ?? this.updateTime,
       isMuted: isMuted ?? this.isMuted,
       hasMutedUnread: hasMutedUnread ?? this.hasMutedUnread,
@@ -1764,4 +1792,38 @@ List<Chat> sortChatsByLatest(Iterable<Chat> chats) {
   final sortedChats = List<Chat>.of(chats);
   sortedChats.sort((a, b) => b.updateTime.compareTo(a.updateTime));
   return sortedChats;
+}
+
+Chat applyVisibleLocalMessagePreview(
+  Chat chat,
+  Iterable<Message> visibleMessages, {
+  String Function(Message message)? senderLabel,
+}) {
+  Message? latest;
+  for (final message in visibleMessages) {
+    if (latest == null ||
+        message.timestamp > latest.timestamp ||
+        (message.timestamp == latest.timestamp &&
+            message.msgId > latest.msgId)) {
+      latest = message;
+    }
+  }
+  if (latest == null) {
+    return chat.copyWith(
+      lastMessage: '',
+      time: '',
+      updateTime: 0,
+      clearLastSenderName: true,
+      mentionedMe: false,
+    );
+  }
+  final formatted = GlobalUtil.formatTimestamp(latest.timestamp);
+  return chat.copyWith(
+    lastMessage: messageQuotePreview(latest),
+    time: formatted.length >= 16 ? formatted.substring(11, 16) : formatted,
+    updateTime: latest.timestamp,
+    lastSenderName: senderLabel?.call(latest),
+    clearLastSenderName: chat.isGroup && senderLabel == null,
+    mentionedMe: false,
+  );
 }
