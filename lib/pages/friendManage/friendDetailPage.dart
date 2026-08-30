@@ -7,8 +7,7 @@ import '../../features/moments/data/server_moments_repository.dart';
 import '../../features/moments/domain/moment.dart';
 import '../../features/moments/presentation/my_moments_page.dart';
 import '../../utils/gloabl.dart';
-import '../../utils/WebSocketManager.dart';
-import '../videoCallPage.dart';
+import '../../features/calls/application/call_coordinator.dart';
 import '../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../core/media/video_media.dart';
 import '../../shared/widgets/app_video_player.dart';
@@ -620,40 +619,18 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
   }
 
   // 发起视频通话
-  void _startVideoCall() {
+  Future<void> _startVideoCall() async {
     String friendUserName = widget.friendData['userName'] ?? '';
     if (friendUserName.isEmpty) {
       _showMessage('获取好友信息失败');
       return;
     }
 
-    // 使用friendUserName作为频道名称
-    String channelName = friendUserName;
-    // 在实际应用中，token应该从服务器获取
-    // 这里使用临时token（在Agora测试环境中可以使用临时token）
-    const token = '';
-
-    // 发送视频通话邀请
-    final wsManager = WebSocketManager();
-    if (wsManager.isConnected) {
-      wsManager.send({
-        'type': 'videoCallInvite',
-        'receiver': friendUserName,
-        'sender': GlobalUtil().userName,
-        'channelName': channelName,
-        'token': token,
-        'time': DateTime.now().millisecondsSinceEpoch,
-      });
-    }
-
-    // 跳转到视频通话页面
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            VideoCallPage(channelName: channelName, token: token),
-      ),
+    final started = await CallCoordinator.instance.startPrivateCall(
+      peerId: friendUserName,
+      peerName: _displayName,
     );
+    if (!started && mounted) _showMessage('当前无法发起视频通话，请检查网络或结束现有通话');
   }
 
   // 构建头像，实现缓存机制

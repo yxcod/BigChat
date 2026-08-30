@@ -42,7 +42,7 @@ import '../core/media/chat_media_saver.dart';
 import '../shared/utils/chat_file_save_ui.dart';
 import '../core/media/voice_message.dart';
 import '../core/media/voice_media.dart';
-import 'videoCallPage.dart';
+import '../features/calls/application/call_coordinator.dart';
 import '../app/theme/app_colors.dart';
 import '../app/theme/app_theme_context.dart';
 import '../features/privacy/application/privacy_settings_service.dart';
@@ -1405,32 +1405,18 @@ class _ChatDialogPageState extends State<ChatDialogPage>
               color: context.appTextPrimary,
               size: 25,
             ),
-            onPressed: () {
-              // 发起视频通话
-              if (id != null) {
-                // 在实际应用中，token应该从服务器获取
-                // 这里使用临时token（在Agora测试环境中可以使用临时token）
-                const token = ''; // 可以使用Agora控制台生成的临时token
-
-                // 发送视频通话邀请
-                if (_wsManager.isConnected) {
-                  _wsManager.send({
-                    'type': 'videoCallInvite',
-                    'receiver': id,
-                    'sender': GlobalUtil().userName,
-                    'channelName': id,
-                    'token': token,
-                    'time': DateTime.now().millisecondsSinceEpoch,
-                  });
-                }
-
-                // 使用id作为频道名称
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        VideoCallPage(channelName: id!, token: token),
-                  ),
+            onPressed: () async {
+              final peerId = friendInfo?.userName ?? id ?? '';
+              final peerName = friendInfo?.remarks?.trim().isNotEmpty == true
+                  ? friendInfo!.remarks!.trim()
+                  : friendInfo?.nickName ?? peerId;
+              final started = await CallCoordinator.instance.startPrivateCall(
+                peerId: peerId,
+                peerName: peerName,
+              );
+              if (!started && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('当前无法发起视频通话，请检查网络或结束现有通话')),
                 );
               }
             },

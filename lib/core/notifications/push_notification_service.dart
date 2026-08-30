@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:jpush_flutter/jpush_flutter.dart';
 import 'package:jpush_flutter/jpush_interface.dart';
 
+import '../../features/calls/application/call_coordinator.dart';
 import '../../features/settings/data/app_settings_repository.dart';
 import '../../utils/GlobalNavigatorKey.dart';
 import '../../utils/gloabl.dart';
@@ -166,7 +167,11 @@ class PushNotificationService {
   void _navigate(NavigatorState navigator, Map<String, dynamic> extras) {
     final eventType = extras['eventType']?.toString() ?? '';
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (eventType == 'friendRequest' || eventType == 'friendRequestUpdated') {
+      if (eventType == 'videoCallInvite' ||
+          eventType == 'groupVideoCallInvite') {
+        CallCoordinator.instance.handleExternalInvite(extras);
+      } else if (eventType == 'friendRequest' ||
+          eventType == 'friendRequestUpdated') {
         navigator.pushNamed('/friendAddManagerPage', arguments: const []);
       } else if (eventType == 'groupMessage') {
         final groupId = int.tryParse(extras['groupId']?.toString() ?? '');

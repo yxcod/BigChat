@@ -2,11 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import '../pages/videoCallInviteWaitingPage.dart';
 import '../core/network/app_connection_monitor.dart';
 import 'gloabl.dart';
-import 'GlobalNavigatorKey.dart';
 
 enum WebSocketStatus {
   disconnected,
@@ -256,51 +253,6 @@ class WebSocketManager {
       dynamic data = message;
       if (message is String) {
         data = json.decode(message);
-      }
-
-      // 处理视频通话邀请
-      if (data is Map<String, dynamic>) {
-        final messageType = data['type'] ?? '';
-        if (messageType == 'videoCallInvite') {
-          final senderName = data['sender'] ?? '';
-          final channelName = data['channelName'] ?? '';
-          final token = data['token'] ?? '';
-
-          // 从本地好友列表中获取nickName
-          final globalUtil = GlobalUtil();
-          final friendInfo = globalUtil.getFriendInfoByUserName(senderName);
-          final displayName = friendInfo.nickName ?? senderName;
-
-          if (displayName.isNotEmpty && channelName.isNotEmpty) {
-            // 使用全局NavigatorKey显示视频邀请页面
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              try {
-                final navigatorState = GlobalNavigatorKey.navigatorState;
-                if (navigatorState != null) {
-                  navigatorState.push(
-                    MaterialPageRoute(
-                      fullscreenDialog: true,
-                      builder: (context) => VideoCallInviteWaitingPage(
-                        inviterName: displayName,
-                        inviterUsername: senderName,
-                        channelName: channelName,
-                        token: token,
-                      ),
-                    ),
-                  );
-                } else {
-                  if (kDebugMode) {
-                    print('导航器状态为空，无法显示视频邀请');
-                  }
-                }
-              } catch (e) {
-                if (kDebugMode) {
-                  print('显示视频邀请失败: $e');
-                }
-              }
-            });
-          }
-        }
       }
 
       // 调用所有消息监听器

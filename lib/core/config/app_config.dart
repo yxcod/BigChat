@@ -13,6 +13,10 @@ class AppConfig {
     'WS_BASE_URL',
     defaultValue: 'ws://45.197.144.95:5555',
   );
+  static const agoraAppId = String.fromEnvironment(
+    'AGORA_APP_ID',
+    defaultValue: '324827b480b6470b8949bf1f317e9096',
+  );
 
   static void validate() {
     validateValues(

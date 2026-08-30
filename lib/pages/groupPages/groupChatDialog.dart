@@ -14,7 +14,7 @@ import '../../model/groupInfoModel.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../model/messageModel.dart';
 import '../../model/groupMessageModel.dart';
-import '../videoCallPage.dart';
+import '../../features/calls/application/call_coordinator.dart';
 import '../../utils/http.dart';
 import '../../api/getGroupInfoAPI.dart';
 import '../../shared/widgets/app_back_button.dart';
@@ -1711,32 +1711,16 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
               color: context.appTextPrimary,
               size: 25,
             ),
-            onPressed: () {
-              // 发起群视频通话
-              const token = ''; // 可以使用Agora控制台生成的临时token
-
-              // 发送视频通话邀请
-              if (_wsManager.isConnected) {
-                _wsManager.send({
-                  'type': 'groupVideoCallInvite',
-                  'receiver': widget.groupId,
-                  'sender': GlobalUtil().userName,
-                  'channelName': widget.groupId.toString(),
-                  'token': token,
-                  'time': DateTime.now().millisecondsSinceEpoch,
-                });
-              }
-
-              // 使用groupId作为频道名称
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => VideoCallPage(
-                    channelName: widget.groupId.toString(),
-                    token: token,
-                  ),
-                ),
+            onPressed: () async {
+              final started = await CallCoordinator.instance.startGroupCall(
+                groupId: widget.groupId,
+                groupName: _currentGroupName,
               );
+              if (!started && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('当前无法发起群视频，请检查网络或结束现有通话')),
+                );
+              }
             },
           ),
           IconButton(

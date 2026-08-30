@@ -23,6 +23,7 @@ import './core/navigation/app_route_observer.dart';
 import './features/friends/application/friendship_realtime_service.dart';
 import './core/notifications/push_notification_service.dart';
 import './core/permissions/initial_permission_service.dart';
+import './features/calls/application/call_coordinator.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -125,6 +126,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _groupEventSubscription = WebSocketManager().addMessageListener(
       _handleGlobalGroupEvent,
     );
+    CallCoordinator.instance.initialize();
     _connectRestoredSession();
     _locationSyncTimer = Timer.periodic(
       const Duration(minutes: 5),
@@ -156,6 +158,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _connectionMonitor.removeListener(_handleConnectionStatusChanged);
     _groupEventSubscription.cancel();
+    CallCoordinator.instance.dispose();
     _locationSyncTimer?.cancel();
     _connectionNoticeTimer?.cancel();
     _messageBannerTimer?.cancel();

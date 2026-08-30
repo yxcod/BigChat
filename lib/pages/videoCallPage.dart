@@ -1,385 +1,359 @@
+import 'dart:async';
+
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_base/utils/agoraManager.dart';
-import 'package:flutter_base/utils/WebSocketManager.dart';
-import 'package:flutter_base/utils/gloabl.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:developer' as dev;
+
+import '../features/calls/application/call_coordinator.dart';
+import '../features/calls/domain/call_signal.dart';
+import '../utils/agoraManager.dart';
 
 class VideoCallPage extends StatefulWidget {
-  final String channelName;
-  final String token;
-
-  const VideoCallPage({
-    super.key,
-    required this.channelName,
-    required this.token,
-  });
+  const VideoCallPage({super.key});
 
   @override
   State<VideoCallPage> createState() => _VideoCallPageState();
 }
 
 class _VideoCallPageState extends State<VideoCallPage> {
-  final AgoraManager _agoraManager = AgoraManager();
-  WebSocketMessageSubscription? _messageSubscription;
+  final AgoraManager _agora = AgoraManager();
+  final CallCoordinator _coordinator = CallCoordinator.instance;
+  Timer? _durationTimer;
+  Duration _duration = Duration.zero;
+  bool _ending = false;
+
+  AppCallSession? get _session => _coordinator.activeSession.value;
 
   @override
   void initState() {
     super.initState();
-    // 初始化并加入频道
-    _initAndJoinChannel();
-    // 设置WebSocket消息监听器
-    _setupWebSocketListener();
+    unawaited(_initializeCall());
+  }
+
+  Future<void> _initializeCall() async {
+    final session = _session;
+    if (session == null) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+    final statuses = await <Permission>[
+      Permission.camera,
+      Permission.microphone,
+    ].request();
+    if (statuses.values.any((status) => !status.isGranted)) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('需要允许摄像头和麦克风权限才能视频通话')));
+      }
+      await _endCall();
+      return;
+    }
+    try {
+      await _agora.initialize();
+      await _agora.joinChannel(
+        channelName: session.signal.channelName,
+        token: session.signal.token,
+      );
+      _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted ||
+            _agora.connectionState != AgoraCallConnectionState.joined) {
+          return;
+        }
+        setState(() => _duration += const Duration(seconds: 1));
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('无法加入视频通话：$error')));
+      }
+      await _endCall();
+    }
+  }
+
+  Future<void> _endCall() async {
+    if (_ending) return;
+    _ending = true;
+    await _coordinator.hangup();
+    await _agora.leaveAndRelease();
+    if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
   }
 
   @override
   void dispose() {
-    // 移除WebSocket消息监听器
-    _messageSubscription?.cancel();
+    _durationTimer?.cancel();
+    if (!_ending && _session != null && _session!.phase != AppCallPhase.ended) {
+      unawaited(_coordinator.hangup());
+    }
+    unawaited(_agora.leaveAndRelease());
     super.dispose();
-  }
-
-  // 请求权限
-  Future<bool> _requestPermissions() async {
-    final cameraPermission = await Permission.camera.request();
-    final microphonePermission = await Permission.microphone.request();
-
-    if (cameraPermission.isGranted && microphonePermission.isGranted) {
-      return true;
-    } else {
-      // 如果权限被拒绝，显示提示
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('需要摄像头和麦克风权限才能进行视频通话'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-      return false;
-    }
-  }
-
-  // 初始化并加入频道
-  Future<void> _initAndJoinChannel() async {
-    // 请求权限
-    final hasPermissions = await _requestPermissions();
-    if (!hasPermissions) return;
-
-    try {
-      // 初始化 Agora 引擎
-      await _agoraManager.initialize(context);
-
-      // 加入频道
-      await _agoraManager.joinChannel(
-        channelName: widget.channelName,
-        token: widget.token,
-      );
-    } catch (e) {
-      dev.log('初始化和加入频道失败: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('视频通话初始化失败: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        Navigator.of(context).pop();
-      }
-    }
-  }
-
-  // 设置WebSocket消息监听器
-  void _setupWebSocketListener() {
-    final wsManager = WebSocketManager();
-    // 不重新连接，只设置消息监听器
-    // 因为WebSocketManager是单例，应该已经在应用启动时连接了
-    _messageSubscription = wsManager.addMessageListener(
-      _handleWebSocketMessage,
-    );
-  }
-
-  // 处理WebSocket消息
-  void _handleWebSocketMessage(dynamic message) {
-    if (message is Map<String, dynamic>) {
-      final messageType = message['type'] ?? '';
-      //final channelName = message['channelName'] ?? '';
-
-      // 处理挂断消息和拒绝消息，不需要检查channelName
-      // 因为这些消息是针对当前通话的
-      if (messageType == 'videoCallHangup' ||
-          messageType == 'videoCallReject') {
-        dev.log(
-          '收到${messageType == 'videoCallHangup' ? '挂断' : '拒绝'}消息，关闭视频通话页面',
-        );
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-      }
-    }
-  }
-
-  // 离开频道并释放资源
-  Future<void> _leaveChannel() async {
-    try {
-      // 离开频道
-      await _agoraManager.leaveChannel();
-
-      // 释放 Agora 引擎
-      await _agoraManager.dispose();
-    } catch (e) {
-      dev.log('离开频道并释放资源失败: $e');
-    }
-  }
-
-  // 构建本地视频视图
-  Widget _buildLocalVideoView() {
-    final engine = _agoraManager.engine;
-    if (engine == null) {
-      return Expanded(
-        child: Container(
-          margin: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey, width: 1),
-          ),
-          child: const Center(child: Text('视频引擎正在初始化...')),
-        ),
-      );
-    }
-
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey, width: 1),
-        ),
-        child: AgoraVideoView(
-          controller: VideoViewController(
-            rtcEngine: engine,
-            canvas: const VideoCanvas(uid: 0),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // 构建远程视频视图
-  Widget _buildRemoteVideoView() {
-    final remoteUids = _agoraManager.remoteUids.toList();
-    final engine = _agoraManager.engine;
-
-    if (remoteUids.isEmpty) {
-      // 如果没有远程用户，显示提示
-      return Expanded(
-        child: Container(
-          margin: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey, width: 1),
-          ),
-          child: const Center(child: Text('等待对方加入...')),
-        ),
-      );
-    } else if (engine == null) {
-      // 如果引擎为 null，显示提示
-      return Expanded(
-        child: Container(
-          margin: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey, width: 1),
-          ),
-          child: const Center(child: Text('视频引擎正在初始化...')),
-        ),
-      );
-    } else {
-      // 构建远程视频视图
-      final uid = remoteUids.first;
-
-      return Expanded(
-        child: Container(
-          margin: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey, width: 1),
-          ),
-          child: AgoraVideoView(
-            controller: VideoViewController(
-              rtcEngine: engine,
-              canvas: VideoCanvas(uid: uid),
-            ),
-          ),
-        ),
-      );
-    }
-  }
-
-  // 构建视频网格
-  Widget _buildVideoGrid() {
-    final remoteUids = _agoraManager.remoteUids;
-    final engine = _agoraManager.engine;
-
-    if (engine == null) {
-      // 如果引擎为 null，显示提示
-      return const Expanded(child: Center(child: Text('视频引擎正在初始化...')));
-    }
-
-    if (remoteUids.isEmpty) {
-      // 只有本地用户
-      return _buildLocalVideoView();
-    } else if (remoteUids.length == 1) {
-      // 本地用户和一个远程用户
-      return Column(
-        children: [_buildRemoteVideoView(), _buildLocalVideoView()],
-      );
-    } else {
-      // 本地用户和多个远程用户
-      return GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 4,
-          crossAxisSpacing: 4,
-        ),
-        itemCount: 1 + remoteUids.length,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return _buildLocalVideoView();
-          } else {
-            final uid = remoteUids.elementAt(index - 1);
-
-            return Container(
-              margin: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey, width: 1),
-              ),
-              child: AgoraVideoView(
-                controller: VideoViewController(
-                  rtcEngine: engine,
-                  canvas: VideoCanvas(uid: uid),
-                ),
-              ),
-            );
-          }
-        },
-      );
-    }
-  }
-
-  // 构建控制按钮
-  Widget _buildControlButtons() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          // 切换摄像头按钮
-          FloatingActionButton(
-            onPressed: () {
-              _agoraManager.switchCamera();
-            },
-            heroTag: 'switch_camera',
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.blue,
-            child: const Icon(Icons.switch_camera),
-          ),
-
-          // 开关麦克风按钮
-          FloatingActionButton(
-            onPressed: () {
-              _agoraManager.toggleLocalAudio();
-              setState(() {});
-            },
-            heroTag: 'toggle_mic',
-            backgroundColor: _agoraManager.isLocalAudioEnabled
-                ? Colors.white
-                : Colors.red,
-            foregroundColor: Colors.blue,
-            child: Icon(
-              _agoraManager.isLocalAudioEnabled ? Icons.mic : Icons.mic_off,
-            ),
-          ),
-
-          // 挂断按钮
-          FloatingActionButton(
-            onPressed: () async {
-              // 发送挂断消息
-              final wsManager = WebSocketManager();
-              if (wsManager.isConnected) {
-                wsManager.send({
-                  'type': 'videoCallHangup',
-                  'receiver': widget.channelName, // 使用channelName作为接收者
-                  'sender': GlobalUtil().userName,
-                  'channelName': widget.channelName,
-                  'time': DateTime.now().millisecondsSinceEpoch,
-                });
-                dev.log('发送视频通话挂断消息');
-              }
-
-              // 先离开频道并释放资源
-              await _leaveChannel();
-
-              // 关闭视频通话页面
-              Navigator.of(context).pop();
-            },
-            heroTag: 'hang_up',
-            backgroundColor: Colors.red,
-            foregroundColor: Colors.white,
-            child: const Icon(Icons.call_end),
-          ),
-
-          // 开关摄像头按钮
-          FloatingActionButton(
-            onPressed: () {
-              _agoraManager.toggleLocalVideo();
-              setState(() {});
-            },
-            heroTag: 'toggle_camera',
-            backgroundColor: _agoraManager.isLocalVideoEnabled
-                ? Colors.white
-                : Colors.red,
-            foregroundColor: Colors.blue,
-            child: Icon(
-              _agoraManager.isLocalVideoEnabled
-                  ? Icons.videocam
-                  : Icons.videocam_off,
-            ),
-          ),
-
-          // 扬声器/听筒切换按钮
-          FloatingActionButton(
-            onPressed: () {
-              // 这个功能可以在 AgoraManager 中添加
-            },
-            heroTag: 'speaker',
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.blue,
-            child: const Icon(Icons.volume_up),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('视频通话 - ${widget.channelName}'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
       backgroundColor: Colors.black,
-      body: Column(
+      body: AnimatedBuilder(
+        animation: _agora,
+        builder: (context, _) {
+          final session = _session;
+          if (session == null) return const SizedBox.shrink();
+          if (_agora.connectionState == AgoraCallConnectionState.joined) {
+            _coordinator.markConnected();
+          }
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildVideoArea(session),
+              _buildTopStatus(session),
+              _buildControls(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildVideoArea(AppCallSession session) {
+    final engine = _agora.engine;
+    if (engine == null) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
+    }
+    final remote = _agora.remoteUids.toList(growable: false);
+    if (session.signal.isGroup) {
+      final tiles = <Widget>[
+        _localVideo(engine),
+        ...remote.map((uid) => _remoteVideo(engine, uid)),
+      ];
+      return GridView.builder(
+        padding: const EdgeInsets.fromLTRB(8, 94, 8, 126),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: tiles.length <= 2 ? 1 : 2,
+          mainAxisSpacing: 6,
+          crossAxisSpacing: 6,
+          childAspectRatio: tiles.length <= 2 ? 0.9 : 0.72,
+        ),
+        itemCount: tiles.length,
+        itemBuilder: (_, index) => ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: tiles[index],
+        ),
+      );
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (remote.isEmpty)
+          const ColoredBox(
+            color: Color(0xFF171A1E),
+            child: Center(
+              child: Text('等待对方进入通话…', style: TextStyle(color: Colors.white70)),
+            ),
+          )
+        else
+          _remoteVideo(engine, remote.first),
+        Positioned(
+          right: 16,
+          top: 104,
+          width: 112,
+          height: 158,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: _localVideo(engine),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _localVideo(RtcEngine engine) {
+    if (!_agora.isLocalVideoEnabled) {
+      return const ColoredBox(
+        color: Color(0xFF262A30),
+        child: Center(
+          child: Icon(Icons.videocam_off, color: Colors.white54, size: 42),
+        ),
+      );
+    }
+    return AgoraVideoView(
+      controller: VideoViewController(
+        rtcEngine: engine,
+        canvas: const VideoCanvas(uid: 0),
+      ),
+    );
+  }
+
+  Widget _remoteVideo(RtcEngine engine, int uid) {
+    return AgoraVideoView(
+      controller: VideoViewController.remote(
+        rtcEngine: engine,
+        canvas: VideoCanvas(uid: uid),
+        connection: RtcConnection(channelId: _session!.signal.channelName),
+      ),
+    );
+  }
+
+  Widget _buildTopStatus(AppCallSession session) {
+    final title = session.signal.isGroup
+        ? (session.signal.groupName.isEmpty
+              ? '群视频通话'
+              : session.signal.groupName)
+        : '视频通话';
+    final stateText = switch (_agora.connectionState) {
+      AgoraCallConnectionState.initializing => '正在初始化…',
+      AgoraCallConnectionState.joining => '正在连接…',
+      AgoraCallConnectionState.joined => _formatDuration(_duration),
+      AgoraCallConnectionState.failed => _agora.errorMessage,
+      AgoraCallConnectionState.idle => '准备通话…',
+    };
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+          child: Column(
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                stateText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControls() {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.transparent, Color(0xCC000000)],
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _ControlButton(
+                icon: _agora.isLocalAudioEnabled ? Icons.mic : Icons.mic_off,
+                label: _agora.isLocalAudioEnabled ? '静音' : '取消静音',
+                active: !_agora.isLocalAudioEnabled,
+                onTap: _agora.toggleLocalAudio,
+              ),
+              _ControlButton(
+                icon: _agora.isLocalVideoEnabled
+                    ? Icons.videocam
+                    : Icons.videocam_off,
+                label: _agora.isLocalVideoEnabled ? '关闭摄像头' : '打开摄像头',
+                active: !_agora.isLocalVideoEnabled,
+                onTap: _agora.toggleLocalVideo,
+              ),
+              _ControlButton(
+                icon: Icons.call_end,
+                label: '挂断',
+                destructive: true,
+                onTap: _endCall,
+              ),
+              _ControlButton(
+                icon: Icons.cameraswitch_rounded,
+                label: '翻转',
+                onTap: _agora.switchCamera,
+              ),
+              _ControlButton(
+                icon: _agora.speakerEnabled ? Icons.volume_up : Icons.hearing,
+                label: _agora.speakerEnabled ? '扬声器' : '听筒',
+                active: _agora.speakerEnabled,
+                onTap: _agora.toggleSpeaker,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDuration(Duration value) {
+    final minutes = value.inMinutes.toString().padLeft(2, '0');
+    final seconds = (value.inSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+}
+
+class _ControlButton extends StatelessWidget {
+  const _ControlButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final Future<void> Function() onTap;
+  final bool active;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive
+        ? const Color(0xFFE94B4B)
+        : active
+        ? Colors.white
+        : Colors.white24;
+    return SizedBox(
+      width: 66,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // 视频区域
-          Expanded(child: _buildVideoGrid()),
-          // 控制按钮区域
-          _buildControlButtons(),
+          InkResponse(
+            onTap: onTap,
+            radius: 28,
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: Icon(
+                icon,
+                color: destructive || !active ? Colors.white : Colors.black,
+                size: 25,
+              ),
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white, fontSize: 10),
+          ),
         ],
       ),
     );
