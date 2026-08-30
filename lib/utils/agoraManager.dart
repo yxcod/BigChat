@@ -3,8 +3,6 @@ import 'dart:collection';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/foundation.dart';
 
-import '../core/config/app_config.dart';
-
 enum AgoraCallConnectionState { idle, initializing, joining, joined, failed }
 
 class AgoraManager extends ChangeNotifier {
@@ -22,15 +20,21 @@ class AgoraManager extends ChangeNotifier {
   AgoraCallConnectionState _connectionState = AgoraCallConnectionState.idle;
   String _errorMessage = '';
   String _channelName = '';
+  String _appId = '';
+  Future<void> Function()? _tokenRenewer;
+  bool _renewingToken = false;
 
-  Future<void> initialize() async {
-    if (_engine != null) return;
+  Future<void> initialize({required String appId}) async {
+    if (_engine != null) {
+      if (_appId != appId) throw StateError('视频项目配置发生变化，请重新进入通话');
+      return;
+    }
     _setState(AgoraCallConnectionState.initializing);
     try {
       final engine = createAgoraRtcEngine();
       await engine.initialize(
-        const RtcEngineContext(
-          appId: AppConfig.agoraAppId,
+        RtcEngineContext(
+          appId: appId,
           channelProfile: ChannelProfileType.channelProfileCommunication,
         ),
       );
@@ -40,6 +44,7 @@ class AgoraManager extends ChangeNotifier {
       await engine.setEnableSpeakerphone(true);
       await engine.startPreview();
       _engine = engine;
+      _appId = appId;
       _localUid = null;
       _remoteUids.clear();
       _isLocalVideoEnabled = true;
@@ -85,9 +90,9 @@ class AgoraManager extends ChangeNotifier {
         }
       },
       onTokenPrivilegeWillExpire: (connection, token) {
-        _errorMessage = '视频通话凭证即将过期';
-        notifyListeners();
+        _requestTokenRenewal();
       },
+      onRequestToken: (connection) => _requestTokenRenewal(),
       onError: (error, message) {
         _errorMessage = 'Agora $error：$message';
         _setState(AgoraCallConnectionState.failed);
@@ -99,10 +104,12 @@ class AgoraManager extends ChangeNotifier {
     required String channelName,
     required String token,
     int uid = 0,
+    Future<void> Function()? onRenewToken,
   }) async {
     final engine = _engine;
     if (engine == null) throw StateError('视频引擎尚未初始化');
     _channelName = channelName;
+    _tokenRenewer = onRenewToken;
     _setState(AgoraCallConnectionState.joining);
     await engine.joinChannel(
       token: token,
@@ -116,6 +123,24 @@ class AgoraManager extends ChangeNotifier {
         clientRoleType: ClientRoleType.clientRoleBroadcaster,
       ),
     );
+  }
+
+  Future<void> renewToken(String token) async {
+    if (token.isEmpty || _engine == null) return;
+    await _engine!.renewToken(token);
+    _errorMessage = '';
+    notifyListeners();
+  }
+
+  void _requestTokenRenewal() {
+    if (_renewingToken || _tokenRenewer == null) return;
+    _renewingToken = true;
+    _tokenRenewer!()
+        .catchError((Object error) {
+          _errorMessage = '视频通话凭证续期失败，请检查网络';
+          notifyListeners();
+        })
+        .whenComplete(() => _renewingToken = false);
   }
 
   Future<void> toggleLocalVideo() async {
@@ -162,6 +187,9 @@ class AgoraManager extends ChangeNotifier {
     _localUid = null;
     _remoteUids.clear();
     _channelName = '';
+    _appId = '';
+    _tokenRenewer = null;
+    _renewingToken = false;
     _errorMessage = '';
     _connectionState = AgoraCallConnectionState.idle;
     notifyListeners();

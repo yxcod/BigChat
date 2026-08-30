@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../features/calls/application/call_coordinator.dart';
 import '../features/calls/domain/call_signal.dart';
+import '../features/calls/data/rtc_token_repository.dart';
 import '../utils/agoraManager.dart';
 
 class VideoCallPage extends StatefulWidget {
@@ -18,6 +19,7 @@ class VideoCallPage extends StatefulWidget {
 class _VideoCallPageState extends State<VideoCallPage> {
   final AgoraManager _agora = AgoraManager();
   final CallCoordinator _coordinator = CallCoordinator.instance;
+  final RtcTokenRepository _tokens = RtcTokenRepository();
   Timer? _durationTimer;
   Duration _duration = Duration.zero;
   bool _ending = false;
@@ -50,10 +52,13 @@ class _VideoCallPageState extends State<VideoCallPage> {
       return;
     }
     try {
-      await _agora.initialize();
+      final credential = await _tokens.issue(session);
+      await _agora.initialize(appId: credential.appId);
       await _agora.joinChannel(
         channelName: session.signal.channelName,
-        token: session.signal.token,
+        token: credential.token,
+        uid: credential.uid,
+        onRenewToken: () => _renewToken(session),
       );
       _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted ||
@@ -70,6 +75,11 @@ class _VideoCallPageState extends State<VideoCallPage> {
       }
       await _endCall();
     }
+  }
+
+  Future<void> _renewToken(AppCallSession session) async {
+    final credential = await _tokens.issue(session);
+    await _agora.renewToken(credential.token);
   }
 
   Future<void> _endCall() async {
