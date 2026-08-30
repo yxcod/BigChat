@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../../../utils/http.dart';
 import '../domain/call_signal.dart';
 
@@ -23,16 +25,26 @@ class RtcTokenRepository {
   Future<RtcCredential> issue(AppCallSession session) async {
     final signal = session.signal;
     final peerId = session.isCaller ? signal.receiverId : signal.senderId;
-    final response = await _http.post(
-      '/api/calls/rtc-token',
-      data: {
-        'callId': signal.callId,
-        'channelName': signal.channelName,
-        'callKind': signal.kind.name,
-        if (signal.isGroup) 'groupId': signal.groupId,
-        if (!signal.isGroup) 'peerId': peerId,
-      },
-    );
+    late final Response<dynamic> response;
+    try {
+      response = await _http.post(
+        '/api/calls/rtc-token',
+        data: {
+          'callId': signal.callId,
+          'channelName': signal.channelName,
+          'callKind': signal.kind.name,
+          if (signal.isGroup) 'groupId': signal.groupId,
+          if (!signal.isGroup) 'peerId': peerId,
+        },
+      );
+    } on DioException catch (error) {
+      final status = error.response?.statusCode;
+      if (status == 503) throw StateError('视频通话服务未配置');
+      if (status == 401 || status == 403) {
+        throw StateError('当前账号无权加入此视频通话');
+      }
+      rethrow;
+    }
     final raw = response.data;
     if (raw is! Map || raw['code'] != 100) {
       throw StateError(
