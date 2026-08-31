@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_theme_context.dart';
+import '../../account/presentation/account_deletion_page.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -63,31 +64,54 @@ class AboutPage extends StatelessWidget {
           const SizedBox(height: 40),
           Material(
             color: context.appSurface,
-            child: ListTile(
-              key: const Key('version_update_tile'),
-              title: const Text('版本更新'),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '当前已是最新版本',
-                    style: TextStyle(
-                      color: context.appTextSecondary,
-                      fontSize: 14,
+            child: Column(
+              children: [
+                ListTile(
+                  key: const Key('version_update_tile'),
+                  title: const Text('版本更新'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '当前已是最新版本',
+                        style: TextStyle(
+                          color: context.appTextSecondary,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right,
+                        color: context.appTextSecondary,
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('当前已是最新版本'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+                Divider(height: 1, indent: 16, color: context.appDivider),
+                ListTile(
+                  key: const Key('account_deletion_tile'),
+                  title: const Text('账户注销'),
+                  subtitle: const Text('永久注销当前账户'),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    color: context.appTextSecondary,
+                  ),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AccountDeletionPage(),
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.chevron_right, color: context.appTextSecondary),
-                ],
-              ),
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('当前已是最新版本'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 20),

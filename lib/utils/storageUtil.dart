@@ -200,6 +200,34 @@ class StorageUtil {
     return clearAuthenticatedSession();
   }
 
+  /// Removes every locally persisted trace of an account after permanent
+  /// deletion. Normal logout intentionally keeps app preferences; account
+  /// deletion does not.
+  static Future<void> purgeDeletedAccountData() async {
+    await _ensureInitialized();
+    await AppImageCache.clear();
+    if (!kIsWeb) {
+      final documents = await getApplicationDocumentsDirectory();
+      for (final name in <String>[
+        _imageDir,
+        'chat_cache',
+        'moments',
+        'downloaded_videos',
+      ]) {
+        final directory = Directory('${documents.path}/$name');
+        if (await directory.exists()) await directory.delete(recursive: true);
+      }
+      final support = await getApplicationSupportDirectory();
+      for (final name in <String>['chat_video_cache', 'chat_voice_cache']) {
+        final directory = Directory('${support.path}/$name');
+        if (await directory.exists()) await directory.delete(recursive: true);
+      }
+    }
+    await _box.erase();
+    await _prefs!.clear();
+    if (!kIsWeb) await _createImageDirectory();
+  }
+
   static Future<bool> clearAuthenticatedSession() async {
     await _ensureInitialized();
     await _prefs!.remove('user_id');
