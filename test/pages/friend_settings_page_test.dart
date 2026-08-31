@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_base/model/userInfoModel.dart';
 import 'package:flutter_base/pages/friendManage/editFriendRemarkPage.dart';
 import 'package:flutter_base/pages/friendManage/friendSettingsPage.dart';
+import 'package:flutter_base/features/reporting/presentation/user_report_page.dart';
 import 'package:flutter_base/utils/gloabl.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -92,5 +93,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('不会影响对方保存的聊天记录'), findsOneWidget);
     expect(find.textContaining('双方都删除后'), findsOneWidget);
+  });
+
+  testWidgets('report action opens the UI-only report page', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: FriendSettingsPage(
+          friendData: {'userName': 'friend', 'nickname': '好友昵称', 'remark': ''},
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('report_user_button')));
+    await tester.pumpAndSettle();
+    expect(find.byType(UserReportPage), findsOneWidget);
+    expect(find.text('账号：friend'), findsOneWidget);
   });
 }

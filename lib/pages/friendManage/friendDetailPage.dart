@@ -14,6 +14,7 @@ import '../../shared/widgets/app_video_player.dart';
 import '../../shared/widgets/app_back_button.dart';
 import 'friendSettingsPage.dart';
 import '../../model/userInfoModel.dart';
+import '../../features/reporting/presentation/user_report_page.dart';
 
 class FriendDetailPage extends StatefulWidget {
   final Map<String, dynamic> friendData;
@@ -133,15 +134,27 @@ class _FriendDetailPageState extends State<FriendDetailPage> {
         centerTitle: true,
         toolbarHeight: 56,
         title: const Text('个人资料'),
-        actions: _isFriend
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.more_horiz, color: Colors.black),
-                  tooltip: '好友设置',
-                  onPressed: _openFriendSettings,
+        actions: [
+          if (_isFriend)
+            IconButton(
+              icon: const Icon(Icons.more_horiz, color: Colors.black),
+              tooltip: '好友设置',
+              onPressed: _openFriendSettings,
+            ),
+          if (!_isFriend)
+            IconButton(
+              icon: const Icon(Icons.outlined_flag_rounded),
+              tooltip: '举报用户',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => UserReportPage(
+                    userName: _targetUserName,
+                    displayName: _displayName,
+                  ),
                 ),
-              ]
-            : null,
+              ),
+            ),
+        ],
       ),
       body: Column(
         children: [

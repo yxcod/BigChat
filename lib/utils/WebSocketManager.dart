@@ -171,7 +171,13 @@ class WebSocketManager {
     _setStatus(WebSocketStatus.connecting);
 
     try {
-      _socket = await WebSocket.connect(_url!);
+      final token = GlobalUtil().token?.trim() ?? '';
+      _socket = await WebSocket.connect(
+        _url!,
+        headers: token.isEmpty
+            ? null
+            : <String, dynamic>{'Authorization': 'Bearer $token'},
+      );
       _reconnectAttempts = 0;
       _setStatus(WebSocketStatus.connected);
       AppConnectionMonitor.instance.reportRealtimeConnected();

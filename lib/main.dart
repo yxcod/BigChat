@@ -24,6 +24,7 @@ import './features/friends/application/friendship_realtime_service.dart';
 import './core/notifications/push_notification_service.dart';
 import './core/permissions/initial_permission_service.dart';
 import './features/calls/application/call_coordinator.dart';
+import './features/account/application/session_termination_event.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -109,6 +110,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late bool _privacyLockPending;
   bool _privacyDecoyVisible = false;
   int _privacyFailedAttempts = 0;
+  bool _handlingSessionTermination = false;
 
   @override
   void initState() {
@@ -168,6 +170,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   void _handleGlobalGroupEvent(dynamic rawMessage) {
     if (rawMessage is! Map<String, dynamic>) return;
+    final terminationEvent = SessionTerminationEvent.parse(rawMessage);
+    if (terminationEvent != null) {
+      unawaited(_terminateReplacedSession(terminationEvent));
+      return;
+    }
     if (rawMessage['type'] == 'privacyMessageDestroy') {
       final rawId = rawMessage['msgId'];
       final msgId = rawId is num
@@ -207,6 +214,37 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       return;
     }
     unawaited(_handleRemovedFromGroup(event));
+  }
+
+  Future<void> _terminateReplacedSession(SessionTerminationEvent event) async {
+    if (_handlingSessionTermination) return;
+    _handlingSessionTermination = true;
+    _dismissMessageBanner();
+    WebSocketManager().disconnect();
+    GlobalUtil().resetSessionState();
+    await StorageUtil.logout();
+    if (!mounted) return;
+    final navigator = GlobalNavigatorKey.navigatorState;
+    if (navigator == null) return;
+    navigator.pushNamedAndRemoveUntil('/login', (_) => false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final currentNavigator = GlobalNavigatorKey.navigatorState;
+      if (currentNavigator == null || !currentNavigator.mounted) return;
+      showDialog<void>(
+        context: currentNavigator.context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(event.title),
+          content: Text(event.message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Future<void> _handleIncomingMessageNotification(

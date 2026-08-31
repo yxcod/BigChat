@@ -6,6 +6,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import '../../core/parsing/json_value_parser.dart';
 import '../../features/blacklist/data/blacklist_repository.dart';
+import '../../features/reporting/presentation/user_report_page.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../utils/gloabl.dart';
 import 'editFriendRemarkPage.dart';
@@ -264,6 +265,20 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
     }
   }
 
+  void _openReportPage() {
+    final nickname = widget.friendData['nickname']?.toString().trim() ?? '';
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => UserReportPage(
+          userName: _friendUserName,
+          displayName: _remark.isNotEmpty
+              ? _remark
+              : (nickname.isEmpty ? _friendUserName : nickname),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -312,6 +327,13 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
                 label: '加入黑名单',
                 color: const Color(0xFF444444),
                 onTap: _isBusy ? null : _blockFriend,
+              ),
+              const SizedBox(height: 14),
+              _DestructiveActionButton(
+                key: const Key('report_user_button'),
+                label: '举报用户',
+                color: const Color(0xFF4A78A8),
+                onTap: _isBusy ? null : _openReportPage,
               ),
             ],
           ),
