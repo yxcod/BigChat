@@ -307,32 +307,34 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              _DestructiveActionButton(
-                key: const Key('delete_chat_history_button'),
-                label: '删除聊天记录',
-                color: const Color(0xFFE58A1F),
-                onTap: _isBusy ? null : _deleteChatHistory,
+              const SizedBox(height: 18),
+              _SettingsCard(
+                key: const Key('friend_settings_actions_card'),
+                children: [
+                  _SettingsActionTile(
+                    key: const Key('delete_chat_history_button'),
+                    label: '删除聊天记录',
+                    onTap: _isBusy ? null : _deleteChatHistory,
+                  ),
+                  Divider(height: 1, indent: 16, color: context.appDivider),
+                  _SettingsActionTile(
+                    key: const Key('block_friend_button'),
+                    label: '加入黑名单',
+                    onTap: _isBusy ? null : _blockFriend,
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              _DestructiveActionButton(
+              const SizedBox(height: 18),
+              _CenteredActionButton(
                 key: const Key('delete_friend_button'),
                 label: '删除好友',
                 color: AppColors.danger,
                 onTap: _isBusy ? null : _deleteFriend,
               ),
-              const SizedBox(height: 14),
-              _DestructiveActionButton(
-                key: const Key('block_friend_button'),
-                label: '加入黑名单',
-                color: const Color(0xFF444444),
-                onTap: _isBusy ? null : _blockFriend,
-              ),
-              const SizedBox(height: 14),
-              _DestructiveActionButton(
+              const SizedBox(height: 24),
+              _TextActionButton(
                 key: const Key('report_user_button'),
-                label: '举报用户',
-                color: const Color(0xFF4A78A8),
+                label: '被骚扰了？举报该用户',
                 onTap: _isBusy ? null : _openReportPage,
               ),
             ],
@@ -351,7 +353,7 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
 }
 
 class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({required this.children});
+  const _SettingsCard({super.key, required this.children});
 
   final List<Widget> children;
 
@@ -424,8 +426,40 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
-class _DestructiveActionButton extends StatelessWidget {
-  const _DestructiveActionButton({
+class _SettingsActionTile extends StatelessWidget {
+  const _SettingsActionTile({
+    super.key,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 62,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(label, style: const TextStyle(fontSize: 17)),
+              ),
+              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CenteredActionButton extends StatelessWidget {
+  const _CenteredActionButton({
     super.key,
     required this.label,
     required this.color,
@@ -450,6 +484,32 @@ class _DestructiveActionButton extends StatelessWidget {
             child: Text(label, style: TextStyle(color: color, fontSize: 17)),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TextActionButton extends StatelessWidget {
+  const _TextActionButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: TextButton(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF3F9BFF),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          textStyle: const TextStyle(fontSize: 16),
+        ),
+        child: Text(label),
       ),
     );
   }

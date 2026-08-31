@@ -62,7 +62,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('chat history and friend deletion use separate action colors', (
+  testWidgets('existing friend actions use the compact grouped layout', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -73,21 +73,26 @@ void main() {
       ),
     );
 
-    final historyText = tester.widget<Text>(
-      find.descendant(
-        of: find.byKey(const Key('delete_chat_history_button')),
-        matching: find.text('删除聊天记录'),
-      ),
+    final actionsCard = find.byKey(const Key('friend_settings_actions_card'));
+    expect(actionsCard, findsOneWidget);
+    expect(
+      find.descendant(of: actionsCard, matching: find.text('删除聊天记录')),
+      findsOneWidget,
     );
+    expect(
+      find.descendant(of: actionsCard, matching: find.text('加入黑名单')),
+      findsOneWidget,
+    );
+    expect(find.byType(Switch), findsNothing);
+
     final friendText = tester.widget<Text>(
       find.descendant(
         of: find.byKey(const Key('delete_friend_button')),
         matching: find.text('删除好友'),
       ),
     );
-
-    expect(historyText.style?.color, const Color(0xFFE58A1F));
-    expect(friendText.style?.color, isNot(historyText.style?.color));
+    expect(friendText.style?.color, isNotNull);
+    expect(find.text('被骚扰了？举报该用户'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('delete_chat_history_button')));
     await tester.pumpAndSettle();
