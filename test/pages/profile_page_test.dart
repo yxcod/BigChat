@@ -52,7 +52,7 @@ void main() {
     expect(find.text('动态 2 · 获赞 11'), findsOneWidget);
     expect(find.text('还没有带图片的动态'), findsOneWidget);
     expect(find.text('偏好设置与更多'), findsOneWidget);
-    expect(find.text('帮助与关于'), findsOneWidget);
+    expect(find.text('关于全信'), findsOneWidget);
     expect(find.text('资料编辑'), findsNothing);
     expect(tester.takeException(), isNull);
   });

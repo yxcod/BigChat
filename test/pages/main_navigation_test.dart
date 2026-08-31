@@ -4,7 +4,7 @@ import 'package:flutter_base/pages/mainPages/chatMainWidget.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('应用重新进入前台时默认回到聊天模块', (tester) async {
+  testWidgets('应用重新进入前台时保留当前导航模块', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
@@ -36,6 +36,6 @@ void main() {
     navigation = tester.widget<BottomNavigationBar>(
       find.byType(BottomNavigationBar),
     );
-    expect(navigation.currentIndex, 0);
+    expect(navigation.currentIndex, 1);
   });
 }
