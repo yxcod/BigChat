@@ -5,6 +5,7 @@ import '../../api/getFriendRequestsAPI.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import '../../core/parsing/json_value_parser.dart';
+import '../../features/blacklist/data/blacklist_repository.dart';
 import '../../shared/widgets/app_back_button.dart';
 import '../../utils/gloabl.dart';
 import 'editFriendRemarkPage.dart';
@@ -15,6 +16,7 @@ typedef FriendRemarkUpdater =
       String friendUserName,
       String remark,
     );
+typedef FriendBlocker = Future<void> Function(String friendUserName);
 
 class FriendSettingsResult {
   const FriendSettingsResult({
@@ -31,10 +33,12 @@ class FriendSettingsPage extends StatefulWidget {
     super.key,
     required this.friendData,
     this.remarkUpdater = updateFriendRemarkApi,
+    this.blocker,
   });
 
   final Map<String, dynamic> friendData;
   final FriendRemarkUpdater remarkUpdater;
+  final FriendBlocker? blocker;
 
   @override
   State<FriendSettingsPage> createState() => _FriendSettingsPageState();
@@ -212,6 +216,54 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
     }
   }
 
+  Future<void> _blockFriend() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('加入黑名单'),
+        content: const Text(
+          '加入后将解除好友关系，双方不能私聊、发起好友申请、查看对方动态、空间和点评内容。共同群聊不受影响。确定继续吗？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              '加入黑名单',
+              style: TextStyle(color: AppColors.danger),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    if (_friendUserName.isEmpty) {
+      _showMessage('获取用户信息失败');
+      return;
+    }
+    setState(() => _isBusy = true);
+    try {
+      if (widget.blocker != null) {
+        await widget.blocker!(_friendUserName);
+      } else {
+        await BlacklistRepository().block(_friendUserName);
+      }
+      if (!mounted) return;
+      _globalUtil.removeCachedFriend(_friendUserName);
+      Navigator.pop(
+        context,
+        FriendSettingsResult(remark: _remark, friendDeleted: true),
+      );
+    } catch (error) {
+      debugPrint('加入黑名单失败: $error');
+      _showMessage('加入黑名单失败，请稍后重试');
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -253,6 +305,13 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
                 label: '删除好友',
                 color: AppColors.danger,
                 onTap: _isBusy ? null : _deleteFriend,
+              ),
+              const SizedBox(height: 14),
+              _DestructiveActionButton(
+                key: const Key('block_friend_button'),
+                label: '加入黑名单',
+                color: const Color(0xFF444444),
+                onTap: _isBusy ? null : _blockFriend,
               ),
             ],
           ),

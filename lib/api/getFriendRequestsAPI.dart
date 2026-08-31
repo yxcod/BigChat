@@ -160,6 +160,10 @@ Future<FriendRequestModel> sendFriendRequestApi(
       throw Exception('对方已经是你的好友');
     } else if (code == 104) {
       throw Exception('对方已向你发送好友申请，请先在“新的朋友”中处理');
+    } else if (code == 105) {
+      throw Exception('请先将对方移出黑名单');
+    } else if (code == 106) {
+      throw Exception('对方暂时无法接收好友申请');
     } else if (code == 102) {
       throw Exception('服务器暂时无法处理好友申请，请稍后重试');
     } else if (code == 101) {

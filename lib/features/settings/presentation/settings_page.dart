@@ -15,6 +15,7 @@ import 'notification_settings_page.dart';
 import 'theme_settings_page.dart';
 import '../../privacy/application/privacy_settings_service.dart';
 import '../../privacy/presentation/privacy_settings_page.dart';
+import '../../blacklist/presentation/blacklist_page.dart';
 
 typedef ChatBackgroundPicker = Future<String?> Function();
 typedef LocationPreferenceHandler = Future<void> Function(bool enabled);
@@ -305,6 +306,22 @@ class _SettingsPageState extends State<SettingsPage> {
                           );
                           await _load();
                         },
+                      ),
+                      Divider(height: 1, indent: 16, color: context.appDivider),
+                      ListTile(
+                        key: const Key('blacklist_settings_entry'),
+                        title: const Text('黑名单管理'),
+                        subtitle: const Text('管理已限制联系的用户'),
+                        trailing: Icon(
+                          Icons.chevron_right,
+                          color: context.appTextSecondary,
+                        ),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BlacklistPage(),
+                          ),
+                        ),
                       ),
                     ],
                   ),
