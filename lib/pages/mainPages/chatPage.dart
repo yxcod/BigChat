@@ -1645,29 +1645,6 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
             letterSpacing: 0.2,
           ),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: IconButton(
-              key: const ValueKey('chat_create_group_button'),
-              tooltip: '创建群聊',
-              onPressed: () => Navigator.pushNamed(context, '/groupCreatePage'),
-              icon: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF34373C)),
-                ),
-                child: Icon(
-                  Icons.add_rounded,
-                  color: context.appTextPrimary,
-                  size: 22,
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: Column(
         children: [

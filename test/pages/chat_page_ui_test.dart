@@ -49,7 +49,8 @@ void main() {
 
     expect(find.text('聊天'), findsOneWidget);
     expect(find.text('搜索聊天记录'), findsOneWidget);
-    expect(find.byKey(const Key('chat_create_group_button')), findsOneWidget);
+    expect(find.byKey(const Key('chat_create_group_button')), findsNothing);
+    expect(find.byTooltip('创建群聊'), findsNothing);
     expect(find.byKey(const Key('chat_unread_summary')), findsOneWidget);
     expect(find.text('已收到 5 条新消息'), findsOneWidget);
     expect(find.text('一键已读'), findsOneWidget);
