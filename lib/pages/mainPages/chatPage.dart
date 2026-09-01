@@ -430,6 +430,9 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
     _unhideConversation('private:${event.senderId}');
     final isOpenChat = globalUtil.isConversationVisible(event.senderId);
     if (isOpenChat) return;
+    final extensions = MessageExtensions.fromExtendInfo(
+      event.data['extendInfo'],
+    );
 
     globalUtil.addMessage(
       event.senderId,
@@ -450,6 +453,8 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
         status: MessageStatus.sent,
         senderId: event.senderId,
         timestamp: event.timestamp,
+        quote: extensions.quote,
+        videoCallRecord: extensions.videoCallRecord,
         isPrivacy: event.data['privacyMode'] == true,
         privacyReadDelaySeconds:
             int.tryParse(

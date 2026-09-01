@@ -24,6 +24,7 @@ class ChatMessageMapper {
       senderId: record.senderName,
       timestamp: record.timestamp ?? 0,
       quote: extensions.quote,
+      videoCallRecord: extensions.videoCallRecord,
       isFriendVerification: isFriendVerificationExtendInfo(record.extendInfo),
     );
   }
@@ -63,6 +64,7 @@ class ChatMessageMapper {
       quote: extensions.quote,
       mentions: extensions.mentions,
       groupSystemEvent: extensions.groupSystemEvent,
+      videoCallRecord: extensions.videoCallRecord,
       isFriendVerification: isFriendVerificationExtendInfo(record.extendInfo),
     );
   }
@@ -85,6 +87,7 @@ class ChatMessageMapper {
       quote: message.quote,
       mentions: message.mentions,
       groupSystemEvent: message.groupSystemEvent,
+      videoCallRecord: message.videoCallRecord,
       isFriendVerification: message.isFriendVerification,
       isPrivacy: message.isPrivacy,
       privacyReadDelaySeconds: message.privacyReadDelaySeconds,

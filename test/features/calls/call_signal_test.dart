@@ -87,4 +87,23 @@ void main() {
       );
     });
   });
+
+  test('call session measures duration after connection', () {
+    const signal = AppCallSignal(
+      callId: 'private_alice_1',
+      kind: AppCallKind.private,
+      action: AppCallAction.invite,
+      channelName: 'quanxin_private_alice_1',
+      senderId: 'alice',
+      senderName: 'Alice',
+    );
+    const session = AppCallSession(
+      signal: signal,
+      phase: AppCallPhase.connected,
+      isCaller: true,
+      connectedAt: 1000,
+    );
+
+    expect(session.durationSecondsAt(25 * 1000), 24);
+  });
 }

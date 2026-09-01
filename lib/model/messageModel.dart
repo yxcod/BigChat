@@ -130,16 +130,91 @@ class GroupSystemEvent {
   }
 }
 
+enum VideoCallOutcome {
+  completed,
+  rejected,
+  noAnswer,
+  cancelled,
+  busy,
+  unavailable,
+}
+
+class VideoCallRecord {
+  const VideoCallRecord({
+    required this.callId,
+    required this.outcome,
+    required this.callerId,
+    required this.peerId,
+    this.durationSeconds = 0,
+  });
+
+  final String callId;
+  final VideoCallOutcome outcome;
+  final String callerId;
+  final String peerId;
+  final int durationSeconds;
+
+  String displayText({required bool isMe}) {
+    return switch (outcome) {
+      VideoCallOutcome.completed => '通话时长 $formattedDuration',
+      VideoCallOutcome.rejected => isMe ? '对方已拒绝' : '已拒绝',
+      VideoCallOutcome.noAnswer => isMe ? '对方无人接听' : '未接听',
+      VideoCallOutcome.cancelled => isMe ? '已取消' : '对方已取消',
+      VideoCallOutcome.busy => isMe ? '对方忙线' : '未接听',
+      VideoCallOutcome.unavailable => isMe ? '对方暂时无法接听' : '未接听',
+    };
+  }
+
+  String get formattedDuration {
+    final seconds = durationSeconds < 0 ? 0 : durationSeconds;
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final remainder = seconds % 60;
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:'
+          '${minutes.toString().padLeft(2, '0')}:'
+          '${remainder.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${remainder.toString().padLeft(2, '0')}';
+  }
+
+  Map<String, dynamic> toJson() => {
+    'kind': 'video_call',
+    'callId': callId,
+    'outcome': outcome.name,
+    'callerId': callerId,
+    'peerId': peerId,
+    'durationSeconds': durationSeconds,
+  };
+
+  factory VideoCallRecord.fromJson(Map<String, dynamic> json) {
+    return VideoCallRecord(
+      callId: JsonValueParser.stringValue(json['callId']),
+      outcome: JsonValueParser.enumValue(
+        json['outcome'],
+        VideoCallOutcome.values,
+        fallback: VideoCallOutcome.unavailable,
+      ),
+      callerId: JsonValueParser.stringValue(json['callerId']),
+      peerId: JsonValueParser.stringValue(json['peerId']),
+      durationSeconds: JsonValueParser.intValue(json['durationSeconds']),
+    );
+  }
+}
+
 class MessageExtensions {
   const MessageExtensions({
     this.quote,
     this.mentions = const [],
     this.groupSystemEvent,
+    this.videoCallRecord,
   });
 
   final MessageQuote? quote;
   final List<MessageMention> mentions;
   final GroupSystemEvent? groupSystemEvent;
+  final VideoCallRecord? videoCallRecord;
 
   static MessageExtensions fromExtendInfo(dynamic value) {
     try {
@@ -170,10 +245,15 @@ class MessageExtensions {
           JsonValueParser.stringValue(root['kind']).startsWith('group_member_')
           ? GroupSystemEvent.fromJson(root)
           : null;
+      final callRecord =
+          JsonValueParser.stringValue(root['kind']) == 'video_call'
+          ? VideoCallRecord.fromJson(root)
+          : null;
       return MessageExtensions(
         quote: quote,
         mentions: mentions,
         groupSystemEvent: systemEvent,
+        videoCallRecord: callRecord,
       );
     } catch (_) {
       return const MessageExtensions();
@@ -187,11 +267,15 @@ class MessageExtensions {
       result['mentions'] = mentions.map((mention) => mention.toJson()).toList();
     }
     if (groupSystemEvent != null) result.addAll(groupSystemEvent!.toJson());
+    if (videoCallRecord != null) result.addAll(videoCallRecord!.toJson());
     return jsonEncode(result);
   }
 }
 
 String messageQuotePreview(Message message) {
+  if (message.videoCallRecord != null) {
+    return '[视频通话] ${message.videoCallRecord!.displayText(isMe: message.isMe)}';
+  }
   final value = switch (message.messageType) {
     MessageType.image => '[图片]',
     MessageType.video => '[视频]',
@@ -286,6 +370,7 @@ class Message {
   final MessageQuote? quote;
   final List<MessageMention> mentions;
   final GroupSystemEvent? groupSystemEvent;
+  final VideoCallRecord? videoCallRecord;
   final bool isFriendVerification;
   final bool isPrivacy;
   final int privacyReadDelaySeconds;
@@ -305,6 +390,7 @@ class Message {
     this.quote,
     this.mentions = const [],
     this.groupSystemEvent,
+    this.videoCallRecord,
     this.isFriendVerification = false,
     this.isPrivacy = false,
     this.privacyReadDelaySeconds = 10,
@@ -326,6 +412,7 @@ class Message {
       quote: value,
       mentions: mentions,
       groupSystemEvent: groupSystemEvent,
+      videoCallRecord: videoCallRecord,
       isFriendVerification: isFriendVerification,
       isPrivacy: isPrivacy,
       privacyReadDelaySeconds: privacyReadDelaySeconds,
@@ -349,6 +436,7 @@ class Message {
       'quote': quote?.toJson(),
       'mentions': mentions.map((mention) => mention.toJson()).toList(),
       'groupSystemEvent': groupSystemEvent?.toJson(),
+      'videoCallRecord': videoCallRecord?.toJson(),
       'isFriendVerification': isFriendVerification,
       'isPrivacy': isPrivacy,
       'privacyReadDelaySeconds': privacyReadDelaySeconds,
@@ -394,6 +482,11 @@ class Message {
       groupSystemEvent: json['groupSystemEvent'] is Map
           ? GroupSystemEvent.fromJson(
               Map<String, dynamic>.from(json['groupSystemEvent']),
+            )
+          : null,
+      videoCallRecord: json['videoCallRecord'] is Map
+          ? VideoCallRecord.fromJson(
+              Map<String, dynamic>.from(json['videoCallRecord']),
             )
           : null,
       isFriendVerification: JsonValueParser.boolValue(

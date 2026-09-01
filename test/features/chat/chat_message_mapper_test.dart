@@ -51,6 +51,35 @@ void main() {
     expect(restored.isFriendVerification, isTrue);
   });
 
+  test('restores a video call record from private server history', () {
+    const callRecord = VideoCallRecord(
+      callId: 'private_alice_1',
+      outcome: VideoCallOutcome.completed,
+      callerId: 'alice',
+      peerId: 'me',
+      durationSeconds: 42,
+    );
+    final record = MessageModel(
+      senderName: 'alice',
+      receiverName: 'me',
+      msgId: 14,
+      timestamp: 1000,
+      content: '通话时长 00:42',
+      messageType: MessageType.text,
+      messageStatus: MessageStatus.sent,
+      conversationId: 'alice_me',
+      extendInfo: const MessageExtensions(videoCallRecord: callRecord).encode(),
+    );
+
+    final mapped = ChatMessageMapper.fromPrivateRecord(
+      record,
+      currentUserId: 'me',
+    );
+
+    expect(mapped.videoCallRecord?.outcome, VideoCallOutcome.completed);
+    expect(mapped.videoCallRecord?.formattedDuration, '00:42');
+  });
+
   test('maps group read state for incoming and outgoing records', () {
     final outgoing = MessageDetailModel(
       msgId: 20,

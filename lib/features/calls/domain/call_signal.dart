@@ -161,6 +161,7 @@ class AppCallSession {
     required this.isCaller,
     this.acceptedParticipants = const <String>{},
     this.endReason = '',
+    this.connectedAt,
   });
 
   final AppCallSignal signal;
@@ -168,12 +169,20 @@ class AppCallSession {
   final bool isCaller;
   final Set<String> acceptedParticipants;
   final String endReason;
+  final int? connectedAt;
+
+  int durationSecondsAt(int timestamp) {
+    final startedAt = connectedAt;
+    if (startedAt == null || timestamp <= startedAt) return 0;
+    return (timestamp - startedAt) ~/ 1000;
+  }
 
   AppCallSession copyWith({
     AppCallSignal? signal,
     AppCallPhase? phase,
     Set<String>? acceptedParticipants,
     String? endReason,
+    int? connectedAt,
   }) {
     return AppCallSession(
       signal: signal ?? this.signal,
@@ -181,6 +190,7 @@ class AppCallSession {
       isCaller: isCaller,
       acceptedParticipants: acceptedParticipants ?? this.acceptedParticipants,
       endReason: endReason ?? this.endReason,
+      connectedAt: connectedAt ?? this.connectedAt,
     );
   }
 }

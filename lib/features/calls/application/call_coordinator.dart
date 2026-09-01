@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../pages/videoCallInviteWaitingPage.dart';
 import '../../../pages/videoCallPage.dart';
+import '../../../model/messageModel.dart';
 import '../../../utils/GlobalNavigatorKey.dart';
 import '../../../utils/WebSocketManager.dart';
 import '../../../utils/gloabl.dart';
@@ -20,6 +21,7 @@ class CallCoordinator {
   WebSocketMessageSubscription? _subscription;
   Timer? _ringTimeout;
   bool _initialized = false;
+  final Set<String> _recordedCallIds = <String>{};
 
   void initialize() {
     if (_initialized) return;
@@ -139,7 +141,13 @@ class CallCoordinator {
   Future<void> cancelOutgoing() async {
     final session = activeSession.value;
     if (session == null) return;
-    _send(session.signal.copyWith(action: AppCallAction.cancel));
+    _send(
+      session.signal.copyWith(
+        action: AppCallAction.cancel,
+        reason: 'cancelled',
+      ),
+    );
+    _recordPrivateCall(session, VideoCallOutcome.cancelled);
     _finish('已取消');
     _closeTopCallRoute();
   }
@@ -163,13 +171,24 @@ class CallCoordinator {
         receiverId: receiver,
       ),
     );
+    if (session.isCaller && !session.signal.isGroup) {
+      _recordPrivateCall(
+        session,
+        session.connectedAt == null
+            ? VideoCallOutcome.cancelled
+            : VideoCallOutcome.completed,
+      );
+    }
     _finish('通话结束');
   }
 
   void markConnected() {
     final session = activeSession.value;
     if (session == null || session.phase == AppCallPhase.connected) return;
-    activeSession.value = session.copyWith(phase: AppCallPhase.connected);
+    activeSession.value = session.copyWith(
+      phase: AppCallPhase.connected,
+      connectedAt: DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   bool _canStartCall() {
@@ -243,7 +262,15 @@ class CallCoordinator {
         }
       case AppCallAction.reject:
         if (!current.signal.isGroup) {
-          _finish('对方已拒绝');
+          if (current.isCaller) {
+            _recordPrivateCall(
+              current,
+              signal.reason == 'timeout'
+                  ? VideoCallOutcome.noAnswer
+                  : VideoCallOutcome.rejected,
+            );
+          }
+          _finish(signal.reason == 'timeout' ? '无人接听' : '对方已拒绝');
           _closeTopCallRoute();
         }
       case AppCallAction.cancel:
@@ -251,6 +278,14 @@ class CallCoordinator {
         _closeTopCallRoute();
       case AppCallAction.hangup:
         if (!current.signal.isGroup) {
+          if (current.isCaller) {
+            _recordPrivateCall(
+              current,
+              current.connectedAt == null
+                  ? VideoCallOutcome.cancelled
+                  : VideoCallOutcome.completed,
+            );
+          }
           _finish('对方已挂断');
           _closeTopCallRoute();
         }
@@ -259,10 +294,16 @@ class CallCoordinator {
         _closeTopCallRoute();
       case AppCallAction.busy:
         if (!current.signal.isGroup) {
+          if (current.isCaller) {
+            _recordPrivateCall(current, VideoCallOutcome.busy);
+          }
           _finish('对方正在通话中');
           _closeTopCallRoute();
         }
       case AppCallAction.unavailable:
+        if (current.isCaller && !current.signal.isGroup) {
+          _recordPrivateCall(current, VideoCallOutcome.unavailable);
+        }
         _finish(_unavailableMessage(signal.reason));
         _closeTopCallRoute();
       case AppCallAction.invite:
@@ -288,7 +329,13 @@ class CallCoordinator {
           ),
         );
       } else {
-        _send(session.signal.copyWith(action: AppCallAction.cancel));
+        _send(
+          session.signal.copyWith(
+            action: AppCallAction.cancel,
+            reason: 'timeout',
+          ),
+        );
+        _recordPrivateCall(session, VideoCallOutcome.noAnswer);
       }
       _finish('无人接听');
       _closeTopCallRoute();
@@ -353,6 +400,55 @@ class CallCoordinator {
     // WebSocket callbacks can arrive while the UI is idle. A post-frame
     // callback alone does not request a frame, so explicitly schedule one.
     binding.scheduleFrame();
+  }
+
+  void _recordPrivateCall(AppCallSession session, VideoCallOutcome outcome) {
+    if (!session.isCaller || session.signal.isGroup) return;
+    if (_recordedCallIds.length > 100) _recordedCallIds.clear();
+    if (!_recordedCallIds.add(session.signal.callId)) return;
+
+    final me = _currentUser;
+    final peer = session.signal.receiverId.trim();
+    if (me.isEmpty || peer.isEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final record = VideoCallRecord(
+      callId: session.signal.callId,
+      outcome: outcome,
+      callerId: me,
+      peerId: peer,
+      durationSeconds: session.durationSecondsAt(now),
+    );
+    final content = record.displayText(isMe: true);
+    final conversationId = GlobalUtil.generateSessionId(me, peer);
+    final queued = WebSocketManager().send({
+      'type': 'chat',
+      'msgType': 1,
+      'msgId': now,
+      'msgContent': content,
+      'sendUserId': me,
+      'receiveId': peer,
+      'sendTime': now,
+      'readTime': 0,
+      'sessionId': conversationId,
+      'receiveType': 1,
+      'extendInfo': MessageExtensions(videoCallRecord: record).encode(),
+      'msgStatus': 1,
+    });
+    GlobalUtil().addMessage(
+      peer,
+      Message(
+        msgId: now,
+        content: content,
+        isMe: true,
+        time: GlobalUtil.formatChatTimestamp(now),
+        isRead: false,
+        conversationId: conversationId,
+        status: queued ? MessageStatus.sending : MessageStatus.failed,
+        senderId: me,
+        timestamp: now,
+        videoCallRecord: record,
+      ),
+    );
   }
 
   String get _currentUser => GlobalUtil().userName?.trim() ?? '';

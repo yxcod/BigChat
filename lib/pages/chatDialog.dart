@@ -152,7 +152,13 @@ class _ChatDialogPageState extends State<ChatDialogPage>
   void didPush() => _activateCurrentConversation();
 
   @override
-  void didPopNext() => _activateCurrentConversation();
+  void didPopNext() {
+    _activateCurrentConversation();
+    if (mounted) {
+      setState(() {});
+      _scrollToBottom();
+    }
+  }
 
   @override
   void didPushNext() => _deactivateCurrentConversation();
@@ -787,6 +793,10 @@ class _ChatDialogPageState extends State<ChatDialogPage>
       _ => MessageType.text,
     };
 
+    final extensions = MessageExtensions.fromExtendInfo(
+      messageData['extendInfo'],
+    );
+
     // 创建新消息对象
     Message newMessage = Message(
       msgId: msgId,
@@ -798,7 +808,9 @@ class _ChatDialogPageState extends State<ChatDialogPage>
       messageType: messageType,
       status: MessageStatus.sent,
       senderId: sender,
-      quote: MessageQuote.fromExtendInfo(messageData['extendInfo']),
+      timestamp: timestamp,
+      quote: extensions.quote,
+      videoCallRecord: extensions.videoCallRecord,
       isFriendVerification: isFriendVerificationExtendInfo(
         messageData['extendInfo'],
       ),
@@ -1860,6 +1872,30 @@ class MessageBubble extends StatelessWidget {
     required this.onQuote,
   });
 
+  void _startVideoCall() {
+    final record = message.videoCallRecord;
+    if (record == null) return;
+    final friendId = friendInfo?.userName?.trim() ?? '';
+    final peerId = friendId.isNotEmpty
+        ? friendId
+        : message.isMe
+        ? record.peerId
+        : record.callerId;
+    if (peerId.isEmpty) return;
+    final remarks = friendInfo?.remarks?.trim() ?? '';
+    final nickname = friendInfo?.nickName?.trim() ?? '';
+    unawaited(
+      CallCoordinator.instance.startPrivateCall(
+        peerId: peerId,
+        peerName: remarks.isNotEmpty
+            ? remarks
+            : nickname.isNotEmpty
+            ? nickname
+            : peerId,
+      ),
+    );
+  }
+
   Future<void> _showMessageActions(
     BuildContext context,
     Offset anchor, {
@@ -2527,6 +2563,9 @@ class MessageBubble extends StatelessWidget {
                 // 消息气泡
                 GestureDetector(
                   behavior: HitTestBehavior.translucent,
+                  onTap: message.videoCallRecord == null
+                      ? null
+                      : _startVideoCall,
                   onLongPressStart: message.messageType == MessageType.audio
                       ? null
                       : (details) => _showMessageActions(
@@ -2534,7 +2573,52 @@ class MessageBubble extends StatelessWidget {
                           details.globalPosition,
                           targetRect: messageActionTargetRect(context),
                         ),
-                  child: message.messageType == MessageType.video
+                  child: message.videoCallRecord != null
+                      ? Container(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.68,
+                          ),
+                          margin: const EdgeInsets.symmetric(vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: bubbleColor,
+                            borderRadius: borderRadius,
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x10000000),
+                                blurRadius: 5,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  message.videoCallRecord!.displayText(
+                                    isMe: message.isMe,
+                                  ),
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 15.5,
+                                    height: 1.25,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 9),
+                              Icon(
+                                Icons.videocam_outlined,
+                                size: 23,
+                                color: textColor,
+                              ),
+                            ],
+                          ),
+                        )
+                      : message.messageType == MessageType.video
                       ? Padding(
                           padding: const EdgeInsets.symmetric(vertical: 2),
                           child: AppVideoPreview(
