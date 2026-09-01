@@ -30,6 +30,9 @@ String videoSuggestedName(String source, {String fallback = 'video.mp4'}) {
   return normalized.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
 }
 
+String videoCoverName(String source) =>
+    '${videoSuggestedName(source, fallback: 'video.mp4')}.cover.jpg';
+
 Future<void> validateVideoFile(String path) async {
   final file = File(path);
   if (!await file.exists()) throw Exception('视频文件不存在');

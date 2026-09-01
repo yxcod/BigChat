@@ -74,33 +74,46 @@ class GroupResourceRepository {
     String? coverPath,
     ProgressCallback? onProgress,
   }) async {
-    final file = await MultipartFile.fromFile(path, filename: originalName);
-    final files = <MultipartFile>[file];
-    if (coverPath != null && coverPath.isNotEmpty) {
-      files.add(
-        await MultipartFile.fromFile(
-          coverPath,
-          filename:
-              '${originalName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}.cover.jpg',
-          contentType: DioMediaType('image', 'jpeg'),
+    Future<Response<dynamic>> send({required bool includeCover}) async {
+      final files = <MultipartFile>[
+        await MultipartFile.fromFile(path, filename: originalName),
+      ];
+      if (includeCover && coverPath != null && coverPath.isNotEmpty) {
+        files.add(
+          await MultipartFile.fromFile(
+            coverPath,
+            filename:
+                '${originalName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}.cover.jpg',
+            contentType: DioMediaType('image', 'jpeg'),
+          ),
+        );
+      }
+      return _http.upload(
+        '/api/group/resource/upload',
+        files,
+        fieldName: 'file',
+        queryParameters: {
+          'groupId': groupId,
+          'userName': _userName,
+          'resourceType': type == GroupResourceType.file ? 1 : 2,
+        },
+        options: Options(
+          sendTimeout: const Duration(minutes: 20),
+          receiveTimeout: const Duration(minutes: 2),
         ),
+        onSendProgress: onProgress,
       );
     }
-    final response = await _http.upload(
-      '/api/group/resource/upload',
-      files,
-      fieldName: 'file',
-      queryParameters: {
-        'groupId': groupId,
-        'userName': _userName,
-        'resourceType': type == GroupResourceType.file ? 1 : 2,
-      },
-      options: Options(
-        sendTimeout: const Duration(minutes: 20),
-        receiveTimeout: const Duration(minutes: 2),
-      ),
-      onSendProgress: onProgress,
-    );
+
+    late final Response<dynamic> response;
+    try {
+      response = await send(includeCover: true);
+    } on DioException catch (error) {
+      final status = error.response?.statusCode;
+      if (coverPath == null || (status != 400 && status != 415)) rethrow;
+      onProgress?.call(0, 1);
+      response = await send(includeCover: false);
+    }
     final data = response.data;
     if (data is! Map || data['code'] != 100) {
       throw Exception(data is Map ? data['message'] : '上传失败');
@@ -119,7 +132,7 @@ class GroupResourceRepository {
     if (visibleLocalPath != null) {
       resource = resource.copyWith(localPath: visibleLocalPath);
     }
-    if (coverPath != null && coverPath.isNotEmpty && resource.hasCover) {
+    if (coverPath != null && coverPath.isNotEmpty) {
       final coverLocalPath = await _mediaCache.persistCover(
         resource: resource,
         sourcePath: coverPath,

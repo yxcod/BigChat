@@ -28,6 +28,7 @@ import '../features/location/data/app_location_service.dart';
 import '../features/location/domain/distance_retry.dart';
 import '../features/location/presentation/chat_location_draft.dart';
 import '../core/media/video_media.dart';
+import '../core/media/video_thumbnail_cache.dart';
 import '../core/media/chat_file.dart';
 import '../core/media/app_media_url.dart';
 import '../shared/widgets/app_video_player.dart';
@@ -416,6 +417,7 @@ class _ChatDialogPageState extends State<ChatDialogPage>
     if (_isUploadingVideo || _isUploadingImage) return;
     Message? pendingMessage;
     int? pendingMessageId;
+    String? privacyCoverPath;
     try {
       final video = await ImagePicker().pickVideo(source: source);
       if (video == null) return;
@@ -454,11 +456,32 @@ class _ChatDialogPageState extends State<ChatDialogPage>
       }
 
       if (!_wsManager.isConnected) throw Exception('当前网络未连接，请稍后重试');
+      final videoUrl = global.getVideoURL(global.userName ?? '', videoName);
+      final cachedVideoPath = _privacy.enabled
+          ? video.path
+          : await cacheUploadedVideo(
+              video.path,
+              videoUrl,
+              suggestedFileName: videoName,
+            );
+      if (cachedVideoPath == null) throw Exception('无法将视频保存到本地缓存');
+      final coverPath = await VideoThumbnailCache.resolve(cachedVideoPath);
+      if (coverPath == null) throw Exception('无法生成视频封面');
+      if (_privacy.enabled) privacyCoverPath = coverPath;
+      if (mounted) {
+        setState(() => _localVideoPaths[msgId] = cachedVideoPath);
+      }
       final cancelToken = CancelToken();
       _videoUploadCancelToken = cancelToken;
+      await HttpUtil().uploadImageFile(
+        videoCoverName(videoName),
+        coverPath,
+        queryParameters: _privacy.enabled ? {'privacy': '1'} : null,
+        cancelToken: cancelToken,
+      );
       await HttpUtil().uploadVideoFile(
         videoName,
-        video.path,
+        cachedVideoPath,
         privacy: _privacy.enabled,
         cancelToken: cancelToken,
         onSendProgress: (sent, total) {
@@ -470,12 +493,6 @@ class _ChatDialogPageState extends State<ChatDialogPage>
             });
           }
         },
-      );
-      unawaited(
-        cacheUploadedVideo(
-          video.path,
-          global.getVideoURL(global.userName ?? '', videoName),
-        ),
       );
       if (mounted) setState(() => _videoMessageProgress[msgId] = 1);
       final queued = _sendWebSocketMessage(
@@ -506,6 +523,11 @@ class _ChatDialogPageState extends State<ChatDialogPage>
         );
       }
     } finally {
+      if (privacyCoverPath != null) {
+        try {
+          await File(privacyCoverPath!).delete();
+        } catch (_) {}
+      }
       _videoUploadCancelToken = null;
       if (mounted)
         setState(() {
@@ -2442,6 +2464,20 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  String _resolveVideoCoverUrl() {
+    final fallbackOwner = message.isMe
+        ? (globalUtil.userName ?? '')
+        : (message.senderId ?? friendInfo?.userName ?? '');
+    final owner = videoOwnerFromName(
+      message.content,
+      fallbackOwner: fallbackOwner,
+    );
+    return privacyAwareMediaUrl(
+      globalUtil.getImageURL(owner, videoCoverName(message.content)),
+      privacy: message.isPrivacy,
+    );
+  }
+
   String _resolveAudioUrl() {
     final payload = VoiceMessagePayload.parse(message.content);
     final owner =
@@ -2571,6 +2607,9 @@ class MessageBubble extends StatelessWidget {
                           child: AppVideoPreview(
                             source: localVideoPath ?? _resolveVideoUrl(),
                             isLocal: localVideoPath != null,
+                            coverSource: localVideoPath == null
+                                ? _resolveVideoCoverUrl()
+                                : null,
                             autoCacheRemote: !message.isPrivacy,
                             allowSave: !message.isPrivacy,
                             uploadProgress: videoUploadProgress,

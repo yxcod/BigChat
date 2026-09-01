@@ -48,6 +48,9 @@ class Moment {
     required this.likeCount,
     required this.isLiked,
     required this.comments,
+    this.mediaThumbnails = const {},
+    this.localMediaPaths = const {},
+    this.localThumbnailPaths = const {},
   });
 
   final String id;
@@ -62,11 +65,17 @@ class Moment {
   final int likeCount;
   final bool isLiked;
   final List<MomentComment> comments;
+  final Map<String, String> mediaThumbnails;
+  final Map<String, String> localMediaPaths;
+  final Map<String, String> localThumbnailPaths;
 
   Moment copyWith({
     int? likeCount,
     bool? isLiked,
     List<MomentComment>? comments,
+    Map<String, String>? mediaThumbnails,
+    Map<String, String>? localMediaPaths,
+    Map<String, String>? localThumbnailPaths,
   }) {
     return Moment(
       id: id,
@@ -81,6 +90,9 @@ class Moment {
       likeCount: likeCount ?? this.likeCount,
       isLiked: isLiked ?? this.isLiked,
       comments: comments ?? this.comments,
+      mediaThumbnails: mediaThumbnails ?? this.mediaThumbnails,
+      localMediaPaths: localMediaPaths ?? this.localMediaPaths,
+      localThumbnailPaths: localThumbnailPaths ?? this.localThumbnailPaths,
     );
   }
 
@@ -97,12 +109,29 @@ class Moment {
     'likeCount': likeCount,
     'isLiked': isLiked,
     'comments': comments.map((comment) => comment.toJson()).toList(),
+    if (mediaThumbnails.isNotEmpty) 'mediaThumbnails': mediaThumbnails,
+    if (localMediaPaths.isNotEmpty) 'localMediaPaths': localMediaPaths,
+    if (localThumbnailPaths.isNotEmpty)
+      'localThumbnailPaths': localThumbnailPaths,
   };
 
   factory Moment.fromJson(Map<String, dynamic> json) {
     final visibility = _parseMomentVisibility(json['visibility']);
     final rawComments = json['comments'];
     final rawMediaPaths = json['mediaPaths'];
+    final rawMediaItems = json['mediaItems'];
+    final mediaThumbnails = <String, String>{};
+    if (rawMediaItems is List) {
+      for (final rawItem in rawMediaItems.whereType<Map>()) {
+        final item = Map<String, dynamic>.from(rawItem);
+        final url = item['url']?.toString() ?? '';
+        final thumbnailUrl = item['thumbnailUrl']?.toString() ?? '';
+        if (url.isNotEmpty && thumbnailUrl.isNotEmpty) {
+          mediaThumbnails[url] = thumbnailUrl;
+        }
+      }
+    }
+    mediaThumbnails.addAll(_parseStringMap(json['mediaThumbnails']));
     return Moment(
       id: json['id']?.toString() ?? '',
       authorId: json['authorId']?.toString() ?? '',
@@ -129,8 +158,20 @@ class Moment {
                 )
                 .toList()
           : const [],
+      mediaThumbnails: Map<String, String>.unmodifiable(mediaThumbnails),
+      localMediaPaths: _parseStringMap(json['localMediaPaths']),
+      localThumbnailPaths: _parseStringMap(json['localThumbnailPaths']),
     );
   }
+}
+
+Map<String, String> _parseStringMap(Object? value) {
+  if (value is! Map) return const {};
+  return Map<String, String>.unmodifiable({
+    for (final entry in value.entries)
+      if (entry.key.toString().isNotEmpty && entry.value.toString().isNotEmpty)
+        entry.key.toString(): entry.value.toString(),
+  });
 }
 
 DateTime _parseMomentDateTime(Object? value) {
@@ -166,6 +207,9 @@ class MomentDraft {
     required this.authorAvatarUrl,
     required this.content,
     required this.mediaPaths,
+    this.mediaThumbnailUrls = const {},
+    this.localMediaPaths = const {},
+    this.localThumbnailPaths = const {},
     required this.visibility,
     this.location,
   });
@@ -175,6 +219,9 @@ class MomentDraft {
   final String authorAvatarUrl;
   final String content;
   final List<String> mediaPaths;
+  final Map<String, String> mediaThumbnailUrls;
+  final Map<String, String> localMediaPaths;
+  final Map<String, String> localThumbnailPaths;
   final MomentVisibility visibility;
   final String? location;
 }

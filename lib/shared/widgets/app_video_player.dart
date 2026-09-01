@@ -54,6 +54,7 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
   bool _isDownloading = false;
   double? _downloadProgress;
   String? _thumbnailPath;
+  bool _coverFailed = false;
 
   bool get _isUploading =>
       widget.uploadProgress != null && widget.uploadProgress! < 1;
@@ -74,6 +75,7 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
         oldWidget.fileName != widget.fileName ||
         oldWidget.coverSource != widget.coverSource ||
         oldWidget.coverIsLocal != widget.coverIsLocal) {
+      _coverFailed = false;
       _initializePreview();
     }
   }
@@ -118,6 +120,7 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
 
     final coverSource = widget.coverSource?.trim() ?? '';
     final hasUsableCover =
+        !_coverFailed &&
         coverSource.isNotEmpty &&
         (!widget.coverIsLocal || File(coverSource).existsSync());
     if (hasUsableCover) {
@@ -153,6 +156,23 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
         debugPrint('Automatic video receive failed: $error');
       }
       if (!mounted || generation != _loadGeneration) return;
+      if (resolvedIsLocal) {
+        final downloadedThumbnail = await VideoThumbnailCache.resolve(
+          resolvedSource,
+        );
+        if (!mounted || generation != _loadGeneration) return;
+        if (downloadedThumbnail != null) {
+          setState(() {
+            _thumbnailPath = downloadedThumbnail;
+            _playbackSource = resolvedSource;
+            _playbackIsLocal = true;
+            _previewError = null;
+            _isDownloading = false;
+            _downloadProgress = null;
+          });
+          return;
+        }
+      }
     }
 
     _playbackSource = resolvedSource;
@@ -300,18 +320,19 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
 
   Widget _cover() {
     final coverSource = widget.coverSource?.trim() ?? '';
-    if (coverSource.isNotEmpty &&
+    if (!_coverFailed &&
+        coverSource.isNotEmpty &&
         (!widget.coverIsLocal || File(coverSource).existsSync())) {
       return widget.coverIsLocal
           ? Image.file(
               File(coverSource),
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _fallbackCover(),
+              errorBuilder: (_, _, _) => _coverErrorFallback(),
             )
           : Image(
               image: AppImageCache.provider(coverSource),
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _fallbackCover(),
+              errorBuilder: (_, _, _) => _coverErrorFallback(),
             );
     }
     final thumbnailPath = _thumbnailPath;
@@ -335,6 +356,17 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
           ),
         ),
       );
+    }
+    return _fallbackCover();
+  }
+
+  Widget _coverErrorFallback() {
+    if (!_coverFailed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _coverFailed) return;
+        setState(() => _coverFailed = true);
+        _initializePreview();
+      });
     }
     return _fallbackCover();
   }

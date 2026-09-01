@@ -81,6 +81,13 @@ class LocalMomentsRepository implements MomentsRepository {
       likeCount: 0,
       isLiked: false,
       comments: const [],
+      mediaThumbnails: Map<String, String>.unmodifiable(
+        draft.mediaThumbnailUrls,
+      ),
+      localMediaPaths: Map<String, String>.unmodifiable(draft.localMediaPaths),
+      localThumbnailPaths: Map<String, String>.unmodifiable(
+        draft.localThumbnailPaths,
+      ),
     );
     _moments.add(moment);
     await _storage.save(_moments);

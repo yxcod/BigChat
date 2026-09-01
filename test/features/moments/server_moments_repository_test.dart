@@ -72,6 +72,87 @@ void main() {
     expect(requestData['clientRequestId'], startsWith('me-'));
   });
 
+  test(
+    'publishes and restores a video thumbnail with durable local paths',
+    () async {
+      const videoUrl = 'https://example.com/video.mp4';
+      const thumbnailUrl = 'https://example.com/video-cover.jpg';
+      late Map<String, dynamic> requestData;
+      final cache = _ReadOnlyMomentsStorage();
+      final api = _FakeMomentsApi((path, data) async {
+        requestData = data;
+        return {
+          'code': 100,
+          'data': {
+            ..._momentJson(id: 22, content: '视频动态'),
+            'mediaPaths': [videoUrl],
+            'mediaItems': [
+              {'url': videoUrl, 'type': 'video', 'thumbnailUrl': thumbnailUrl},
+            ],
+          },
+        };
+      });
+      final repository = ServerMomentsRepository(apiClient: api, cache: cache);
+
+      final moment = await repository.publish(
+        const MomentDraft(
+          authorId: 'me',
+          authorName: '小明',
+          authorAvatarUrl: '',
+          content: '视频动态',
+          mediaPaths: [videoUrl],
+          mediaThumbnailUrls: {videoUrl: thumbnailUrl},
+          localMediaPaths: {videoUrl: '/local/video.mp4'},
+          localThumbnailPaths: {videoUrl: '/local/video.jpg'},
+          visibility: MomentVisibility.public,
+        ),
+      );
+
+      expect(requestData['mediaUrls'], [
+        {'url': videoUrl, 'thumbnailUrl': thumbnailUrl},
+      ]);
+      expect(moment.mediaThumbnails[videoUrl], thumbnailUrl);
+      expect(moment.localMediaPaths[videoUrl], '/local/video.mp4');
+      expect(
+        (await cache.load()).single.localThumbnailPaths[videoUrl],
+        '/local/video.jpg',
+      );
+    },
+  );
+
+  test(
+    'server refresh keeps local video mappings for unchanged media',
+    () async {
+      const videoUrl = 'https://example.com/video.mp4';
+      final cached = Moment.fromJson({
+        ..._momentJson(id: 23, content: '缓存视频'),
+        'mediaPaths': [videoUrl],
+        'localMediaPaths': {videoUrl: '/local/video.mp4'},
+      });
+      final cache = _ReadOnlyMomentsStorage([cached]);
+      final repository = ServerMomentsRepository(
+        apiClient: _FakeMomentsApi(
+          (_, _) async => {
+            'code': 100,
+            'data': {
+              'items': [
+                {
+                  ..._momentJson(id: 23, content: '缓存视频'),
+                  'mediaPaths': [videoUrl],
+                },
+              ],
+            },
+          },
+        ),
+        cache: cache,
+      );
+
+      final moments = await repository.fetchOwnMoments('me');
+
+      expect(moments.single.localMediaPaths[videoUrl], '/local/video.mp4');
+    },
+  );
+
   test('loads moments visible to the current user from a profile', () async {
     late Map<String, dynamic> requestData;
     final api = _FakeMomentsApi((path, data) async {

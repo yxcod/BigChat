@@ -12,6 +12,13 @@ void main() {
     expect(videoOwnerFromName('legacy.mp4', fallbackOwner: '10002'), '10002');
   });
 
+  test('chat video cover keeps a deterministic image name', () {
+    expect(
+      videoCoverName('10001_10002_123456.mov'),
+      '10001_10002_123456.mov.cover.jpg',
+    );
+  });
+
   test(
     'uploaded chat video is restored from persistent cache by remote url',
     () async {

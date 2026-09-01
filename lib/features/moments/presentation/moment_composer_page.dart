@@ -121,12 +121,13 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
     if (!_canPublish || _isPublishing) return;
     setState(() => _isPublishing = true);
     try {
-      final mediaPaths = _mediaPaths.isEmpty
-          ? const <String>[]
+      final uploadedMedia = _mediaPaths.isEmpty
+          ? const <MomentUploadedMedia>[]
           : await (widget.mediaUploader ?? ServerMomentMediaUploader()).upload(
               authorId: widget.authorId,
               localPaths: _mediaPaths,
             );
+      final mediaPaths = uploadedMedia.map((item) => item.url).toList();
       await widget.repository.publish(
         MomentDraft(
           authorId: widget.authorId,
@@ -134,6 +135,20 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
           authorAvatarUrl: widget.authorAvatarUrl,
           content: _contentController.text,
           mediaPaths: mediaPaths,
+          mediaThumbnailUrls: {
+            for (final item in uploadedMedia)
+              if (item.thumbnailUrl?.isNotEmpty == true)
+                item.url: item.thumbnailUrl!,
+          },
+          localMediaPaths: {
+            for (final item in uploadedMedia)
+              if (item.localPath?.isNotEmpty == true) item.url: item.localPath!,
+          },
+          localThumbnailPaths: {
+            for (final item in uploadedMedia)
+              if (item.localThumbnailPath?.isNotEmpty == true)
+                item.url: item.localThumbnailPath!,
+          },
           visibility: _visibility,
           location: _location,
         ),

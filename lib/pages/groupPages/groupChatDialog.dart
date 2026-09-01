@@ -37,6 +37,7 @@ import '../../features/groups/application/group_membership_verifier.dart';
 import '../../features/location/data/app_location_service.dart';
 import '../../features/location/presentation/chat_location_draft.dart';
 import '../../core/media/video_media.dart';
+import '../../core/media/video_thumbnail_cache.dart';
 import '../../core/media/chat_file.dart';
 import '../../shared/widgets/app_video_player.dart';
 import '../../shared/widgets/chat_file_message.dart';
@@ -699,6 +700,7 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
     if (_isUploadingVideo || _isUploadingImage) return;
     Message? pendingMessage;
     int? pendingMessageId;
+    String? privacyCoverPath;
     try {
       final video = await ImagePicker().pickVideo(source: source);
       if (video == null) return;
@@ -736,11 +738,32 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
       }
 
       if (!_wsManager.isConnected) throw Exception('当前网络未连接，请稍后重试');
+      final videoUrl = global.getVideoURL(global.userName ?? '', videoName);
+      final cachedVideoPath = _privacy.enabled
+          ? video.path
+          : await cacheUploadedVideo(
+              video.path,
+              videoUrl,
+              suggestedFileName: videoName,
+            );
+      if (cachedVideoPath == null) throw Exception('无法将视频保存到本地缓存');
+      final coverPath = await VideoThumbnailCache.resolve(cachedVideoPath);
+      if (coverPath == null) throw Exception('无法生成视频封面');
+      if (_privacy.enabled) privacyCoverPath = coverPath;
+      if (mounted) {
+        setState(() => _localVideoPaths[msgId] = cachedVideoPath);
+      }
       final cancelToken = CancelToken();
       _videoUploadCancelToken = cancelToken;
+      await HttpUtil().uploadImageFile(
+        videoCoverName(videoName),
+        coverPath,
+        queryParameters: _privacy.enabled ? {'privacy': '1'} : null,
+        cancelToken: cancelToken,
+      );
       await HttpUtil().uploadVideoFile(
         videoName,
-        video.path,
+        cachedVideoPath,
         privacy: _privacy.enabled,
         cancelToken: cancelToken,
         onSendProgress: (sent, total) {
@@ -752,12 +775,6 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
             });
           }
         },
-      );
-      unawaited(
-        cacheUploadedVideo(
-          video.path,
-          global.getVideoURL(global.userName ?? '', videoName),
-        ),
       );
       if (mounted) setState(() => _videoMessageProgress[msgId] = 1);
       final queued = _sendWebSocketMessage(
@@ -788,6 +805,11 @@ class _GroupChatDialogPageState extends State<GroupChatDialogPage>
         );
       }
     } finally {
+      if (privacyCoverPath != null) {
+        try {
+          await File(privacyCoverPath!).delete();
+        } catch (_) {}
+      }
       _videoUploadCancelToken = null;
       if (mounted)
         setState(() {
@@ -2760,22 +2782,11 @@ class GroupMessageBubble extends StatelessWidget {
                     child: switch (message.messageType) {
                       MessageType.text => _buildTextBubble(context),
                       MessageType.video => AppVideoPreview(
-                        source:
-                            localVideoPath ??
-                            privacyAwareMediaUrl(
-                              globalUtil.getVideoURL(
-                                videoOwnerFromName(
-                                  message.content,
-                                  fallbackOwner:
-                                      message.senderId ??
-                                      globalUtil.userName ??
-                                      '',
-                                ),
-                                message.content,
-                              ),
-                              privacy: message.isPrivacy,
-                            ),
+                        source: localVideoPath ?? _resolveVideoUrl(),
                         isLocal: localVideoPath != null,
+                        coverSource: localVideoPath == null
+                            ? _resolveVideoCoverUrl()
+                            : null,
                         autoCacheRemote: !message.isPrivacy,
                         allowSave: !message.isPrivacy,
                         uploadProgress: videoUploadProgress,
@@ -2985,6 +2996,21 @@ class GroupMessageBubble extends StatelessWidget {
       privacy: message.isPrivacy,
     );
   }
+
+  String _videoOwner() => videoOwnerFromName(
+    message.content,
+    fallbackOwner: message.senderId ?? globalUtil.userName ?? '',
+  );
+
+  String _resolveVideoUrl() => privacyAwareMediaUrl(
+    globalUtil.getVideoURL(_videoOwner(), message.content),
+    privacy: message.isPrivacy,
+  );
+
+  String _resolveVideoCoverUrl() => privacyAwareMediaUrl(
+    globalUtil.getImageURL(_videoOwner(), videoCoverName(message.content)),
+    privacy: message.isPrivacy,
+  );
 
   // 构建消息状态
   Widget _buildMessageStatus() {

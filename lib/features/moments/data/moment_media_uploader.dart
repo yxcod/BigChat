@@ -3,10 +3,26 @@ import 'dart:io';
 import '../../../utils/gloabl.dart';
 import '../../../utils/http.dart';
 import '../../../core/media/video_media.dart';
+import '../../../core/media/video_thumbnail_cache.dart';
+import '../../../core/cache/app_image_cache.dart';
 import '../../../core/media/image_file_format.dart';
 
+class MomentUploadedMedia {
+  const MomentUploadedMedia({
+    required this.url,
+    this.thumbnailUrl,
+    this.localPath,
+    this.localThumbnailPath,
+  });
+
+  final String url;
+  final String? thumbnailUrl;
+  final String? localPath;
+  final String? localThumbnailPath;
+}
+
 abstract class MomentMediaUploader {
-  Future<List<String>> upload({
+  Future<List<MomentUploadedMedia>> upload({
     required String authorId,
     required List<String> localPaths,
   });
@@ -21,16 +37,16 @@ class ServerMomentMediaUploader implements MomentMediaUploader {
   final GlobalUtil _globalUtil;
 
   @override
-  Future<List<String>> upload({
+  Future<List<MomentUploadedMedia>> upload({
     required String authorId,
     required List<String> localPaths,
   }) async {
-    final uploadedUrls = <String>[];
+    final uploadedMedia = <MomentUploadedMedia>[];
     for (var index = 0; index < localPaths.length; index++) {
       final path = localPaths[index];
       final uri = Uri.tryParse(path);
       if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
-        uploadedUrls.add(path);
+        uploadedMedia.add(MomentUploadedMedia(url: path));
         continue;
       }
 
@@ -41,12 +57,37 @@ class ServerMomentMediaUploader implements MomentMediaUploader {
         final timestamp = DateTime.now().microsecondsSinceEpoch;
         final videoName =
             '${authorId}_moment_${timestamp}_$index.${videoExtension(path)}';
-        await _httpUtil.uploadVideoFile(
-          videoName,
+        final thumbnailPath = await VideoThumbnailCache.resolve(file.path);
+        if (thumbnailPath == null) throw Exception('无法生成动态视频封面');
+        final thumbnailName =
+            '${authorId}_moment_${timestamp}_${index}_cover.jpg';
+        final videoUrl = _globalUtil.getVideoURL(authorId, videoName);
+        final thumbnailUrl = _globalUtil.getImageURL(authorId, thumbnailName);
+        final cachedVideoPath = await cacheUploadedVideo(
           file.path,
+          videoUrl,
+          suggestedFileName: videoName,
+        );
+        if (cachedVideoPath == null) throw Exception('无法保存动态视频到本地缓存');
+        await _httpUtil.uploadImageFile(
+          thumbnailName,
+          thumbnailPath,
           userName: authorId,
         );
-        uploadedUrls.add(_globalUtil.getVideoURL(authorId, videoName));
+        await _httpUtil.uploadVideoFile(
+          videoName,
+          cachedVideoPath,
+          userName: authorId,
+        );
+        await AppImageCache.cacheUploadedFile(thumbnailUrl, thumbnailPath);
+        uploadedMedia.add(
+          MomentUploadedMedia(
+            url: videoUrl,
+            thumbnailUrl: thumbnailUrl,
+            localPath: cachedVideoPath,
+            localThumbnailPath: thumbnailPath,
+          ),
+        );
         continue;
       }
       if (await file.length() > 5 * 1024 * 1024) {
@@ -57,8 +98,12 @@ class ServerMomentMediaUploader implements MomentMediaUploader {
       final timestamp = DateTime.now().microsecondsSinceEpoch;
       final imageName = '${authorId}_moment_${timestamp}_$index.$extension';
       await _httpUtil.uploadImageFile(imageName, file.path, userName: authorId);
-      uploadedUrls.add(_globalUtil.getImageURL(authorId, imageName));
+      final imageUrl = _globalUtil.getImageURL(authorId, imageName);
+      await AppImageCache.cacheUploadedFile(imageUrl, file.path);
+      uploadedMedia.add(
+        MomentUploadedMedia(url: imageUrl, localPath: file.path),
+      );
     }
-    return uploadedUrls;
+    return uploadedMedia;
   }
 }

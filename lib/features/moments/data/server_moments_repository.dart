@@ -61,8 +61,7 @@ class ServerMomentsRepository
         'limit': 50,
       });
       final moments = _parseMomentList(envelope, authorId: userId);
-      await _replaceAuthorCache(userId, moments);
-      return moments;
+      return _replaceAuthorCache(userId, moments);
     } catch (_) {
       final cached = (await _cache.load())
           .where((moment) => moment.authorId == userId)
@@ -94,8 +93,7 @@ class ServerMomentsRepository
         if (nextCursor == beforeMomentId) break;
         beforeMomentId = nextCursor;
       }
-      await _replaceAuthorCache(userId, moments);
-      return List<Moment>.unmodifiable(moments);
+      return _replaceAuthorCache(userId, moments);
     } catch (_) {
       final cached = await loadCachedMoments(userId, maxItems: maxItems);
       if (cached.isNotEmpty) return cached;
@@ -116,17 +114,40 @@ class ServerMomentsRepository
 
   @override
   Future<Moment> publish(MomentDraft draft) async {
-    final envelope = await _apiClient.post('/api/moment/publish', {
+    final clientRequestId =
+        '${draft.authorId}-${DateTime.now().microsecondsSinceEpoch}';
+    final request = <String, dynamic>{
       'content': draft.content.trim(),
-      'mediaUrls': draft.mediaPaths,
+      'mediaUrls': draft.mediaPaths.map((url) {
+        final thumbnailUrl = draft.mediaThumbnailUrls[url];
+        return thumbnailUrl == null || thumbnailUrl.isEmpty
+            ? url
+            : {'url': url, 'thumbnailUrl': thumbnailUrl};
+      }).toList(),
       'visibility': draft.visibility.index,
       'location': draft.location,
-      'clientRequestId':
-          '${draft.authorId}-${DateTime.now().microsecondsSinceEpoch}',
-    });
-    final moment = _parseMoment(_requireMapData(envelope));
-    await _upsertCache(moment);
-    return moment;
+      'clientRequestId': clientRequestId,
+    };
+    late Map<String, dynamic> data;
+    try {
+      final envelope = await _apiClient.post('/api/moment/publish', request);
+      data = _requireMapData(envelope);
+    } catch (_) {
+      if (draft.mediaThumbnailUrls.isEmpty) rethrow;
+      final fallbackRequest = Map<String, dynamic>.of(request)
+        ..['mediaUrls'] = draft.mediaPaths;
+      final envelope = await _apiClient.post(
+        '/api/moment/publish',
+        fallbackRequest,
+      );
+      data = _requireMapData(envelope);
+    }
+    final moment = _parseMoment(data).copyWith(
+      mediaThumbnails: draft.mediaThumbnailUrls,
+      localMediaPaths: draft.localMediaPaths,
+      localThumbnailPaths: draft.localThumbnailPaths,
+    );
+    return _upsertCache(moment);
   }
 
   @override
@@ -138,8 +159,7 @@ class ServerMomentsRepository
       'momentId': momentId,
     });
     final moment = _parseMoment(_requireMapData(envelope));
-    await _upsertCache(moment);
-    return moment;
+    return _upsertCache(moment);
   }
 
   @override
@@ -158,8 +178,7 @@ class ServerMomentsRepository
       'content': normalizedContent,
     });
     final moment = _parseMoment(_requireMapData(envelope));
-    await _upsertCache(moment);
-    return moment;
+    return _upsertCache(moment);
   }
 
   @override
@@ -238,25 +257,51 @@ class ServerMomentsRepository
     return Moment.fromJson(json);
   }
 
-  Future<void> _upsertCache(Moment updated) async {
+  Future<Moment> _upsertCache(Moment updated) async {
     final moments = List<Moment>.of(await _cache.load());
     final index = moments.indexWhere((moment) => moment.id == updated.id);
     if (index == -1) {
       moments.insert(0, updated);
     } else {
+      updated = _mergeLocalMedia(updated, moments[index]);
       moments[index] = updated;
     }
     await _cache.save(moments);
+    return updated;
   }
 
-  Future<void> _replaceAuthorCache(
+  Future<List<Moment>> _replaceAuthorCache(
     String authorId,
     Iterable<Moment> latest,
   ) async {
     final moments = List<Moment>.of(await _cache.load());
+    final cachedById = {for (final item in moments) item.id: item};
+    final merged = latest
+        .map(
+          (item) => cachedById[item.id] == null
+              ? item
+              : _mergeLocalMedia(item, cachedById[item.id]!),
+        )
+        .toList(growable: false);
     moments.removeWhere((moment) => moment.authorId == authorId);
-    moments.addAll(latest);
+    moments.addAll(merged);
     await _cache.save(moments);
+    return List<Moment>.unmodifiable(merged);
+  }
+
+  Moment _mergeLocalMedia(Moment server, Moment cached) {
+    final activeUrls = server.mediaPaths.toSet();
+    return server.copyWith(
+      mediaThumbnails: {...cached.mediaThumbnails, ...server.mediaThumbnails},
+      localMediaPaths: {
+        for (final entry in cached.localMediaPaths.entries)
+          if (activeUrls.contains(entry.key)) entry.key: entry.value,
+      },
+      localThumbnailPaths: {
+        for (final entry in cached.localThumbnailPaths.entries)
+          if (activeUrls.contains(entry.key)) entry.key: entry.value,
+      },
+    );
   }
 
   int? _readInt(Object? value) {

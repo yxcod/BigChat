@@ -1183,7 +1183,12 @@ class _MomentCard extends StatelessWidget {
             ],
             if (moment.mediaPaths.isNotEmpty) ...[
               const SizedBox(height: 12),
-              _MomentMediaGrid(paths: moment.mediaPaths),
+              _MomentMediaGrid(
+                paths: moment.mediaPaths,
+                thumbnails: moment.mediaThumbnails,
+                localPaths: moment.localMediaPaths,
+                localThumbnailPaths: moment.localThumbnailPaths,
+              ),
             ],
             if (moment.location?.isNotEmpty ?? false) ...[
               const SizedBox(height: 10),
@@ -1293,12 +1298,27 @@ class _MomentAvatar extends StatelessWidget {
 }
 
 class _MomentMediaGrid extends StatelessWidget {
-  const _MomentMediaGrid({required this.paths});
+  const _MomentMediaGrid({
+    required this.paths,
+    required this.thumbnails,
+    required this.localPaths,
+    required this.localThumbnailPaths,
+  });
 
   final List<String> paths;
+  final Map<String, String> thumbnails;
+  final Map<String, String> localPaths;
+  final Map<String, String> localThumbnailPaths;
 
   bool _isRemote(String path) =>
       path.startsWith('http://') || path.startsWith('https://');
+
+  String? _existingLocal(Map<String, String> values, String remoteUrl) {
+    final path = values[remoteUrl];
+    if (path == null || path.isEmpty) return null;
+    final file = File(path);
+    return file.existsSync() && file.lengthSync() > 0 ? path : null;
+  }
 
   String _fileName(String path) {
     final uri = Uri.tryParse(path);
@@ -1314,10 +1334,11 @@ class _MomentMediaGrid extends StatelessWidget {
   Future<void> _save(BuildContext context, String path) async {
     try {
       if (isVideoPath(path)) {
+        final localPath = _existingLocal(localPaths, path);
         await const ChatMediaSaver().saveVideo(
           source: path,
           fileName: _fileName(path),
-          localPath: _isRemote(path) ? null : path,
+          localPath: localPath ?? (_isRemote(path) ? null : path),
         );
       } else {
         await const ChatMediaSaver().saveImage(
@@ -1388,16 +1409,21 @@ class _MomentMediaGrid extends StatelessWidget {
               itemBuilder: (context, index) {
                 final path = paths[index];
                 if (isVideoPath(path)) {
+                  final localPath = _existingLocal(localPaths, path);
+                  final localThumbnailPath = _existingLocal(
+                    localThumbnailPaths,
+                    path,
+                  );
                   return AppVideoPreview(
                     key: ValueKey('moment_video_$index'),
-                    source: path,
-                    isLocal:
-                        !(path.startsWith('http://') ||
-                            path.startsWith('https://')),
+                    source: localPath ?? path,
+                    isLocal: localPath != null || !_isRemote(path),
                     width: double.infinity,
                     height: double.infinity,
                     fileName: _fileName(path),
-                    autoCacheRemote: _isRemote(path),
+                    coverSource: localThumbnailPath ?? thumbnails[path],
+                    coverIsLocal: localThumbnailPath != null,
+                    autoCacheRemote: localPath == null && _isRemote(path),
                     onLongPress: () => _showSaveMenu(context, path),
                   );
                 }
