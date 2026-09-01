@@ -75,7 +75,11 @@ Future<String> videoDownloadPath(String url) async {
   return '${videoDirectory.path}/$safeName';
 }
 
-Future<String> videoCachePath(String url, {Directory? rootDirectory}) async {
+Future<String> videoCachePath(
+  String url, {
+  Directory? rootDirectory,
+  String? suggestedFileName,
+}) async {
   final directory = rootDirectory ?? await getApplicationSupportDirectory();
   final videoDirectory = Directory('${directory.path}/chat_video_cache');
   if (!await videoDirectory.exists()) {
@@ -84,6 +88,7 @@ Future<String> videoCachePath(String url, {Directory? rootDirectory}) async {
   final uri = Uri.parse(url);
   final owner = uri.queryParameters['userName'] ?? 'unknown';
   final requestedName =
+      suggestedFileName ??
       uri.queryParameters['videoName'] ??
       uri.queryParameters['fileName'] ??
       uri.queryParameters['resourceName'];
@@ -98,8 +103,16 @@ Future<String> videoCachePath(String url, {Directory? rootDirectory}) async {
   return '${videoDirectory.path}/$safeName';
 }
 
-Future<String?> cachedVideoPath(String url, {Directory? rootDirectory}) async {
-  final path = await videoCachePath(url, rootDirectory: rootDirectory);
+Future<String?> cachedVideoPath(
+  String url, {
+  Directory? rootDirectory,
+  String? suggestedFileName,
+}) async {
+  final path = await videoCachePath(
+    url,
+    rootDirectory: rootDirectory,
+    suggestedFileName: suggestedFileName,
+  );
   final file = File(path);
   if (!await file.exists() || await file.length() <= 0) return null;
   return path;
@@ -109,6 +122,7 @@ Future<String?> cacheUploadedVideo(
   String localPath,
   String remoteUrl, {
   Directory? rootDirectory,
+  String? suggestedFileName,
 }) async {
   try {
     final source = File(localPath);
@@ -116,6 +130,7 @@ Future<String?> cacheUploadedVideo(
     final destinationPath = await videoCachePath(
       remoteUrl,
       rootDirectory: rootDirectory,
+      suggestedFileName: suggestedFileName,
     );
     if (source.absolute.path == File(destinationPath).absolute.path) {
       return destinationPath;

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_base/features/group_resources/data/group_resource_repository.dart';
 import 'package:flutter_base/features/group_resources/domain/group_resource.dart';
@@ -52,6 +55,39 @@ void main() {
     expect(find.byKey(const ValueKey('save_group_resource_2')), findsOneWidget);
     expect(find.text('保存文件'), findsOneWidget);
   });
+
+  testWidgets('file upload stays in the list with item progress', (
+    tester,
+  ) async {
+    final repository = _PendingUploadGroupResourceRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GroupResourceListPage(
+          groupId: 8,
+          groupName: '测试群',
+          type: GroupResourceType.file,
+          repository: repository,
+          picker: (kind) async => const GroupResourceUploadDraft(
+            path: '/tmp/pending-image.jpg',
+            name: '待上传照片.jpg',
+            size: 1024,
+            kind: GroupResourceUploadKind.file,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('上传文件'));
+    await tester.pump();
+
+    expect(find.text('待上传照片.jpg'), findsOneWidget);
+    expect(find.textContaining('上传中 42%'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+
+    repository.completeUpload();
+    await tester.pumpAndSettle();
+  });
 }
 
 class _EmptyGroupResourceRepository extends GroupResourceRepository {
@@ -80,4 +116,26 @@ class _OfflineCachedGroupResourceRepository extends GroupResourceRepository {
   Future<List<GroupResource>> list(int groupId, GroupResourceType type) async {
     throw Exception('offline');
   }
+}
+
+class _PendingUploadGroupResourceRepository extends GroupResourceRepository {
+  final Completer<void> _uploadCompleter = Completer<void>();
+
+  @override
+  Future<List<GroupResource>> list(int groupId, GroupResourceType type) async =>
+      const [];
+
+  @override
+  Future<void> upload({
+    required int groupId,
+    required GroupResourceType type,
+    required String path,
+    required String originalName,
+    ProgressCallback? onProgress,
+  }) async {
+    onProgress?.call(42, 100);
+    await _uploadCompleter.future;
+  }
+
+  void completeUpload() => _uploadCompleter.complete();
 }

@@ -89,16 +89,12 @@ class GroupResourceRepository {
     }
   }
 
-  String downloadUrl(int resourceId, {String? fileName}) {
+  String downloadUrl(int resourceId) {
     final base = Uri.parse(GlobalUtil().baseURL);
     return base
         .replace(
           path: '${base.path}/api/group/resource/download',
-          queryParameters: {
-            'resourceId': '$resourceId',
-            'userName': _userName,
-            if (fileName?.trim().isNotEmpty == true) 'fileName': fileName!,
-          },
+          queryParameters: {'resourceId': '$resourceId', 'userName': _userName},
         )
         .toString();
   }

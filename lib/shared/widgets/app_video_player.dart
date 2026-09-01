@@ -97,7 +97,10 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
     var resolvedSource = widget.source;
     var resolvedIsLocal = widget.isLocal;
     if (!resolvedIsLocal) {
-      final cachedPath = await cachedVideoPath(widget.source);
+      final cachedPath = await cachedVideoPath(
+        widget.source,
+        suggestedFileName: widget.fileName,
+      );
       if (!mounted || generation != _loadGeneration) return;
       if (cachedPath != null) {
         resolvedSource = cachedPath;
@@ -163,7 +166,10 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
   }
 
   Future<String> _downloadPreviewToCache(String source, int generation) async {
-    final cachePath = await videoCachePath(source);
+    final cachePath = await videoCachePath(
+      source,
+      suggestedFileName: widget.fileName,
+    );
     final temporary = File('$cachePath.preview.part');
     if (await temporary.exists()) await temporary.delete();
     final cancelToken = CancelToken();
@@ -445,7 +451,10 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
         return;
       }
 
-      final cachedPath = await cachedVideoPath(widget.source);
+      final cachedPath = await cachedVideoPath(
+        widget.source,
+        suggestedFileName: widget.fileName,
+      );
       if (!mounted) return;
       if (cachedPath != null) {
         await _useController(VideoPlayerController.file(File(cachedPath)));
@@ -493,7 +502,10 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
       _downloading = true;
       _downloadProgress = null;
     });
-    final cachePath = await videoCachePath(widget.source);
+    final cachePath = await videoCachePath(
+      widget.source,
+      suggestedFileName: widget.fileName,
+    );
     final temporary = File('$cachePath.part');
     if (await temporary.exists()) await temporary.delete();
     try {
@@ -547,7 +559,10 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
         fileName: widget.fileName ?? videoSuggestedName(widget.source),
         localPath: widget.isLocal
             ? widget.source
-            : await cachedVideoPath(widget.source),
+            : await cachedVideoPath(
+                widget.source,
+                suggestedFileName: widget.fileName,
+              ),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

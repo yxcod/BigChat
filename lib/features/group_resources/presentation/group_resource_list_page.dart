@@ -20,6 +20,25 @@ import '../../../app/theme/app_theme_context.dart';
 import '../data/group_resource_repository.dart';
 import '../domain/group_resource.dart';
 
+enum GroupResourceUploadKind { photo, video, file }
+
+class GroupResourceUploadDraft {
+  const GroupResourceUploadDraft({
+    required this.path,
+    required this.name,
+    required this.size,
+    required this.kind,
+  });
+
+  final String path;
+  final String name;
+  final int size;
+  final GroupResourceUploadKind kind;
+}
+
+typedef GroupResourcePicker =
+    Future<GroupResourceUploadDraft?> Function(GroupResourceUploadKind kind);
+
 class GroupResourceListPage extends StatefulWidget {
   const GroupResourceListPage({
     super.key,
@@ -27,11 +46,13 @@ class GroupResourceListPage extends StatefulWidget {
     required this.groupName,
     required this.type,
     this.repository,
+    this.picker,
   });
   final int groupId;
   final String groupName;
   final GroupResourceType type;
   final GroupResourceRepository? repository;
+  final GroupResourcePicker? picker;
   @override
   State<GroupResourceListPage> createState() => _GroupResourceListPageState();
 }
@@ -40,6 +61,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
   late final GroupResourceRepository _repository =
       widget.repository ?? GroupResourceRepository();
   List<GroupResource> _items = const [];
+  final List<_PendingGroupResource> _pending = [];
   bool _loading = true;
   bool _uploading = false;
   double? _progress;
@@ -58,7 +80,12 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     if (mounted && _items.isEmpty) setState(() => _loading = true);
     try {
       final items = await _repository.list(widget.groupId, widget.type);
-      if (mounted) setState(() => _items = items);
+      if (mounted) {
+        setState(() {
+          _items = items;
+          _pending.removeWhere((item) => item.completed);
+        });
+      }
     } catch (error) {
       if (mounted) _message('加载失败：$error');
     } finally {
@@ -71,7 +98,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       await _pickAndUpload();
       return;
     }
-    final kind = await showModalBottomSheet<_AlbumUploadKind>(
+    final kind = await showModalBottomSheet<GroupResourceUploadKind>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -83,14 +110,16 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
               leading: const Icon(Icons.add_photo_alternate_outlined),
               title: const Text('上传照片'),
               subtitle: const Text('支持 JPEG、PNG、WebP，最大 5MB'),
-              onTap: () => Navigator.pop(context, _AlbumUploadKind.photo),
+              onTap: () =>
+                  Navigator.pop(context, GroupResourceUploadKind.photo),
             ),
             ListTile(
               key: const Key('group_album_upload_video'),
               leading: const Icon(Icons.video_library_outlined),
               title: const Text('上传视频'),
               subtitle: const Text('支持 MP4、MOV、M4V，最大 300MB'),
-              onTap: () => Navigator.pop(context, _AlbumUploadKind.video),
+              onTap: () =>
+                  Navigator.pop(context, GroupResourceUploadKind.video),
             ),
             const SizedBox(height: 8),
           ],
@@ -100,36 +129,98 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     if (kind != null) await _pickAndUpload(albumKind: kind);
   }
 
-  Future<void> _pickAndUpload({_AlbumUploadKind? albumKind}) async {
+  Future<void> _pickAndUpload({GroupResourceUploadKind? albumKind}) async {
     if (_uploading) return;
+    final kind = albumKind ?? GroupResourceUploadKind.file;
+    final draft = widget.picker == null
+        ? await _pickNative(kind)
+        : await widget.picker!(kind);
+    if (draft == null || !mounted) return;
+    final pendingId = DateTime.now().microsecondsSinceEpoch.toString();
+    setState(() {
+      _uploading = true;
+      _pending.insert(
+        0,
+        _PendingGroupResource(
+          id: pendingId,
+          path: draft.path,
+          name: draft.name,
+          size: draft.size,
+          kind: draft.kind,
+          progress: 0,
+        ),
+      );
+    });
+    try {
+      await _repository.upload(
+        groupId: widget.groupId,
+        type: widget.type,
+        path: draft.path,
+        originalName: draft.name,
+        onProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          _updatePending(
+            pendingId,
+            (item) => item.copyWith(progress: sent / total),
+          );
+        },
+      );
+      _updatePending(
+        pendingId,
+        (item) => item.copyWith(progress: 1, completed: true),
+      );
+      try {
+        final items = await _repository.list(widget.groupId, widget.type);
+        if (mounted) {
+          setState(() {
+            _items = items;
+            _pending.removeWhere((item) => item.id == pendingId);
+          });
+        }
+      } catch (_) {
+        // The upload is already committed. Keep its local preview visible
+        // until pull-to-refresh can replace it with the server resource.
+      }
+      if (mounted) _message('上传成功');
+    } catch (error) {
+      _updatePending(pendingId, (item) => item.copyWith(failed: true));
+      if (mounted) _message('上传失败：$error');
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<GroupResourceUploadDraft?> _pickNative(
+    GroupResourceUploadKind kind,
+  ) async {
     String? path;
     String? name;
     int size = 0;
-    if (_isAlbum && albumKind == _AlbumUploadKind.photo) {
+    if (_isAlbum && kind == GroupResourceUploadKind.photo) {
       final image = await ImagePicker().pickImage(
         source: ImageSource.gallery,
         imageQuality: 88,
         maxWidth: 2560,
         maxHeight: 2560,
       );
-      if (image == null) return;
+      if (image == null) return null;
       path = image.path;
       name = image.name;
       size = await image.length();
       if (size > 5 * 1024 * 1024) {
         _message('照片不能超过5MB');
-        return;
+        return null;
       }
-    } else if (_isAlbum && albumKind == _AlbumUploadKind.video) {
+    } else if (_isAlbum && kind == GroupResourceUploadKind.video) {
       final video = await ImagePicker().pickVideo(source: ImageSource.gallery);
-      if (video == null) return;
+      if (video == null) return null;
       path = video.path;
       name = video.name;
       try {
         await validateVideoFile(path);
       } catch (error) {
         _message(error.toString().replaceFirst('Exception: ', ''));
-        return;
+        return null;
       }
       size = await video.length();
     } else {
@@ -139,43 +230,31 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         withData: false,
       );
       final file = result?.files.singleOrNull;
-      if (file == null || file.path == null) return;
+      if (file == null || file.path == null) return null;
       path = file.path;
       name = file.name;
       size = file.size;
       if (size > 300 * 1024 * 1024) {
         _message('单个文件不能超过300MB');
-        return;
+        return null;
       }
     }
-    setState(() {
-      _uploading = true;
-      _progress = null;
-    });
-    try {
-      await _repository.upload(
-        groupId: widget.groupId,
-        type: widget.type,
-        path: path!,
-        originalName: name,
-        onProgress: (sent, total) {
-          if (mounted && total > 0) {
-            setState(() => _progress = sent / total);
-          }
-        },
-      );
-      await _load();
-      if (mounted) _message('上传成功');
-    } catch (error) {
-      if (mounted) _message('上传失败：$error');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _uploading = false;
-          _progress = null;
-        });
-      }
-    }
+    return GroupResourceUploadDraft(
+      path: path!,
+      name: name,
+      size: size,
+      kind: kind,
+    );
+  }
+
+  void _updatePending(
+    String id,
+    _PendingGroupResource Function(_PendingGroupResource item) update,
+  ) {
+    if (!mounted) return;
+    final index = _pending.indexWhere((item) => item.id == id);
+    if (index < 0) return;
+    setState(() => _pending[index] = update(_pending[index]));
   }
 
   Future<void> _delete(GroupResource item) async {
@@ -206,7 +285,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
   }
 
   Future<void> _openFile(GroupResource item) async {
-    final url = _repository.downloadUrl(item.id, fileName: item.originalName);
+    final url = _repository.downloadUrl(item.id);
     if (item.isVideo) {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -243,7 +322,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
   }
 
   Future<void> _save(GroupResource item) async {
-    final url = _repository.downloadUrl(item.id, fileName: item.originalName);
+    final url = _repository.downloadUrl(item.id);
     setState(() => _progress = 0);
     try {
       if (item.isImage) {
@@ -333,12 +412,11 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       ),
       body: Column(
         children: [
-          if (_uploading || _progress != null)
-            LinearProgressIndicator(value: _progress),
+          if (_progress != null) LinearProgressIndicator(value: _progress),
           Expanded(
-            child: _loading
+            child: _loading && _pending.isEmpty
                 ? const Center(child: CircularProgressIndicator())
-                : _items.isEmpty
+                : _items.isEmpty && _pending.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -380,10 +458,13 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       crossAxisSpacing: 5,
       mainAxisSpacing: 5,
     ),
-    itemCount: _items.length,
+    itemCount: _pending.length + _items.length,
     itemBuilder: (context, index) {
-      final item = _items[index];
-      final url = _repository.downloadUrl(item.id, fileName: item.originalName);
+      if (index < _pending.length) {
+        return _buildPendingAlbumItem(_pending[index]);
+      }
+      final item = _items[index - _pending.length];
+      final url = _repository.downloadUrl(item.id);
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -444,28 +525,76 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     },
   );
 
+  Widget _buildPendingAlbumItem(_PendingGroupResource item) {
+    final progress = item.progress.clamp(0.0, 1.0);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (item.isVideo)
+            AppVideoPreview(
+              key: ValueKey('pending_group_video_${item.id}'),
+              source: item.path,
+              isLocal: true,
+              fileName: item.name,
+              uploadProgress: item.failed ? null : progress,
+              uploadFailed: item.failed,
+            )
+          else
+            Image.file(
+              File(item.path),
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => ColoredBox(
+                color: context.appSurface,
+                child: const Icon(Icons.image_outlined),
+              ),
+            ),
+          if (!item.isVideo)
+            ColoredBox(
+              color: const Color(0x55000000),
+              child: Center(
+                child: item.failed
+                    ? const Icon(
+                        Icons.error_outline,
+                        color: Colors.white,
+                        size: 34,
+                      )
+                    : _UploadProgressBadge(progress: progress),
+              ),
+            ),
+          if (item.failed)
+            Positioned(
+              right: 4,
+              top: 4,
+              child: IconButton.filled(
+                key: ValueKey('remove_pending_group_resource_${item.id}'),
+                onPressed: () => setState(() => _pending.remove(item)),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black54,
+                  minimumSize: const Size(28, 28),
+                  padding: EdgeInsets.zero,
+                ),
+                icon: const Icon(Icons.close, size: 17),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFiles() => ListView.separated(
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 90),
-    itemCount: _items.length,
+    itemCount: _pending.length + _items.length,
     separatorBuilder: (_, _) => const Divider(height: 1, indent: 68),
     itemBuilder: (context, index) {
-      final item = _items[index];
+      if (index < _pending.length) {
+        return _buildPendingFileItem(_pending[index]);
+      }
+      final item = _items[index - _pending.length];
       return ListTile(
         tileColor: context.appSurface,
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: item.isVideo ? Colors.purple[50] : Colors.amber[50],
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            item.isVideo
-                ? Icons.play_circle_outline
-                : Icons.insert_drive_file_outlined,
-            color: item.isVideo ? Colors.purple : Colors.amber[800],
-          ),
-        ),
+        leading: _buildServerFilePreview(item),
         title: Text(
           item.originalName,
           maxLines: 1,
@@ -486,6 +615,186 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       );
     },
   );
+
+  Widget _buildPendingFileItem(_PendingGroupResource item) {
+    final progress = item.progress.clamp(0.0, 1.0);
+    return ListTile(
+      key: ValueKey('pending_group_file_${item.id}'),
+      tileColor: context.appSurface,
+      leading: _buildLocalFilePreview(item),
+      title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        item.failed
+            ? '上传失败'
+            : item.completed
+            ? '已上传，正在刷新列表'
+            : '${_size(item.size)} · 上传中 ${(progress * 100).round()}%',
+        style: item.failed ? const TextStyle(color: Colors.red) : null,
+      ),
+      trailing: item.failed
+          ? IconButton(
+              onPressed: () => setState(() => _pending.remove(item)),
+              icon: const Icon(Icons.close),
+            )
+          : _UploadProgressBadge(progress: progress, size: 40),
+    );
+  }
+
+  Widget _buildLocalFilePreview(_PendingGroupResource item) {
+    if (item.isImage) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.file(
+          File(item.path),
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _fileIcon(item.isVideo),
+        ),
+      );
+    }
+    if (item.isVideo) {
+      return AppVideoPreview(
+        source: item.path,
+        isLocal: true,
+        width: 48,
+        height: 48,
+        fileName: item.name,
+        uploadProgress: item.failed ? null : item.progress,
+        uploadFailed: item.failed,
+      );
+    }
+    return _fileIcon(false);
+  }
+
+  Widget _buildServerFilePreview(GroupResource item) {
+    final url = _repository.downloadUrl(item.id);
+    if (item.isImage) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: CachedNetworkImage(
+          cacheManager: AppImageCache.manager,
+          imageUrl: url,
+          cacheKey: AppImageCache.cacheKey(url),
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorWidget: (_, _, _) => _fileIcon(false),
+        ),
+      );
+    }
+    if (item.isVideo) {
+      return AppVideoPreview(
+        source: url,
+        width: 48,
+        height: 48,
+        fileName: item.originalName,
+        autoCacheRemote: true,
+        onLongPress: () => _showResourceActions(item),
+      );
+    }
+    return _fileIcon(false);
+  }
+
+  Widget _fileIcon(bool video) => Container(
+    width: 48,
+    height: 48,
+    decoration: BoxDecoration(
+      color: video ? Colors.purple[50] : Colors.amber[50],
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Icon(
+      video ? Icons.play_circle_outline : Icons.insert_drive_file_outlined,
+      color: video ? Colors.purple : Colors.amber[800],
+    ),
+  );
 }
 
-enum _AlbumUploadKind { photo, video }
+class _UploadProgressBadge extends StatelessWidget {
+  const _UploadProgressBadge({required this.progress, this.size = 54});
+
+  final double progress;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    alignment: Alignment.center,
+    decoration: const BoxDecoration(
+      color: Color(0x99000000),
+      shape: BoxShape.circle,
+    ),
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        SizedBox.square(
+          dimension: size - 10,
+          child: CircularProgressIndicator(
+            value: progress,
+            strokeWidth: 3,
+            color: Colors.white,
+            backgroundColor: Colors.white24,
+          ),
+        ),
+        Text(
+          '${(progress * 100).round()}%',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _PendingGroupResource {
+  const _PendingGroupResource({
+    required this.id,
+    required this.path,
+    required this.name,
+    required this.size,
+    required this.kind,
+    required this.progress,
+    this.failed = false,
+    this.completed = false,
+  });
+
+  final String id;
+  final String path;
+  final String name;
+  final int size;
+  final GroupResourceUploadKind kind;
+  final double progress;
+  final bool failed;
+  final bool completed;
+
+  bool get isVideo =>
+      kind == GroupResourceUploadKind.video || isVideoPath(path);
+  bool get isImage {
+    if (kind == GroupResourceUploadKind.photo) return true;
+    final lower = name.toLowerCase();
+    return lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.gif');
+  }
+
+  _PendingGroupResource copyWith({
+    double? progress,
+    bool? failed,
+    bool? completed,
+  }) => _PendingGroupResource(
+    id: id,
+    path: path,
+    name: name,
+    size: size,
+    kind: kind,
+    progress: progress ?? this.progress,
+    failed: failed ?? this.failed,
+    completed: completed ?? this.completed,
+  );
+}
