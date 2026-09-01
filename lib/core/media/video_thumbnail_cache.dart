@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
@@ -7,6 +8,9 @@ class VideoThumbnailCache {
   VideoThumbnailCache._();
 
   static final Map<String, Future<String?>> _pending = {};
+  static const MethodChannel _nativeChannel = MethodChannel(
+    'com.yxcod.bigchat/video_cover',
+  );
 
   static Future<String?> resolve(String source, {Directory? rootDirectory}) {
     final normalized = source.trim();
@@ -35,27 +39,53 @@ class VideoThumbnailCache {
         return destination.path;
       }
 
-      final generated = await VideoThumbnail.thumbnailFile(
-        video: source,
-        thumbnailPath: directory.path,
-        imageFormat: ImageFormat.JPEG,
-        maxWidth: 720,
-        timeMs: 0,
-        quality: 82,
-      );
-      if (generated == null) return null;
-      final generatedFile = File(generated);
-      if (!await generatedFile.exists() || await generatedFile.length() == 0) {
-        return null;
+      String? generated;
+      for (final timeMs in const [0, 250]) {
+        try {
+          generated = await VideoThumbnail.thumbnailFile(
+            video: source,
+            thumbnailPath: directory.path,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 720,
+            timeMs: timeMs,
+            quality: 82,
+          );
+          if (generated != null && await _isUsableFile(generated)) break;
+        } catch (_) {
+          generated = null;
+        }
       }
+      if (generated == null || !await _isUsableFile(generated)) {
+        try {
+          final nativePath = await _nativeChannel.invokeMethod<String>(
+            'generate',
+            {'sourcePath': source, 'outputPath': destination.path},
+          );
+          return nativePath != null && await _isUsableFile(nativePath)
+              ? nativePath
+              : null;
+        } catch (_) {
+          return null;
+        }
+      }
+      final generatedFile = File(generated);
       if (generatedFile.absolute.path != destination.absolute.path) {
         if (await destination.exists()) await destination.delete();
-        await generatedFile.rename(destination.path);
+        try {
+          await generatedFile.rename(destination.path);
+        } on FileSystemException {
+          await generatedFile.copy(destination.path);
+        }
       }
       return destination.path;
     } catch (_) {
       return null;
     }
+  }
+
+  static Future<bool> _isUsableFile(String path) async {
+    final file = File(path);
+    return await file.exists() && await file.length() > 0;
   }
 
   static String _stableHash(String value) {

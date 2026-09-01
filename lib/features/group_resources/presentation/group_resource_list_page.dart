@@ -12,6 +12,7 @@ import '../../../core/cache/app_image_cache.dart';
 import '../../../core/media/chat_file_saver.dart';
 import '../../../core/media/chat_media_saver.dart';
 import '../../../core/media/video_media.dart';
+import '../../../core/media/video_thumbnail_cache.dart';
 import '../../../shared/widgets/app_video_player.dart';
 import '../../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../../utils/http.dart';
@@ -134,6 +135,15 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         ? await _pickNative(kind)
         : await widget.picker!(kind);
     if (draft == null || !mounted) return;
+    final isVideo =
+        draft.kind == GroupResourceUploadKind.video || isVideoPath(draft.path);
+    final coverPath = isVideo
+        ? await VideoThumbnailCache.resolve(draft.path)
+        : null;
+    if (isVideo && coverPath == null) {
+      if (mounted) _message('无法读取该视频的首帧，请更换视频后重试');
+      return;
+    }
     final pendingId = DateTime.now().microsecondsSinceEpoch.toString();
     setState(() {
       _uploading = true;
@@ -145,6 +155,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
           name: draft.name,
           size: draft.size,
           kind: draft.kind,
+          coverPath: coverPath,
           progress: 0,
         ),
       );
@@ -155,6 +166,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         type: widget.type,
         path: draft.path,
         originalName: draft.name,
+        coverPath: coverPath,
         onProgress: (sent, total) {
           if (!mounted || total <= 0) return;
           _updatePending(
@@ -482,6 +494,8 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
                 width: constraints.maxWidth,
                 height: constraints.maxHeight,
                 fileName: item.originalName,
+                coverSource: _coverSource(item),
+                coverIsLocal: _validCoverPath(item) != null,
                 autoCacheRemote: localPath == null,
                 onLongPress: () => _showResourceActions(item),
               ),
@@ -542,6 +556,8 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
               source: item.path,
               isLocal: true,
               fileName: item.name,
+              coverSource: item.coverPath,
+              coverIsLocal: item.coverPath != null,
               uploadProgress: item.failed || progress >= 1 ? null : progress,
               uploadFailed: item.failed,
             )
@@ -662,6 +678,8 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         width: 48,
         height: 48,
         fileName: item.name,
+        coverSource: item.coverPath,
+        coverIsLocal: item.coverPath != null,
         uploadProgress: item.failed || item.progress >= 1
             ? null
             : item.progress,
@@ -693,6 +711,8 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         width: 48,
         height: 48,
         fileName: item.originalName,
+        coverSource: _coverSource(item),
+        coverIsLocal: _validCoverPath(item) != null,
         autoCacheRemote: localPath == null,
         onLongPress: () => _showResourceActions(item),
       );
@@ -705,6 +725,19 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     if (path == null || path.isEmpty) return null;
     final file = File(path);
     return file.existsSync() && file.lengthSync() > 0 ? path : null;
+  }
+
+  String? _validCoverPath(GroupResource item) {
+    final path = item.coverLocalPath;
+    if (path == null || path.isEmpty) return null;
+    final file = File(path);
+    return file.existsSync() && file.lengthSync() > 0 ? path : null;
+  }
+
+  String? _coverSource(GroupResource item) {
+    final localPath = _validCoverPath(item);
+    if (localPath != null) return localPath;
+    return item.hasCover ? _repository.coverUrl(item.id) : null;
   }
 
   ImageProvider<Object> _imageProvider(GroupResource item, String url) {
@@ -776,6 +809,7 @@ class _PendingGroupResource {
     required this.size,
     required this.kind,
     required this.progress,
+    this.coverPath,
     this.failed = false,
   });
 
@@ -785,6 +819,7 @@ class _PendingGroupResource {
   final int size;
   final GroupResourceUploadKind kind;
   final double progress;
+  final String? coverPath;
   final bool failed;
 
   bool get isVideo =>
@@ -807,6 +842,7 @@ class _PendingGroupResource {
         size: size,
         kind: kind,
         progress: progress ?? this.progress,
+        coverPath: coverPath,
         failed: failed ?? this.failed,
       );
 }

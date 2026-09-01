@@ -134,6 +134,7 @@ class _PendingUploadGroupResourceRepository extends GroupResourceRepository {
     required GroupResourceType type,
     required String path,
     required String originalName,
+    String? coverPath,
     ProgressCallback? onProgress,
   }) async {
     onProgress?.call(42, 100);

@@ -11,7 +11,9 @@ class GroupResource {
     required this.uploaderId,
     required this.createdAt,
     required this.canDelete,
+    this.hasCover = false,
     this.localPath,
+    this.coverLocalPath,
   });
 
   final int id;
@@ -23,7 +25,9 @@ class GroupResource {
   final String uploaderId;
   final DateTime createdAt;
   final bool canDelete;
+  final bool hasCover;
   final String? localPath;
+  final String? coverLocalPath;
 
   bool get isVideo => mimeType.startsWith('video/');
   bool get isImage => mimeType.startsWith('image/');
@@ -45,7 +49,9 @@ class GroupResource {
       uploaderId: json['uploaderId']?.toString() ?? '',
       createdAt: DateTime.fromMillisecondsSinceEpoch(timestamp),
       canDelete: json['canDelete'] == true,
+      hasCover: json['hasCover'] == true,
       localPath: json['localPath']?.toString(),
+      coverLocalPath: json['coverLocalPath']?.toString(),
     );
   }
 
@@ -59,19 +65,24 @@ class GroupResource {
     'uploaderId': uploaderId,
     'createdAt': createdAt.millisecondsSinceEpoch,
     'canDelete': canDelete,
+    'hasCover': hasCover,
     if (localPath?.isNotEmpty == true) 'localPath': localPath,
+    if (coverLocalPath?.isNotEmpty == true) 'coverLocalPath': coverLocalPath,
   };
 
-  GroupResource copyWith({String? localPath}) => GroupResource(
-    id: id,
-    groupId: groupId,
-    type: type,
-    originalName: originalName,
-    mimeType: mimeType,
-    fileSize: fileSize,
-    uploaderId: uploaderId,
-    createdAt: createdAt,
-    canDelete: canDelete,
-    localPath: localPath ?? this.localPath,
-  );
+  GroupResource copyWith({String? localPath, String? coverLocalPath}) =>
+      GroupResource(
+        id: id,
+        groupId: groupId,
+        type: type,
+        originalName: originalName,
+        mimeType: mimeType,
+        fileSize: fileSize,
+        uploaderId: uploaderId,
+        createdAt: createdAt,
+        canDelete: canDelete,
+        hasCover: hasCover,
+        localPath: localPath ?? this.localPath,
+        coverLocalPath: coverLocalPath ?? this.coverLocalPath,
+      );
 }

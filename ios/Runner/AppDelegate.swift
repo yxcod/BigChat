@@ -1,4 +1,5 @@
 import Flutter
+import AVFoundation
 import MapKit
 import UIKit
 
@@ -7,6 +8,7 @@ import UIKit
   private var nearbyPlacesChannel: FlutterMethodChannel?
   private var baiduSetupChannel: FlutterMethodChannel?
   private var fileExportChannel: FlutterMethodChannel?
+  private var videoCoverChannel: FlutterMethodChannel?
   private var nearbyPlacesSearch: MKLocalSearch?
   private var pendingFileExportResult: FlutterResult?
 
@@ -58,6 +60,50 @@ import UIKit
       self?.presentFileExporter(call: call, result: result)
     }
     fileExportChannel = exportChannel
+
+    let coverChannel = FlutterMethodChannel(
+      name: "com.yxcod.bigchat/video_cover",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    coverChannel.setMethodCallHandler { call, result in
+      guard call.method == "generate" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          guard
+            let arguments = call.arguments as? [String: Any],
+            let sourcePath = arguments["sourcePath"] as? String,
+            let outputPath = arguments["outputPath"] as? String
+          else {
+            throw NSError(domain: "BigChatVideoCover", code: 1)
+          }
+          let asset = AVURLAsset(url: URL(fileURLWithPath: sourcePath))
+          let generator = AVAssetImageGenerator(asset: asset)
+          generator.appliesPreferredTrackTransform = true
+          generator.maximumSize = CGSize(width: 720, height: 720)
+          generator.requestedTimeToleranceBefore = .positiveInfinity
+          generator.requestedTimeToleranceAfter = .positiveInfinity
+          let image = try generator.copyCGImage(at: .zero, actualTime: nil)
+          guard let jpeg = UIImage(cgImage: image).jpegData(compressionQuality: 0.82) else {
+            throw NSError(domain: "BigChatVideoCover", code: 2)
+          }
+          let outputURL = URL(fileURLWithPath: outputPath)
+          try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+          )
+          try jpeg.write(to: outputURL, options: .atomic)
+          DispatchQueue.main.async { result(outputPath) }
+        } catch {
+          DispatchQueue.main.async {
+            result(FlutterError(code: "cover_failed", message: "无法生成视频封面", details: error.localizedDescription))
+          }
+        }
+      }
+    }
+    videoCoverChannel = coverChannel
   }
 
   private func presentFileExporter(call: FlutterMethodCall, result: @escaping FlutterResult) {

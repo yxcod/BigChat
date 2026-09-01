@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.media.MediaMetadataRetriever
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -14,6 +15,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.net.URLConnection
 import java.util.concurrent.Executors
 
@@ -102,6 +104,29 @@ class MainActivity : FlutterActivity() {
                 result.error("picker_unavailable", "无法打开系统文件选择器", error.message)
             }
         }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            VIDEO_COVER_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "generate") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val sourcePath = call.argument<String>("sourcePath").orEmpty()
+            val outputPath = call.argument<String>("outputPath").orEmpty()
+            fileExportExecutor.execute {
+                try {
+                    generateVideoCover(sourcePath, outputPath)
+                    Handler(Looper.getMainLooper()).post { result.success(outputPath) }
+                } catch (error: Exception) {
+                    Log.e("QuanxinVideoCover", "Video cover generation failed", error)
+                    Handler(Looper.getMainLooper()).post {
+                        result.error("cover_failed", "无法生成视频封面", error.message)
+                    }
+                }
+            }
+        }
     }
 
     @Deprecated("Deprecated in Java")
@@ -150,6 +175,42 @@ class MainActivity : FlutterActivity() {
         pendingFileExportSource = null
     }
 
+    private fun generateVideoCover(sourcePath: String, outputPath: String) {
+        val source = File(sourcePath)
+        if (!source.isFile || source.length() <= 0L || outputPath.isBlank()) {
+            throw IllegalArgumentException("视频文件不存在")
+        }
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(source.absolutePath)
+            val frame = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: retriever.getFrameAtTime(250_000, MediaMetadataRetriever.OPTION_CLOSEST)
+                ?: throw IllegalStateException("无法读取视频首帧")
+            val scale = minOf(1.0, 720.0 / frame.width.coerceAtLeast(1))
+            val output = if (scale < 1.0) {
+                android.graphics.Bitmap.createScaledBitmap(
+                    frame,
+                    (frame.width * scale).toInt().coerceAtLeast(1),
+                    (frame.height * scale).toInt().coerceAtLeast(1),
+                    true,
+                )
+            } else {
+                frame
+            }
+            val destination = File(outputPath)
+            destination.parentFile?.mkdirs()
+            FileOutputStream(destination).use { stream ->
+                if (!output.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, stream)) {
+                    throw IllegalStateException("视频封面写入失败")
+                }
+            }
+            if (output !== frame) output.recycle()
+            frame.recycle()
+        } finally {
+            retriever.release()
+        }
+    }
+
     override fun onDestroy() {
         pendingFileExportResult?.error("activity_destroyed", "文件保存已中断", null)
         clearPendingFileExport()
@@ -159,6 +220,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val FILE_EXPORT_CHANNEL = "com.yxcod.bigchat/file_export"
+        private const val VIDEO_COVER_CHANNEL = "com.yxcod.bigchat/video_cover"
         private const val FILE_EXPORT_REQUEST_CODE = 7812
     }
 }

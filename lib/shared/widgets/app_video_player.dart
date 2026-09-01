@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/cache/app_image_cache.dart';
 import '../../core/media/video_media.dart';
 import '../../core/media/chat_media_saver.dart';
 import '../../core/media/video_thumbnail_cache.dart';
@@ -20,6 +21,8 @@ class AppVideoPreview extends StatefulWidget {
     this.uploadFailed = false,
     this.autoCacheRemote = false,
     this.fileName,
+    this.coverSource,
+    this.coverIsLocal = false,
     this.allowSave = true,
     this.onLongPress,
   });
@@ -32,6 +35,8 @@ class AppVideoPreview extends StatefulWidget {
   final bool uploadFailed;
   final bool autoCacheRemote;
   final String? fileName;
+  final String? coverSource;
+  final bool coverIsLocal;
   final bool allowSave;
   final VoidCallback? onLongPress;
 
@@ -66,7 +71,9 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
     if (oldWidget.source != widget.source ||
         oldWidget.isLocal != widget.isLocal ||
         oldWidget.autoCacheRemote != widget.autoCacheRemote ||
-        oldWidget.fileName != widget.fileName) {
+        oldWidget.fileName != widget.fileName ||
+        oldWidget.coverSource != widget.coverSource ||
+        oldWidget.coverIsLocal != widget.coverIsLocal) {
       _initializePreview();
     }
   }
@@ -107,6 +114,18 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
         resolvedSource = cachedPath;
         resolvedIsLocal = true;
       }
+    }
+
+    final coverSource = widget.coverSource?.trim() ?? '';
+    final hasUsableCover =
+        coverSource.isNotEmpty &&
+        (!widget.coverIsLocal || File(coverSource).existsSync());
+    if (hasUsableCover) {
+      setState(() {
+        _playbackSource = resolvedSource;
+        _playbackIsLocal = resolvedIsLocal;
+      });
+      return;
     }
 
     final thumbnailPath = await VideoThumbnailCache.resolve(resolvedSource);
@@ -280,6 +299,21 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
   }
 
   Widget _cover() {
+    final coverSource = widget.coverSource?.trim() ?? '';
+    if (coverSource.isNotEmpty &&
+        (!widget.coverIsLocal || File(coverSource).existsSync())) {
+      return widget.coverIsLocal
+          ? Image.file(
+              File(coverSource),
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _fallbackCover(),
+            )
+          : Image(
+              image: AppImageCache.provider(coverSource),
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _fallbackCover(),
+            );
+    }
     final thumbnailPath = _thumbnailPath;
     if (thumbnailPath != null) {
       return Image.file(
@@ -391,6 +425,7 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
                 child: KeyedSubtree(
                   key: ValueKey<String>(
                     _thumbnailPath ??
+                        widget.coverSource ??
                         ((_controller?.value.isInitialized ?? false)
                             ? 'decoded-first-frame'
                             : 'temporary-cover'),

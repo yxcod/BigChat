@@ -16,12 +16,16 @@ void main() {
       'uploaderId': 'alice',
       'createdAt': 1770000000000,
       'canDelete': true,
+      'hasCover': true,
+      'coverLocalPath': '/cached/group/cover.jpg',
     });
 
     expect(resource.id, 12);
     expect(resource.type, GroupResourceType.file);
     expect(resource.canDelete, isTrue);
     expect(resource.fileSize, 1048576);
+    expect(resource.hasCover, isTrue);
+    expect(resource.coverLocalPath, '/cached/group/cover.jpg');
   });
 
   test('resource type 2 is parsed as album media', () {

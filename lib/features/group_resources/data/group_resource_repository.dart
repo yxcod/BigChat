@@ -45,9 +45,13 @@ class GroupResourceRepository {
             final localPath = _mediaCache.existingPath(
               cachedById[resource.id]?.localPath,
             );
-            return localPath == null
-                ? resource
-                : resource.copyWith(localPath: localPath);
+            final coverLocalPath = _mediaCache.existingPath(
+              cachedById[resource.id]?.coverLocalPath,
+            );
+            return resource.copyWith(
+              localPath: localPath,
+              coverLocalPath: coverLocalPath,
+            );
           }).toList()
         : const <GroupResource>[];
     try {
@@ -67,12 +71,24 @@ class GroupResourceRepository {
     required GroupResourceType type,
     required String path,
     required String originalName,
+    String? coverPath,
     ProgressCallback? onProgress,
   }) async {
     final file = await MultipartFile.fromFile(path, filename: originalName);
+    final files = <MultipartFile>[file];
+    if (coverPath != null && coverPath.isNotEmpty) {
+      files.add(
+        await MultipartFile.fromFile(
+          coverPath,
+          filename:
+              '${originalName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}.cover.jpg',
+          contentType: DioMediaType('image', 'jpeg'),
+        ),
+      );
+    }
     final response = await _http.upload(
       '/api/group/resource/upload',
-      [file],
+      files,
       fieldName: 'file',
       queryParameters: {
         'groupId': groupId,
@@ -103,6 +119,16 @@ class GroupResourceRepository {
     if (visibleLocalPath != null) {
       resource = resource.copyWith(localPath: visibleLocalPath);
     }
+    if (coverPath != null && coverPath.isNotEmpty && resource.hasCover) {
+      final coverLocalPath = await _mediaCache.persistCover(
+        resource: resource,
+        sourcePath: coverPath,
+        remoteUrl: coverUrl(resource.id),
+      );
+      if (coverLocalPath != null) {
+        resource = resource.copyWith(coverLocalPath: coverLocalPath);
+      }
+    }
     try {
       final existing = _cache.load(_userName, groupId, type);
       await _cache.save(_userName, groupId, type, [
@@ -132,6 +158,16 @@ class GroupResourceRepository {
     return base
         .replace(
           path: '${base.path}/api/group/resource/download',
+          queryParameters: {'resourceId': '$resourceId', 'userName': _userName},
+        )
+        .toString();
+  }
+
+  String coverUrl(int resourceId) {
+    final base = Uri.parse(GlobalUtil().baseURL);
+    return base
+        .replace(
+          path: '${base.path}/api/group/resource/cover',
           queryParameters: {'resourceId': '$resourceId', 'userName': _userName},
         )
         .toString();

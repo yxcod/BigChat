@@ -58,6 +58,30 @@ class GroupResourceMediaCache {
     return cached;
   }
 
+  Future<String?> persistCover({
+    required GroupResource resource,
+    required String sourcePath,
+    required String remoteUrl,
+  }) async {
+    try {
+      final source = File(sourcePath);
+      if (!await source.exists() || await source.length() <= 0) return null;
+      final root = await getApplicationSupportDirectory();
+      final directory = Directory('${root.path}/group_resource_cover_cache');
+      await directory.create(recursive: true);
+      final destination = File('${directory.path}/resource_${resource.id}.jpg');
+      final temporary = File('${destination.path}.part');
+      if (await temporary.exists()) await temporary.delete();
+      await source.copy(temporary.path);
+      if (await destination.exists()) await destination.delete();
+      await temporary.rename(destination.path);
+      await AppImageCache.cacheUploadedFile(remoteUrl, destination.path);
+      return destination.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
   String _safeExtension(String value, String fallback) {
     final index = value.lastIndexOf('.');
     if (index < 0 || index == value.length - 1) return fallback;
