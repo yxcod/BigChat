@@ -47,6 +47,8 @@ import '../../core/media/voice_message.dart';
 import '../../core/media/voice_media.dart';
 import '../../shared/widgets/message_action_menu.dart';
 import '../../shared/widgets/quoted_message_view.dart';
+import '../../shared/widgets/app_selectable_text.dart';
+import '../../shared/widgets/chat_image_bubble.dart';
 import '../../core/media/chat_media_saver.dart';
 import '../../shared/utils/chat_file_save_ui.dart';
 import '../../app/theme/app_colors.dart';
@@ -2746,7 +2748,9 @@ class GroupMessageBubble extends StatelessWidget {
                     ),
                   GestureDetector(
                     behavior: HitTestBehavior.translucent,
-                    onLongPressStart: message.messageType == MessageType.audio
+                    onLongPressStart:
+                        message.messageType == MessageType.audio ||
+                            message.messageType == MessageType.text
                         ? null
                         : (details) => _showMessageActions(
                             context,
@@ -2930,8 +2934,10 @@ class GroupMessageBubble extends StatelessWidget {
           ),
         ],
       ),
-      child: Text(
+      child: AppSelectableText(
         message.content,
+        onDelete: onDelete,
+        onQuote: onQuote,
         style: TextStyle(color: textColor, fontSize: 15.5, height: 1.35),
       ),
     );
@@ -2947,56 +2953,21 @@ class GroupMessageBubble extends StatelessWidget {
             ? NetworkImage(imageUrl)
             : AppImageCache.provider(imageUrl),
       ),
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.6,
-          maxHeight: 200,
+      child: ChatImageBubble(
+        imageProvider: message.isPrivacy
+            ? NetworkImage(imageUrl)
+            : AppImageCache.provider(imageUrl),
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(16),
+          topRight: const Radius.circular(16),
+          bottomLeft: message.isMe
+              ? const Radius.circular(16)
+              : const Radius.circular(4),
+          bottomRight: message.isMe
+              ? const Radius.circular(4)
+              : const Radius.circular(16),
         ),
-        decoration: BoxDecoration(
-          color: message.isMe ? AppColors.primary : context.appSurface,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomLeft: message.isMe ? Radius.circular(16) : Radius.circular(4),
-            bottomRight: message.isMe
-                ? Radius.circular(4)
-                : Radius.circular(16),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x10000000),
-              blurRadius: 5,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: message.isPrivacy
-            ? Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const SizedBox(
-                  width: 150,
-                  height: 150,
-                  child: Center(child: Icon(Icons.error_outline)),
-                ),
-              )
-            : CachedNetworkImage(
-                cacheManager: AppImageCache.manager,
-                imageUrl: imageUrl,
-                cacheKey: AppImageCache.cacheKey(imageUrl),
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                  width: 150,
-                  height: 150,
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                errorWidget: (context, url, error) => Container(
-                  width: 150,
-                  height: 150,
-                  child: Center(child: Icon(Icons.error)),
-                ),
-              ),
+        maxWidth: MediaQuery.of(context).size.width * 0.6,
       ),
     );
   }

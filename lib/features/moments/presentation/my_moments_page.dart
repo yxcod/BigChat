@@ -15,6 +15,7 @@ import '../../../model/userInfoModel.dart';
 import '../../../utils/gloabl.dart';
 import '../../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../../shared/widgets/app_video_player.dart';
+import '../../../shared/widgets/app_selectable_text.dart';
 import '../../../shared/pages/app_text_editor_page.dart';
 import '../../nearby/data/merchant_reviews_repository.dart';
 import '../../nearby/presentation/merchant_reviews_page.dart';
@@ -1175,7 +1176,7 @@ class _MomentCard extends StatelessWidget {
             ),
             if (moment.content.isNotEmpty) ...[
               const SizedBox(height: 13),
-              Text(
+              AppSelectableText(
                 moment.content,
                 style: const TextStyle(fontSize: 15, height: 1.5),
               ),
@@ -1497,7 +1498,7 @@ class _CommentsPreview extends StatelessWidget {
           for (final comment in preview)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Text.rich(
+              child: SelectableText.rich(
                 TextSpan(
                   children: [
                     TextSpan(

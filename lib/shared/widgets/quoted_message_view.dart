@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../model/messageModel.dart';
 import '../../app/theme/app_theme_context.dart';
+import 'app_selectable_text.dart';
 
 class QuotedMessageView extends StatelessWidget {
   const QuotedMessageView({
@@ -175,7 +176,10 @@ class QuotedTextMessageBubble extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(text, style: TextStyle(color: textColor, fontSize: 16)),
+          AppSelectableText(
+            text,
+            style: TextStyle(color: textColor, fontSize: 16),
+          ),
         ],
       ),
     );

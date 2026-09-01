@@ -124,6 +124,7 @@ void main() {
 
     expect(find.text('小李的空间'), findsOneWidget);
     expect(find.text('朋友的公开记录'), findsOneWidget);
+    expect(find.widgetWithText(SelectableText, '朋友的公开记录'), findsOneWidget);
     expect(find.byKey(const Key('moment_publish_fab')), findsNothing);
   });
 

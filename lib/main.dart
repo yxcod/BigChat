@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import './routes/routeIndex.dart';
 import './utils/storageUtil.dart';
 import './utils/GlobalNavigatorKey.dart';
@@ -702,6 +703,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         themeMode: _themeController.themeMode,
         navigatorKey: GlobalNavigatorKey.navigatorKey,
         navigatorObservers: [appRouteObserver],
+        locale: const Locale('zh', 'CN'),
+        supportedLocales: const [Locale('zh', 'CN')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         initialRoute:
             widget.initialRoute ??
             appInitialRoute(
@@ -713,33 +717,30 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         builder: (context, child) => Overlay(
           initialEntries: [
             OverlayEntry(
-              builder: (context) => SelectionArea(
-                child: Stack(
-                  children: [
-                    if (child != null)
-                      Positioned.fill(
-                        child: TickerMode(
-                          enabled: !_privacyLockPending,
-                          child: Offstage(
-                            offstage: _privacyLockPending,
-                            child: child,
-                          ),
+              builder: (context) => Stack(
+                children: [
+                  if (child != null)
+                    Positioned.fill(
+                      child: TickerMode(
+                        enabled: !_privacyLockPending,
+                        child: Offstage(
+                          offstage: _privacyLockPending,
+                          child: child,
                         ),
                       ),
-                    if (_connectionNoticeStatus != null)
-                      _buildConnectionNotice(),
-                    if (_privacyLockPending)
-                      Positioned.fill(
-                        child: _privacyDecoyVisible
-                            ? const CalculatorDecoyPage()
-                            : PrivacyUnlockPage(
-                                onUnlocked: _completePrivacyUnlock,
-                                onRejected: _rejectPrivacyUnlock,
-                                verifyGesture: widget.privacyGestureVerifier,
-                              ),
-                      ),
-                  ],
-                ),
+                    ),
+                  if (_connectionNoticeStatus != null) _buildConnectionNotice(),
+                  if (_privacyLockPending)
+                    Positioned.fill(
+                      child: _privacyDecoyVisible
+                          ? const CalculatorDecoyPage()
+                          : PrivacyUnlockPage(
+                              onUnlocked: _completePrivacyUnlock,
+                              onRejected: _rejectPrivacyUnlock,
+                              verifyGesture: widget.privacyGestureVerifier,
+                            ),
+                    ),
+                ],
               ),
             ),
           ],

@@ -27,18 +27,22 @@ void main() {
     await tester.pump();
 
     expect(find.byType(MaterialApp), findsOneWidget);
-    expect(find.byType(SelectionArea), findsOneWidget);
+    expect(find.byType(SelectionArea), findsNothing);
     expect(find.text('登录'), findsWidgets);
   });
 
-  testWidgets('普通展示文字支持长按选择和系统复制工具栏', (tester) async {
+  testWidgets('普通页面不再使用跨页面文字全选区域', (tester) async {
     await tester.pumpWidget(const MyApp(initialRoute: '/login'));
     await tester.pump();
 
     await tester.longPress(find.text('全信'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AdaptiveTextSelectionToolbar), findsOneWidget);
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+    final context = tester.element(find.text('全信'));
+    final localizations = MaterialLocalizations.of(context);
+    expect(localizations.selectAllButtonLabel, '全选');
+    expect(localizations.copyButtonLabel, '复制');
   });
 
   test('已恢复的登录会话选择主界面作为启动路由', () {

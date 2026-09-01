@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 // import 'package:image_gallery_saver/image_gallery_saver.dart'; // 暂时禁用，等待修复兼容性问题
 import 'package:dio/dio.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/gloabl.dart';
 import '../model/friendInfoModel.dart';
 import '../utils/WebSocketManager.dart';
@@ -38,6 +37,8 @@ import '../shared/widgets/hold_to_record_field.dart';
 import '../shared/widgets/message_action_menu.dart';
 import '../shared/widgets/quoted_message_view.dart';
 import '../shared/widgets/top_aligned_reversed_list.dart';
+import '../shared/widgets/app_selectable_text.dart';
+import '../shared/widgets/chat_image_bubble.dart';
 import '../core/media/chat_media_saver.dart';
 import '../shared/utils/chat_file_save_ui.dart';
 import '../core/media/voice_message.dart';
@@ -2456,67 +2457,11 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildImageMessage() {
     final imageURL = _resolveImageUrl();
-
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: 200.0, // 图片最大宽度
-        maxHeight: 200.0, // 图片最大高度
-      ),
-      // 添加一个固定大小的占位容器，确保布局不会因为图片加载而变化
-      child: Container(
-        width: 200.0,
-        height: 200.0,
-        alignment: Alignment.center,
-        child: message.isPrivacy
-            ? Image.network(
-                imageURL,
-                fit: BoxFit.cover,
-                width: 200,
-                height: 200,
-                errorBuilder: (_, _, _) =>
-                    const Icon(Icons.broken_image_outlined, size: 40),
-              )
-            : CachedNetworkImage(
-                cacheManager: AppImageCache.manager,
-                imageUrl: imageURL,
-                cacheKey: AppImageCache.cacheKey(imageURL),
-                fit: BoxFit.cover,
-                width: 200.0,
-                height: 200.0,
-                progressIndicatorBuilder:
-                    (
-                      BuildContext context,
-                      String url,
-                      DownloadProgress? progress,
-                    ) {
-                      if (progress == null) {
-                        return SizedBox(width: 200.0, height: 200.0);
-                      } else {
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: progress.totalSize != null
-                                ? progress.downloaded /
-                                      (progress.totalSize ?? 1)
-                                : null,
-                          ),
-                        );
-                      }
-                    },
-                errorWidget: (BuildContext context, String url, dynamic error) {
-                  return Container(
-                    width: 200.0,
-                    height: 200.0,
-                    color: Colors.grey[200],
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.broken_image,
-                      color: Colors.grey,
-                      size: 40,
-                    ),
-                  );
-                },
-              ),
-      ),
+    return ChatImageBubble(
+      imageProvider: message.isPrivacy
+          ? NetworkImage(imageURL)
+          : AppImageCache.provider(imageURL),
+      borderRadius: BorderRadius.zero,
     );
   }
 
@@ -2566,7 +2511,9 @@ class MessageBubble extends StatelessWidget {
                   onTap: message.videoCallRecord == null
                       ? null
                       : _startVideoCall,
-                  onLongPressStart: message.messageType == MessageType.audio
+                  onLongPressStart:
+                      message.messageType == MessageType.audio ||
+                          message.messageType == MessageType.text
                       ? null
                       : (details) => _showMessageActions(
                           context,
@@ -2690,8 +2637,10 @@ class MessageBubble extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: Text(
+                          child: AppSelectableText(
                             message.content,
+                            onDelete: onDelete,
+                            onQuote: onQuote,
                             style: TextStyle(
                               color: textColor,
                               fontSize: 15.5,
