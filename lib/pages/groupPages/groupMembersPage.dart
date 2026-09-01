@@ -50,6 +50,8 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
       _handleGroupEvent,
     );
     print('初始化群成员页面');
+    final groupId = int.tryParse(widget.groupId) ?? 0;
+    _groupMembers = globalUtil.getGroupMembers(groupId);
     // 直接设置 _filteredMembers，避免 _filterMembers 方法可能的问题
     _filteredMembers = _groupMembers;
     print('初始化默认数据完成，成员数: ${_filteredMembers.length}');
@@ -75,6 +77,7 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
       int groupIdInt = int.parse(widget.groupId);
 
       List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
+      if (members.isNotEmpty) globalUtil.addGroupMembers(groupIdInt, members);
 
       final currentUserId = globalUtil.userName?.trim() ?? '';
       if (currentUserId.isEmpty) return;

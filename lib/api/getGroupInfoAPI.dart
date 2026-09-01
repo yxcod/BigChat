@@ -1,6 +1,7 @@
 import '../model/groupInfoModel.dart';
 import '../utils/http.dart';
 import 'package:flutter/foundation.dart';
+import '../features/groups/data/group_data_cache.dart';
 
 // 获取用户的所有群信息
 Future<List<GroupInfoModel>> getGroups(String userName) async {
@@ -14,7 +15,20 @@ Future<List<GroupInfoModel>> getGroups(String userName) async {
     if (response.statusCode == 200) {
       if (response.data['code'] == 100) {
         List<dynamic> groups = response.data['groups'];
-        return groups.map((group) => GroupInfoModel.fromJson(group)).toList();
+        final result = groups
+            .whereType<Map>()
+            .map(
+              (group) => GroupInfoModel.fromJson(
+                group.map((key, value) => MapEntry(key.toString(), value)),
+              ),
+            )
+            .toList();
+        try {
+          await GroupDataCache().saveGroups(userName, result);
+        } catch (error) {
+          debugPrint('保存群资料快照失败: $error');
+        }
+        return result;
       } else {
         throw Exception('获取群信息失败: ${response.data['code']}');
       }

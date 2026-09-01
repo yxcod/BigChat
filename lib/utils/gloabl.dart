@@ -18,6 +18,7 @@ import '../features/chat/data/chat_local_cache.dart';
 import '../features/chat/data/hidden_messages_store.dart';
 import '../features/groups/application/group_member_cache.dart';
 import '../features/account/data/user_info_cache.dart';
+import '../features/groups/data/group_data_cache.dart';
 
 class GlobalUtil {
   String? _token;
@@ -35,6 +36,7 @@ class GlobalUtil {
   final HiddenMessagesStore _hiddenMessagesStore = HiddenMessagesStore();
   final GroupMemberCache _groupMemberCache = GroupMemberCache();
   final UserInfoCache _userInfoCache = UserInfoCache();
+  final GroupDataCache _groupDataCache = GroupDataCache();
   final Map<String, Timer> _chatCacheWriteTimers = {};
   final Map<int, Timer> _privacyMessageTimers = {};
   final ValueNotifier<int> privacyMessagesRevision = ValueNotifier<int>(0);
@@ -525,16 +527,29 @@ class GlobalUtil {
   // 添加群成员列表
   void addGroupMembers(int groupId, List<GroupMemberModel> members) {
     _groupMemberCache.put(groupId, members);
+    final ownerId = userName?.trim() ?? '';
+    if (ownerId.isNotEmpty && members.isNotEmpty) {
+      unawaited(_groupDataCache.saveMembers(ownerId, groupId, members));
+    }
   }
 
   // 获取群成员列表
   List<GroupMemberModel> getGroupMembers(int groupId) {
-    return _groupMemberCache.get(groupId);
+    final inMemory = _groupMemberCache.get(groupId);
+    if (inMemory.isNotEmpty) return inMemory;
+    final ownerId = userName?.trim() ?? '';
+    final persisted = _groupDataCache.loadMembers(ownerId, groupId);
+    if (persisted.isNotEmpty) _groupMemberCache.put(groupId, persisted);
+    return persisted;
   }
 
   // 清除群成员列表
   void clearGroupMembers(int groupId) {
     _groupMemberCache.remove(groupId);
+    final ownerId = userName?.trim() ?? '';
+    if (ownerId.isNotEmpty) {
+      unawaited(_groupDataCache.removeMembers(ownerId, groupId));
+    }
   }
 
   // 清除所有群成员列表

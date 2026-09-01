@@ -27,6 +27,7 @@ import '../../shared/pages/app_text_editor_page.dart';
 import '../../features/groups/application/group_notification_settings_service.dart';
 import '../../features/groups/application/group_membership_verifier.dart';
 import '../../core/media/image_file_format.dart';
+import '../../features/groups/data/group_data_cache.dart';
 
 class GroupChatSettingsPage extends StatefulWidget {
   final String groupId;
@@ -267,10 +268,14 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     _groupName = widget.groupName;
     _groupAnnouncement = '未设置';
     _groupDescription = '未设置';
-    if (widget.groupMembers.isNotEmpty) {
-      _members = _memberViewModels(widget.groupMembers);
+    final groupId = int.tryParse(widget.groupId) ?? 0;
+    final initialMembers = widget.groupMembers.isNotEmpty
+        ? widget.groupMembers
+        : globalUtil.getGroupMembers(groupId);
+    if (initialMembers.isNotEmpty) {
+      _members = _memberViewModels(initialMembers);
       final currentUserId = globalUtil.userName?.trim() ?? '';
-      for (final member in widget.groupMembers) {
+      for (final member in initialMembers) {
         if (member.userId == currentUserId && member.isQuit == 0) {
           _myNickname = member.groupNickName;
           _myRole = member.role;
@@ -278,6 +283,11 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
         }
       }
     }
+    final cachedGroup = GroupDataCache()
+        .loadGroups(globalUtil.userName ?? '')
+        .where((group) => group.groupId == groupId)
+        .firstOrNull;
+    if (cachedGroup != null) _applyGroupInfo(cachedGroup);
     unawaited(_loadGroupNotificationSetting());
     // 初始化时不需要手动设置群头像 URL，会在 _fetchGroupInfo 中自动设置
     // 群头像 URL 会根据 GroupInfoModel 中的 groupAvatar 字段动态生成
@@ -332,36 +342,30 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
       // 找到当前群
       for (var group in groups) {
         if (group.groupId.toString() == widget.groupId) {
-          // 将时间戳转换为可读的日期时间格式（只显示年月日）
-          DateTime createdAt = DateTime.fromMillisecondsSinceEpoch(
-            group.createdAt,
-          );
-          String formattedDate =
-              '${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')}';
-          setState(() {
-            _groupCreatedAt = formattedDate;
-            _groupDescription = group.description;
-            _groupAnnouncement = group.description.isEmpty
-                ? '未设置'
-                : group.description;
-            _groupName = group.groupName; // 更新群名称
-            _groupInfoModel = group; // 存储完整的群信息
-            // 更新群头像 URL 为 groupAvatar 字段对应的 URL
-            try {
-              String avatarName = group.groupAvatar.isNotEmpty
-                  ? group.groupAvatar
-                  : 'head.jpg';
-              String url = globalUtil.getImageURL(widget.groupId, avatarName);
-              _groupAvatar = url;
-            } catch (e) {
-              print('更新群头像 URL 失败: $e');
-            }
-          });
+          if (mounted) setState(() => _applyGroupInfo(group));
           break;
         }
       }
     } catch (e) {
       print('获取群信息失败: $e');
+    }
+  }
+
+  void _applyGroupInfo(GroupInfoModel group) {
+    final createdAt = DateTime.fromMillisecondsSinceEpoch(group.createdAt);
+    _groupCreatedAt =
+        '${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')}';
+    _groupDescription = group.description;
+    _groupAnnouncement = group.description.isEmpty ? '未设置' : group.description;
+    _groupName = group.groupName;
+    _groupInfoModel = group;
+    try {
+      final avatarName = group.groupAvatar.isNotEmpty
+          ? group.groupAvatar
+          : 'head.jpg';
+      _groupAvatar = globalUtil.getImageURL(widget.groupId, avatarName);
+    } catch (error) {
+      debugPrint('更新群头像 URL 失败: $error');
     }
   }
 
@@ -393,6 +397,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
     try {
       int groupIdInt = int.parse(widget.groupId);
       List<GroupMemberModel> members = await getGroupMembers(groupIdInt);
+      if (members.isNotEmpty) globalUtil.addGroupMembers(groupIdInt, members);
 
       // 根据用户要求，userId 就是 userName。成员列表缺失时必须再通过
       // 当前账号可见群资料确认，不能直接把群主误判成已被移除。

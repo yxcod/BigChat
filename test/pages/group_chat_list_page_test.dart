@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_base/app/theme/app_theme.dart';
 import 'package:flutter_base/pages/groupPages/groupChatListPage.dart';
+import 'package:flutter_base/features/groups/data/group_data_cache.dart';
+import 'package:flutter_base/model/groupInfoModel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -66,5 +68,37 @@ void main() {
     expect(find.text('测试群'), findsOneWidget);
     expect(find.byKey(const ValueKey('group_summary_card')), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('冷启动优先展示本地群列表快照', (tester) async {
+    final storage = <String, String>{};
+    final cache = GroupDataCache(
+      readString: (key) => storage[key],
+      writeString: (key, value) async => storage[key] = value,
+      deleteString: (key) async => storage.remove(key),
+    );
+    await cache.saveGroups('me', [
+      GroupInfoModel(
+        groupId: 3,
+        groupName: '离线可见群',
+        creatorId: 'me',
+        description: '本地资料',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: GroupChatListPage(
+          autoRefresh: false,
+          currentUserName: 'me',
+          groupDataCache: cache,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('离线可见群'), findsOneWidget);
+    expect(find.text('共 1 个群聊'), findsOneWidget);
   });
 }

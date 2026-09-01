@@ -10,6 +10,7 @@ import '../../shared/widgets/app_back_button.dart';
 import '../../shared/widgets/app_search_field.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
+import '../../features/groups/data/group_data_cache.dart';
 
 class GroupChat {
   final int groupId;
@@ -46,11 +47,13 @@ class GroupChatListPage extends StatefulWidget {
     this.initialGroups = const [],
     this.autoRefresh = true,
     this.currentUserName,
+    this.groupDataCache,
   });
 
   final List<GroupChat> initialGroups;
   final bool autoRefresh;
   final String? currentUserName;
+  final GroupDataCache? groupDataCache;
 
   @override
   _GroupChatListPageState createState() => _GroupChatListPageState();
@@ -65,10 +68,18 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
   Timer? _timer;
   // 静态缓存已经加载成功的头像 URL，避免重复加载
   static final Map<String, String> _avatarCache = {};
+  late final GroupDataCache _groupDataCache =
+      widget.groupDataCache ?? GroupDataCache();
   @override
   void initState() {
     super.initState();
-    _groupChats = List<GroupChat>.from(widget.initialGroups);
+    _groupChats = widget.initialGroups.isNotEmpty
+        ? List<GroupChat>.from(widget.initialGroups)
+        : _mapGroups(
+            _groupDataCache.loadGroups(
+              widget.currentUserName ?? globalUtil.userName ?? '',
+            ),
+          );
     _filteredGroupChats = List<GroupChat>.from(_groupChats);
     if (widget.autoRefresh) {
       _fetchGroups();
@@ -109,27 +120,7 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
       List<GroupInfoModel> groupInfoModels = await getGroups(
         globalUtil.userName!,
       );
-      final newGroups = groupInfoModels.map((model) {
-        final avatarName = model.groupAvatar; // 默认头像，可根据实际情况修改
-        final groupId = model.groupId; // 保持整数类型
-        String avatarURL = _getAvatarUrl(
-          groupId.toString(),
-          avatarName,
-        ); // 获取头像URL时转换为字符串
-        final groupIdStr = groupId.toString(); // 用于缓存键
-        final previousAvatar = previousAvatars[groupIdStr] ?? '';
-        if (avatarURL != previousAvatar && avatarURL.isNotEmpty) {
-          previousAvatars[groupIdStr] = avatarURL;
-        }
-        return GroupChat(
-          groupId: groupId,
-          name: model.groupName,
-          avatar: avatarURL,
-          previousAvatar: previousAvatar,
-          creatorId: model.creatorId,
-          description: model.description,
-        );
-      }).toList();
+      final newGroups = _mapGroups(groupInfoModels);
 
       if (!mounted) return;
       _groupChats = newGroups;
@@ -137,6 +128,30 @@ class _GroupChatListPageState extends State<GroupChatListPage> {
     } catch (e) {
       debugPrint('获取群聊列表失败: $e');
     }
+  }
+
+  List<GroupChat> _mapGroups(Iterable<GroupInfoModel> groupInfoModels) {
+    return groupInfoModels.map((model) {
+      final avatarName = model.groupAvatar; // 默认头像，可根据实际情况修改
+      final groupId = model.groupId; // 保持整数类型
+      String avatarURL = _getAvatarUrl(
+        groupId.toString(),
+        avatarName,
+      ); // 获取头像URL时转换为字符串
+      final groupIdStr = groupId.toString(); // 用于缓存键
+      final previousAvatar = previousAvatars[groupIdStr] ?? '';
+      if (avatarURL != previousAvatar && avatarURL.isNotEmpty) {
+        previousAvatars[groupIdStr] = avatarURL;
+      }
+      return GroupChat(
+        groupId: groupId,
+        name: model.groupName,
+        avatar: avatarURL,
+        previousAvatar: previousAvatar,
+        creatorId: model.creatorId,
+        description: model.description,
+      );
+    }).toList();
   }
 
   // 获取头像 URL，使用缓存避免重复加载

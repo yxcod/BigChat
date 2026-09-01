@@ -372,6 +372,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   Future<void> _handleRemovedFromGroup(ChatRealtimeEvent event) async {
     final groupId = event.groupId;
+    GlobalUtil().clearGroupMembers(groupId);
     await GlobalUtil().deleteChatRecords(
       GlobalUtil.groupConversationKey(groupId),
     );
