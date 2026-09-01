@@ -41,6 +41,16 @@ class UserInfoModel {
       friendListData: friendList,
     ); //..friendListData = friendList;
   }
+
+  Map<String, dynamic> toJson() => {
+    'userName': userName,
+    'nickName': nickName,
+    'avatar': avatar,
+    'gender': gender,
+    'region': region,
+    'signature': signature,
+    'friendListData': friendListData?.map((friend) => friend.toJson()).toList(),
+  };
 }
 
 String userGenderLabel(int gender) {

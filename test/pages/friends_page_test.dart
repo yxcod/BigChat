@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_base/app/theme/app_theme.dart';
 import 'package:flutter_base/pages/mainPages/friendsPage.dart';
+import 'package:flutter_base/model/friendInfoModel.dart';
+import 'package:flutter_base/model/userInfoModel.dart';
+import 'package:flutter_base/utils/gloabl.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -66,6 +69,35 @@ void main() {
     expect(find.text('叶翔'), findsOneWidget);
     expect(find.text('动态'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('没有服务器结果时优先展示内存中恢复的好友快照', (tester) async {
+    GlobalUtil().userInfoModel = UserInfoModel(
+      userName: 'owner',
+      nickName: '我',
+      avatar: '',
+      signature: '',
+      friendListData: [
+        FriendInfoModel(
+          userName: 'cached_friend',
+          nickName: '缓存好友',
+          remarks: '',
+          avatar: '',
+          signature: '',
+          isOnline: false,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: const Friendspage(friendListDate: [], autoRefresh: false),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('缓存好友'), findsOneWidget);
   });
 
   testWidgets('右上角菜单只保留创建群聊', (tester) async {

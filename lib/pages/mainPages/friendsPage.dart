@@ -12,6 +12,8 @@ import '../../core/config/refresh_intervals.dart';
 import '../../utils/WebSocketManager.dart';
 import '../../utils/presence_event.dart';
 import '../../utils/friend_sort_util.dart';
+import '../../model/friendInfoModel.dart';
+import '../../model/userInfoModel.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -98,7 +100,9 @@ class _FriendsPage extends State<Friendspage>
   @override
   void initState() {
     super.initState();
-    friends = List<Friend>.from(widget.friendListDate);
+    friends = widget.friendListDate.isNotEmpty
+        ? List<Friend>.from(widget.friendListDate)
+        : _friendsFromUserInfo(_globalUtil.userInfoModel);
     if (!widget.autoRefresh) return;
     final webSocketManager = WebSocketManager();
     _presenceSubscription = webSocketManager.addMessageListener(
@@ -238,45 +242,56 @@ class _FriendsPage extends State<Friendspage>
       final userInfo = await getUserInfoApi(userName);
       if (mounted) {
         if (userInfo.friendListData != null) {
-          final newFriends = userInfo.friendListData!.map((f) {
-            final avatarName = f.avatar ?? '';
-            final userName = f.userName ?? '';
-            final remark = f.remarks?.trim() ?? '';
-            // 使用 globalUtil.getImageURL 生成头像 URL
-            String avatarURL = _globalUtil.getImageURL(
-              userName,
-              avatarName,
-              version: f.modifyTime,
-            );
-            final previousAvatar = previousAvatars[userName] ?? '';
-            // 只有当 URL 不同时才更新缓存
-            if (avatarURL != previousAvatar && avatarURL.isNotEmpty) {
-              previousAvatars[userName] = avatarURL;
-            }
-            final isOnline =
-                _presenceOverrides[userName] ?? f.isOnline ?? false;
-            f.isOnline = isOnline;
-            return Friend(
-              userName: userName,
-              remark: remark,
-              name: remark.isNotEmpty ? remark : f.nickName ?? '',
-              avatar: avatarName.isNotEmpty ? avatarURL : '👤',
-              nickName: f.nickName ?? '',
-              previousAvatar: previousAvatars[userName] ?? '',
-              signature: f.signature ?? '',
-              time: '',
-              isOnline: isOnline,
-            );
-          }).toList();
           _globalUtil.userInfoModel = userInfo;
           setState(() {
-            friends = newFriends;
+            friends = _friendsFromUserInfo(userInfo);
           });
         }
       }
     } catch (e) {
       debugPrint('获取好友列表失败: $e');
     }
+  }
+
+  List<Friend> _friendsFromUserInfo(UserInfoModel userInfo) {
+    return (userInfo.friendListData ?? const <FriendInfoModel>[])
+        .map((friend) {
+          final avatarName = friend.avatar ?? '';
+          final userName = friend.userName ?? '';
+          final remark = friend.remarks?.trim() ?? '';
+          var avatarUrl = '';
+          if (avatarName.isNotEmpty && userName.isNotEmpty) {
+            try {
+              avatarUrl = _globalUtil.getImageURL(
+                userName,
+                avatarName,
+                version: friend.modifyTime,
+              );
+            } catch (_) {
+              avatarUrl = '';
+            }
+          }
+          final previousAvatar = previousAvatars[userName] ?? '';
+          if (avatarUrl.isNotEmpty && avatarUrl != previousAvatar) {
+            previousAvatars[userName] = avatarUrl;
+          }
+          final isOnline =
+              _presenceOverrides[userName] ?? friend.isOnline ?? false;
+          friend.isOnline = isOnline;
+          return Friend(
+            userName: userName,
+            remark: remark,
+            name: remark.isNotEmpty ? remark : friend.nickName ?? '',
+            avatar: avatarUrl.isNotEmpty ? avatarUrl : '👤',
+            nickName: friend.nickName ?? '',
+            previousAvatar: previousAvatars[userName] ?? '',
+            signature: friend.signature ?? '',
+            time: '',
+            isOnline: isOnline,
+          );
+        })
+        .where((friend) => friend.userName.isNotEmpty)
+        .toList();
   }
 
   //搜索好友

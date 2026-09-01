@@ -33,6 +33,9 @@ Future<void> main() async {
   await AppThemeController.instance.load();
   final hasAuthenticatedSession =
       await StorageUtil.restoreAuthenticatedSession();
+  if (hasAuthenticatedSession) {
+    GlobalUtil().hydrateUserInfoFromLocal();
+  }
   await PrivacySettingsService.instance.load();
   await GroupNotificationSettingsService.instance.load();
   final privacySettings = PrivacySettingsService.instance.settings;

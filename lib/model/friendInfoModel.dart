@@ -34,4 +34,16 @@ class FriendInfoModel {
       isOnline: JsonValueParser.boolValue(json["onlineStatus"]),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'userName': userName,
+    'nickName': nickName,
+    'remark': remarks,
+    'avatar': avatar,
+    'modifyTime': modifyTime,
+    'gender': gender,
+    'region': region,
+    'signature': signature,
+    'onlineStatus': isOnline,
+  };
 }

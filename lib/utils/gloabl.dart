@@ -17,6 +17,7 @@ import '../features/chat/domain/chat_time_formatter.dart';
 import '../features/chat/data/chat_local_cache.dart';
 import '../features/chat/data/hidden_messages_store.dart';
 import '../features/groups/application/group_member_cache.dart';
+import '../features/account/data/user_info_cache.dart';
 
 class GlobalUtil {
   String? _token;
@@ -33,6 +34,7 @@ class GlobalUtil {
   final ChatLocalCache _chatLocalCache = ChatLocalCache();
   final HiddenMessagesStore _hiddenMessagesStore = HiddenMessagesStore();
   final GroupMemberCache _groupMemberCache = GroupMemberCache();
+  final UserInfoCache _userInfoCache = UserInfoCache();
   final Map<String, Timer> _chatCacheWriteTimers = {};
   final Map<int, Timer> _privacyMessageTimers = {};
   final ValueNotifier<int> privacyMessagesRevision = ValueNotifier<int>(0);
@@ -144,6 +146,19 @@ class GlobalUtil {
 
   set userInfoModel(UserInfoModel? value) {
     _userInfoModel = value;
+    final ownerId = userName?.trim() ?? '';
+    if (value != null && ownerId.isNotEmpty) {
+      unawaited(_userInfoCache.save(ownerId, value));
+    }
+  }
+
+  bool hydrateUserInfoFromLocal() {
+    final ownerId = userName?.trim() ?? '';
+    if (ownerId.isEmpty) return false;
+    final cached = _userInfoCache.load(ownerId);
+    if (cached == null) return false;
+    _userInfoModel = cached;
+    return true;
   }
 
   // 管理未读消息的方法
