@@ -47,11 +47,13 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
   @override
   void initState() {
     super.initState();
+    _items = _repository.loadCached(widget.groupId, widget.type);
+    _loading = _items.isEmpty;
     _load();
   }
 
   Future<void> _load() async {
-    if (mounted) setState(() => _loading = true);
+    if (mounted && _items.isEmpty) setState(() => _loading = true);
     try {
       final items = await _repository.list(widget.groupId, widget.type);
       if (mounted) setState(() => _items = items);

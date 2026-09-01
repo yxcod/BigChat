@@ -45,4 +45,16 @@ class GroupResource {
       canDelete: json['canDelete'] == true,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'resourceId': id,
+    'groupId': groupId,
+    'resourceType': type == GroupResourceType.file ? 1 : 2,
+    'originalName': originalName,
+    'mimeType': mimeType,
+    'fileSize': fileSize,
+    'uploaderId': uploaderId,
+    'createdAt': createdAt.millisecondsSinceEpoch,
+    'canDelete': canDelete,
+  };
 }

@@ -30,10 +30,50 @@ void main() {
     expect(find.byKey(const Key('group_album_upload_video')), findsOneWidget);
     expect(find.textContaining('MP4、MOV、M4V'), findsOneWidget);
   });
+
+  testWidgets('cached files remain visible when background refresh fails', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GroupResourceListPage(
+          groupId: 8,
+          groupName: '测试群',
+          type: GroupResourceType.file,
+          repository: _OfflineCachedGroupResourceRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('离线文件.pdf'), findsOneWidget);
+  });
 }
 
 class _EmptyGroupResourceRepository extends GroupResourceRepository {
   @override
   Future<List<GroupResource>> list(int groupId, GroupResourceType type) async =>
       const [];
+}
+
+class _OfflineCachedGroupResourceRepository extends GroupResourceRepository {
+  @override
+  List<GroupResource> loadCached(int groupId, GroupResourceType type) => [
+    GroupResource(
+      id: 2,
+      groupId: groupId,
+      type: type,
+      originalName: '离线文件.pdf',
+      mimeType: 'application/pdf',
+      fileSize: 2048,
+      uploaderId: 'owner',
+      createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+      canDelete: false,
+    ),
+  ];
+
+  @override
+  Future<List<GroupResource>> list(int groupId, GroupResourceType type) async {
+    throw Exception('offline');
+  }
 }

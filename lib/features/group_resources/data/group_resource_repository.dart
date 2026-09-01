@@ -3,11 +3,14 @@ import 'package:dio/dio.dart';
 import '../../../utils/gloabl.dart';
 import '../../../utils/http.dart';
 import '../domain/group_resource.dart';
+import 'group_resource_cache.dart';
 
 class GroupResourceRepository {
-  GroupResourceRepository({HttpUtil? httpUtil})
-    : _http = httpUtil ?? HttpUtil();
+  GroupResourceRepository({HttpUtil? httpUtil, GroupResourceCache? cache})
+    : _http = httpUtil ?? HttpUtil(),
+      _cache = cache ?? GroupResourceCache();
   final HttpUtil _http;
+  final GroupResourceCache _cache;
 
   String get _userName => GlobalUtil().userName ?? '';
 
@@ -25,7 +28,7 @@ class GroupResourceRepository {
       throw Exception(data is Map ? data['message'] : '获取群资源失败');
     }
     final items = data['items'];
-    return items is List
+    final List<GroupResource> resources = items is List
         ? items
               .whereType<Map>()
               .map(
@@ -33,8 +36,18 @@ class GroupResourceRepository {
                     GroupResource.fromJson(Map<String, dynamic>.from(item)),
               )
               .toList()
-        : const [];
+        : const <GroupResource>[];
+    try {
+      await _cache.save(_userName, groupId, type, resources);
+    } catch (_) {
+      // A cache write must never turn a successful server response into an
+      // error or replace the currently visible list.
+    }
+    return resources;
   }
+
+  List<GroupResource> loadCached(int groupId, GroupResourceType type) =>
+      _cache.load(_userName, groupId, type);
 
   Future<void> upload({
     required int groupId,
