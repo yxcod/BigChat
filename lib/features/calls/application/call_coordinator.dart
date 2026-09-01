@@ -312,7 +312,7 @@ class CallCoordinator {
   }
 
   void _openLobby() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _runAfterNextFrame(() {
       GlobalNavigatorKey.navigatorState?.push(
         MaterialPageRoute<void>(
           settings: const RouteSettings(name: '/callLobby'),
@@ -324,7 +324,7 @@ class CallCoordinator {
   }
 
   void _openCall({required bool replace}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _runAfterNextFrame(() {
       final navigator = GlobalNavigatorKey.navigatorState;
       if (navigator == null) return;
       final route = MaterialPageRoute<void>(
@@ -341,10 +341,18 @@ class CallCoordinator {
   }
 
   void _closeTopCallRoute() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _runAfterNextFrame(() {
       final navigator = GlobalNavigatorKey.navigatorState;
       if (navigator?.canPop() == true) navigator?.pop();
     });
+  }
+
+  void _runAfterNextFrame(VoidCallback callback) {
+    final binding = WidgetsBinding.instance;
+    binding.addPostFrameCallback((_) => callback());
+    // WebSocket callbacks can arrive while the UI is idle. A post-frame
+    // callback alone does not request a frame, so explicitly schedule one.
+    binding.scheduleFrame();
   }
 
   String get _currentUser => GlobalUtil().userName?.trim() ?? '';
