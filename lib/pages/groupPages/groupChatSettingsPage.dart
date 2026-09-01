@@ -1230,7 +1230,7 @@ class _GroupChatSettingsPageState extends State<GroupChatSettingsPage> {
                       icon: Icons.photo_library_rounded,
                       color: Color(0xFF2B9DF4),
                       label: '群相册',
-                      type: GroupResourceType.photo,
+                      type: GroupResourceType.album,
                     ),
                   ],
                 ),

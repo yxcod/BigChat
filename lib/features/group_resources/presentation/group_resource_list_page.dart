@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/cache/app_image_cache.dart';
+import '../../../core/media/video_media.dart';
 import '../../../shared/widgets/app_video_player.dart';
 import '../../../shared/widgets/fullscreen_image_viewer.dart';
 import '../../../utils/http.dart';
@@ -23,22 +24,25 @@ class GroupResourceListPage extends StatefulWidget {
     required this.groupId,
     required this.groupName,
     required this.type,
+    this.repository,
   });
   final int groupId;
   final String groupName;
   final GroupResourceType type;
+  final GroupResourceRepository? repository;
   @override
   State<GroupResourceListPage> createState() => _GroupResourceListPageState();
 }
 
 class _GroupResourceListPageState extends State<GroupResourceListPage> {
-  final GroupResourceRepository _repository = GroupResourceRepository();
+  late final GroupResourceRepository _repository =
+      widget.repository ?? GroupResourceRepository();
   List<GroupResource> _items = const [];
   bool _loading = true;
   bool _uploading = false;
   double? _progress;
 
-  bool get _isAlbum => widget.type == GroupResourceType.photo;
+  bool get _isAlbum => widget.type == GroupResourceType.album;
 
   @override
   void initState() {
@@ -58,12 +62,46 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     }
   }
 
-  Future<void> _pickAndUpload() async {
+  Future<void> _chooseAndUpload() async {
+    if (!_isAlbum) {
+      await _pickAndUpload();
+      return;
+    }
+    final kind = await showModalBottomSheet<_AlbumUploadKind>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const Key('group_album_upload_photo'),
+              leading: const Icon(Icons.add_photo_alternate_outlined),
+              title: const Text('上传照片'),
+              subtitle: const Text('支持 JPEG、PNG、WebP，最大 5MB'),
+              onTap: () => Navigator.pop(context, _AlbumUploadKind.photo),
+            ),
+            ListTile(
+              key: const Key('group_album_upload_video'),
+              leading: const Icon(Icons.video_library_outlined),
+              title: const Text('上传视频'),
+              subtitle: const Text('支持 MP4、MOV、M4V，最大 300MB'),
+              onTap: () => Navigator.pop(context, _AlbumUploadKind.video),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (kind != null) await _pickAndUpload(albumKind: kind);
+  }
+
+  Future<void> _pickAndUpload({_AlbumUploadKind? albumKind}) async {
     if (_uploading) return;
     String? path;
     String? name;
     int size = 0;
-    if (_isAlbum) {
+    if (_isAlbum && albumKind == _AlbumUploadKind.photo) {
       final image = await ImagePicker().pickImage(
         source: ImageSource.gallery,
         imageQuality: 88,
@@ -78,6 +116,18 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         _message('照片不能超过5MB');
         return;
       }
+    } else if (_isAlbum && albumKind == _AlbumUploadKind.video) {
+      final video = await ImagePicker().pickVideo(source: ImageSource.gallery);
+      if (video == null) return;
+      path = video.path;
+      name = video.name;
+      try {
+        await validateVideoFile(path);
+      } catch (error) {
+        _message(error.toString().replaceFirst('Exception: ', ''));
+        return;
+      }
+      size = await video.length();
     } else {
       final result = await FilePicker.pickFiles(
         type: FileType.any,
@@ -105,7 +155,9 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         path: path!,
         originalName: name,
         onProgress: (sent, total) {
-          if (mounted && total > 0) setState(() => _progress = sent / total);
+          if (mounted && total > 0) {
+            setState(() => _progress = sent / total);
+          }
         },
       );
       await _load();
@@ -113,11 +165,12 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     } catch (error) {
       if (mounted) _message('上传失败：$error');
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _uploading = false;
           _progress = null;
         });
+      }
     }
   }
 
@@ -125,7 +178,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(_isAlbum ? '删除照片' : '删除文件'),
+        title: Text(_isAlbum ? (item.isVideo ? '删除视频' : '删除照片') : '删除文件'),
         content: Text('确定删除“${item.originalName}”吗？此操作会同时删除服务器文件。'),
         actions: [
           TextButton(
@@ -150,7 +203,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
 
   Future<void> _openFile(GroupResource item) async {
     final url = _repository.downloadUrl(item.id);
-    if (item.mimeType.startsWith('video/')) {
+    if (item.isVideo) {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => AppVideoPlayerPage(source: url),
@@ -171,8 +224,9 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         url,
         path,
         onReceiveProgress: (received, total) {
-          if (mounted && total > 0)
+          if (mounted && total > 0) {
             setState(() => _progress = received / total);
+          }
         },
       );
       if (mounted) _message('已下载到应用本地：$path');
@@ -199,7 +253,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         title: Text(_isAlbum ? '群相册' : '群文件'),
         actions: [
           IconButton(
-            onPressed: _uploading ? null : _pickAndUpload,
+            onPressed: _uploading ? null : _chooseAndUpload,
             icon: const Icon(Icons.add),
           ),
         ],
@@ -225,7 +279,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          _isAlbum ? '暂无群照片' : '暂无群文件',
+                          _isAlbum ? '暂无群照片或视频' : '暂无群文件',
                           style: const TextStyle(color: Colors.grey),
                         ),
                       ],
@@ -239,11 +293,9 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _uploading ? null : _pickAndUpload,
-        icon: Icon(
-          _isAlbum ? Icons.add_photo_alternate_outlined : Icons.upload_file,
-        ),
-        label: Text(_isAlbum ? '上传照片' : '上传文件'),
+        onPressed: _uploading ? null : _chooseAndUpload,
+        icon: Icon(_isAlbum ? Icons.add_to_photos_outlined : Icons.upload_file),
+        label: Text(_isAlbum ? '上传照片或视频' : '上传文件'),
       ),
     );
   }
@@ -262,25 +314,35 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       return Stack(
         fit: StackFit.expand,
         children: [
-          GestureDetector(
-            onTap: () => showFullscreenImage(
-              context,
-              imageProvider: AppImageCache.provider(url),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: CachedNetworkImage(
-                cacheManager: AppImageCache.manager,
-                imageUrl: url,
-                cacheKey: AppImageCache.cacheKey(url),
-                fit: BoxFit.cover,
-                errorWidget: (_, _, _) => ColoredBox(
-                  color: context.appSurface,
-                  child: const Icon(Icons.broken_image_outlined),
+          if (item.isVideo)
+            LayoutBuilder(
+              builder: (context, constraints) => AppVideoPreview(
+                key: ValueKey('group_album_video_${item.id}'),
+                source: url,
+                width: constraints.maxWidth,
+                height: constraints.maxHeight,
+              ),
+            )
+          else
+            GestureDetector(
+              onTap: () => showFullscreenImage(
+                context,
+                imageProvider: AppImageCache.provider(url),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  cacheManager: AppImageCache.manager,
+                  imageUrl: url,
+                  cacheKey: AppImageCache.cacheKey(url),
+                  fit: BoxFit.cover,
+                  errorWidget: (_, _, _) => ColoredBox(
+                    color: context.appSurface,
+                    child: const Icon(Icons.broken_image_outlined),
+                  ),
                 ),
               ),
             ),
-          ),
           if (item.canDelete)
             Positioned(
               top: 3,
@@ -316,18 +378,14 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: item.mimeType.startsWith('video/')
-                ? Colors.purple[50]
-                : Colors.amber[50],
+            color: item.isVideo ? Colors.purple[50] : Colors.amber[50],
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(
-            item.mimeType.startsWith('video/')
+            item.isVideo
                 ? Icons.play_circle_outline
                 : Icons.insert_drive_file_outlined,
-            color: item.mimeType.startsWith('video/')
-                ? Colors.purple
-                : Colors.amber[800],
+            color: item.isVideo ? Colors.purple : Colors.amber[800],
           ),
         ),
         title: Text(
@@ -351,3 +409,5 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     },
   );
 }
+
+enum _AlbumUploadKind { photo, video }

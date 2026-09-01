@@ -52,7 +52,7 @@ class GroupResourcesPage extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               const Text(
-                '群成员共享的文件与照片',
+                '群成员共享的文件、照片与视频',
                 style: TextStyle(color: Colors.grey, fontSize: 13),
               ),
               const SizedBox(height: 26),
@@ -69,7 +69,7 @@ class GroupResourcesPage extends StatelessWidget {
                     icon: Icons.photo_library_rounded,
                     color: const Color(0xFF2B9DF4),
                     label: '群相册',
-                    onTap: () => _open(context, GroupResourceType.photo),
+                    onTap: () => _open(context, GroupResourceType.album),
                   ),
                 ],
               ),

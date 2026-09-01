@@ -21,7 +21,7 @@ void main() {
     expect(resource.fileSize, 1048576);
   });
 
-  test('resource type 2 is parsed as album photo', () {
+  test('resource type 2 is parsed as album media', () {
     final resource = GroupResource.fromJson({
       'resourceId': 1,
       'groupId': 2,
@@ -31,7 +31,23 @@ void main() {
       'canDelete': false,
     });
 
-    expect(resource.type, GroupResourceType.photo);
+    expect(resource.type, GroupResourceType.album);
     expect(resource.canDelete, isFalse);
+  });
+
+  test('album video is identified from persisted mime type', () {
+    final resource = GroupResource.fromJson({
+      'resourceId': 2,
+      'groupId': 2,
+      'resourceType': 2,
+      'originalName': 'clip.mov',
+      'mimeType': 'video/quicktime',
+      'createdAt': 0,
+      'canDelete': true,
+    });
+
+    expect(resource.type, GroupResourceType.album);
+    expect(resource.isVideo, isTrue);
+    expect(resource.isImage, isFalse);
   });
 }

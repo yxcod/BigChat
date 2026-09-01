@@ -1,4 +1,4 @@
-enum GroupResourceType { file, photo }
+enum GroupResourceType { file, album }
 
 class GroupResource {
   const GroupResource({
@@ -23,6 +23,9 @@ class GroupResource {
   final DateTime createdAt;
   final bool canDelete;
 
+  bool get isVideo => mimeType.startsWith('video/');
+  bool get isImage => mimeType.startsWith('image/');
+
   factory GroupResource.fromJson(Map<String, dynamic> json) {
     int intValue(Object? value) => value is num
         ? value.toInt()
@@ -32,7 +35,7 @@ class GroupResource {
       id: intValue(json['resourceId']),
       groupId: intValue(json['groupId']),
       type: intValue(json['resourceType']) == 2
-          ? GroupResourceType.photo
+          ? GroupResourceType.album
           : GroupResourceType.file,
       originalName: json['originalName']?.toString() ?? '',
       mimeType: json['mimeType']?.toString() ?? 'application/octet-stream',

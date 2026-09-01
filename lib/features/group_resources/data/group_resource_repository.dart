@@ -21,8 +21,9 @@ class GroupResourceRepository {
       },
     );
     final data = response.data;
-    if (data is! Map || data['code'] != 100)
+    if (data is! Map || data['code'] != 100) {
       throw Exception(data is Map ? data['message'] : '获取群资源失败');
+    }
     final items = data['items'];
     return items is List
         ? items
@@ -59,8 +60,9 @@ class GroupResourceRepository {
       onSendProgress: onProgress,
     );
     final data = response.data;
-    if (data is! Map || data['code'] != 100)
+    if (data is! Map || data['code'] != 100) {
       throw Exception(data is Map ? data['message'] : '上传失败');
+    }
   }
 
   Future<void> delete(int resourceId) async {
@@ -69,8 +71,9 @@ class GroupResourceRepository {
       data: {'resourceId': resourceId, 'userName': _userName},
     );
     final data = response.data;
-    if (data is! Map || data['code'] != 100)
+    if (data is! Map || data['code'] != 100) {
       throw Exception(data is Map ? data['message'] : '删除失败');
+    }
   }
 
   String downloadUrl(int resourceId) {
