@@ -47,6 +47,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('离线文件.pdf'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('group_resource_actions_2')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('save_group_resource_2')), findsOneWidget);
+    expect(find.text('保存文件'), findsOneWidget);
   });
 }
 

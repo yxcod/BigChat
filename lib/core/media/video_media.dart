@@ -6,11 +6,28 @@ const int maxVideoBytes = 300 * 1024 * 1024;
 
 bool isVideoPath(String path) {
   final uri = Uri.tryParse(path);
-  final clean = (uri?.queryParameters['videoName'] ?? uri?.path ?? path)
-      .toLowerCase();
+  final clean =
+      (uri?.queryParameters['videoName'] ??
+              uri?.queryParameters['fileName'] ??
+              uri?.queryParameters['resourceName'] ??
+              uri?.path ??
+              path)
+          .toLowerCase();
   return clean.endsWith('.mp4') ||
       clean.endsWith('.mov') ||
       clean.endsWith('.m4v');
+}
+
+String videoSuggestedName(String source, {String fallback = 'video.mp4'}) {
+  final uri = Uri.tryParse(source);
+  final candidate =
+      uri?.queryParameters['videoName'] ??
+      uri?.queryParameters['fileName'] ??
+      uri?.queryParameters['resourceName'] ??
+      (uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : source);
+  final normalized = candidate.split('/').last.split('\\').last.trim();
+  if (normalized.isEmpty || !isVideoPath(normalized)) return fallback;
+  return normalized.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
 }
 
 Future<void> validateVideoFile(String path) async {
@@ -66,14 +83,18 @@ Future<String> videoCachePath(String url, {Directory? rootDirectory}) async {
   }
   final uri = Uri.parse(url);
   final owner = uri.queryParameters['userName'] ?? 'unknown';
-  final requestedName = uri.queryParameters['videoName'];
+  final requestedName =
+      uri.queryParameters['videoName'] ??
+      uri.queryParameters['fileName'] ??
+      uri.queryParameters['resourceName'];
   final fallback = uri.pathSegments.isEmpty
       ? 'video.mp4'
       : uri.pathSegments.last;
-  final safeName = '${owner}_${requestedName ?? fallback}'.replaceAll(
+  var safeName = '${owner}_${requestedName ?? fallback}'.replaceAll(
     RegExp(r'[^A-Za-z0-9._-]'),
     '_',
   );
+  if (!isVideoPath(safeName)) safeName = '$safeName.mp4';
   return '${videoDirectory.path}/$safeName';
 }
 

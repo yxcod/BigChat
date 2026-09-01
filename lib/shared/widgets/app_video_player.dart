@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/media/video_media.dart';
+import '../../core/media/chat_media_saver.dart';
+import '../../core/media/video_thumbnail_cache.dart';
 import '../../utils/http.dart';
 
 class AppVideoPreview extends StatefulWidget {
@@ -17,6 +19,9 @@ class AppVideoPreview extends StatefulWidget {
     this.uploadProgress,
     this.uploadFailed = false,
     this.autoCacheRemote = false,
+    this.fileName,
+    this.allowSave = true,
+    this.onLongPress,
   });
 
   final String source;
@@ -26,6 +31,9 @@ class AppVideoPreview extends StatefulWidget {
   final double? uploadProgress;
   final bool uploadFailed;
   final bool autoCacheRemote;
+  final String? fileName;
+  final bool allowSave;
+  final VoidCallback? onLongPress;
 
   @override
   State<AppVideoPreview> createState() => _AppVideoPreviewState();
@@ -40,6 +48,7 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
   CancelToken? _previewDownloadCancelToken;
   bool _isDownloading = false;
   double? _downloadProgress;
+  String? _thumbnailPath;
 
   bool get _isUploading =>
       widget.uploadProgress != null && widget.uploadProgress! < 1;
@@ -72,6 +81,7 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
     _playbackIsLocal = false;
     _isDownloading = false;
     _downloadProgress = null;
+    _thumbnailPath = null;
     if (mounted) setState(() {});
     await previous?.dispose();
     if (!mounted || generation != _loadGeneration) return;
@@ -93,6 +103,18 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
         resolvedSource = cachedPath;
         resolvedIsLocal = true;
       }
+    }
+
+    final thumbnailPath = await VideoThumbnailCache.resolve(resolvedSource);
+    if (!mounted || generation != _loadGeneration) return;
+    if (thumbnailPath != null) {
+      setState(() {
+        _thumbnailPath = thumbnailPath;
+        _playbackSource = resolvedSource;
+        _playbackIsLocal = resolvedIsLocal;
+        _previewError = null;
+      });
+      return;
     }
 
     if (!resolvedIsLocal && widget.autoCacheRemote) {
@@ -237,7 +259,12 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
     final isLocal = _playbackSource == null ? widget.isLocal : _playbackIsLocal;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => AppVideoPlayerPage(source: source, isLocal: isLocal),
+        builder: (_) => AppVideoPlayerPage(
+          source: source,
+          isLocal: isLocal,
+          fileName: widget.fileName,
+          allowSave: widget.allowSave,
+        ),
       ),
     );
     // The player may have downloaded the remote video into the shared cache.
@@ -246,6 +273,14 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
   }
 
   Widget _cover() {
+    final thumbnailPath = _thumbnailPath;
+    if (thumbnailPath != null) {
+      return Image.file(
+        File(thumbnailPath),
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _fallbackCover(),
+      );
+    }
     final controller = _controller;
     if (controller != null && controller.value.isInitialized) {
       final size = controller.value.size;
@@ -260,18 +295,18 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
         ),
       );
     }
-    return Container(
-      color: const Color(0xFF202124),
-      alignment: Alignment.center,
-      child: Icon(
-        _previewError == null
-            ? Icons.movie_outlined
-            : Icons.video_file_outlined,
-        size: 54,
-        color: Colors.white38,
-      ),
-    );
+    return _fallbackCover();
   }
+
+  Widget _fallbackCover() => Container(
+    color: const Color(0xFF202124),
+    alignment: Alignment.center,
+    child: Icon(
+      _previewError == null ? Icons.movie_outlined : Icons.video_file_outlined,
+      size: 54,
+      color: Colors.white38,
+    ),
+  );
 
   Widget _centerOverlay() {
     if (widget.uploadFailed) {
@@ -329,6 +364,7 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: _openPlayer,
+      onLongPress: widget.onLongPress,
       borderRadius: BorderRadius.circular(10),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
@@ -376,9 +412,13 @@ class AppVideoPlayerPage extends StatefulWidget {
     super.key,
     required this.source,
     this.isLocal = false,
+    this.fileName,
+    this.allowSave = true,
   });
   final String source;
   final bool isLocal;
+  final String? fileName;
+  final bool allowSave;
 
   @override
   State<AppVideoPlayerPage> createState() => _AppVideoPlayerPageState();
@@ -496,26 +536,23 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
   }
 
   Future<void> _download() async {
-    if (_downloading || widget.isLocal) return;
+    if (_downloading || !widget.allowSave) return;
     setState(() {
       _downloading = true;
       _downloadProgress = null;
     });
     try {
-      final path = await videoDownloadPath(widget.source);
-      await HttpUtil().downloadFile(
-        widget.source,
-        path,
-        onReceiveProgress: (received, total) {
-          if (mounted && total > 0) {
-            setState(() => _downloadProgress = received / total);
-          }
-        },
+      await const ChatMediaSaver().saveVideo(
+        source: widget.source,
+        fileName: widget.fileName ?? videoSuggestedName(widget.source),
+        localPath: widget.isLocal
+            ? widget.source
+            : await cachedVideoPath(widget.source),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('视频已保存到应用本地：$path'),
+          content: const Text('视频已保存到系统相册'),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -533,6 +570,29 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
     }
   }
 
+  Future<void> _showSaveMenu() async {
+    if (!widget.allowSave || _downloading) return;
+    final action = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const Key('save_video_to_gallery'),
+              leading: const Icon(Icons.download_rounded),
+              title: const Text('保存到本地'),
+              onTap: () => Navigator.pop(context, true),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (action == true && mounted) await _download();
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
@@ -543,6 +603,7 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => setState(() => _controlsVisible = !_controlsVisible),
+          onLongPress: _showSaveMenu,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -576,7 +637,7 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
                       ),
                       const Spacer(),
-                      if (!widget.isLocal)
+                      if (widget.allowSave)
                         IconButton(
                           onPressed: _downloading ? null : _download,
                           icon: const Icon(

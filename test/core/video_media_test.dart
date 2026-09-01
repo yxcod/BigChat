@@ -46,4 +46,19 @@ void main() {
 
     expect(await cachedVideoPath(url, rootDirectory: root), isNull);
   });
+
+  test('group resource cache keeps the original video extension', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'group_video_cache_test',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    const url =
+        'http://example.test/api/group/resource/download?resourceId=7&fileName=相册视频.mov';
+
+    final path = await videoCachePath(url, rootDirectory: root);
+
+    expect(path, endsWith('.mov'));
+    expect(isVideoPath(url), isTrue);
+    expect(videoSuggestedName(url), endsWith('.mov'));
+  });
 }

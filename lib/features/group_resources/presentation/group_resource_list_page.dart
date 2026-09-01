@@ -10,6 +10,8 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/cache/app_image_cache.dart';
+import '../../../core/media/chat_file_saver.dart';
+import '../../../core/media/chat_media_saver.dart';
 import '../../../core/media/video_media.dart';
 import '../../../shared/widgets/app_video_player.dart';
 import '../../../shared/widgets/fullscreen_image_viewer.dart';
@@ -204,11 +206,12 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
   }
 
   Future<void> _openFile(GroupResource item) async {
-    final url = _repository.downloadUrl(item.id);
+    final url = _repository.downloadUrl(item.id, fileName: item.originalName);
     if (item.isVideo) {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => AppVideoPlayerPage(source: url),
+          builder: (_) =>
+              AppVideoPlayerPage(source: url, fileName: item.originalName),
         ),
       );
       return;
@@ -237,6 +240,74 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     } finally {
       if (mounted) setState(() => _progress = null);
     }
+  }
+
+  Future<void> _save(GroupResource item) async {
+    final url = _repository.downloadUrl(item.id, fileName: item.originalName);
+    setState(() => _progress = 0);
+    try {
+      if (item.isImage) {
+        await const ChatMediaSaver().saveImage(
+          source: url,
+          fileName: item.originalName,
+        );
+        if (mounted) _message('照片已保存到系统相册');
+      } else if (item.isVideo) {
+        await const ChatMediaSaver().saveVideo(
+          source: url,
+          fileName: item.originalName,
+        );
+        if (mounted) _message('视频已保存到系统相册');
+      } else {
+        final saved = await const ChatFileSaver().save(
+          source: url,
+          fileName: item.originalName,
+          onProgress: (progress) {
+            if (mounted) setState(() => _progress = progress);
+          },
+          beforeChoosingLocation: () async {
+            if (mounted) setState(() => _progress = null);
+          },
+        );
+        if (mounted) _message(saved ? '文件保存成功' : '已取消保存');
+      }
+    } catch (error) {
+      if (mounted) _message('保存失败：$error');
+    } finally {
+      if (mounted) setState(() => _progress = null);
+    }
+  }
+
+  Future<void> _showResourceActions(GroupResource item) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: ValueKey('save_group_resource_${item.id}'),
+              leading: const Icon(Icons.download_rounded),
+              title: Text(
+                item.type == GroupResourceType.file ? '保存文件' : '保存到本地',
+              ),
+              onTap: () => Navigator.pop(context, 'save'),
+            ),
+            if (item.canDelete)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('删除', style: TextStyle(color: Colors.red)),
+                onTap: () => Navigator.pop(context, 'delete'),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'save') await _save(item);
+    if (action == 'delete') await _delete(item);
   }
 
   void _message(String value) => ScaffoldMessenger.of(context).showSnackBar(
@@ -312,7 +383,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     itemCount: _items.length,
     itemBuilder: (context, index) {
       final item = _items[index];
-      final url = _repository.downloadUrl(item.id);
+      final url = _repository.downloadUrl(item.id, fileName: item.originalName);
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -323,6 +394,9 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
                 source: url,
                 width: constraints.maxWidth,
                 height: constraints.maxHeight,
+                fileName: item.originalName,
+                autoCacheRemote: true,
+                onLongPress: () => _showResourceActions(item),
               ),
             )
           else
@@ -330,7 +404,9 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
               onTap: () => showFullscreenImage(
                 context,
                 imageProvider: AppImageCache.provider(url),
+                onSave: () => _save(item),
               ),
+              onLongPress: () => _showResourceActions(item),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: CachedNetworkImage(
@@ -400,13 +476,13 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: item.canDelete
-            ? IconButton(
-                onPressed: () => _delete(item),
-                icon: const Icon(Icons.delete_outline),
-              )
-            : const Icon(Icons.download_outlined),
+        trailing: IconButton(
+          key: ValueKey('group_resource_actions_${item.id}'),
+          onPressed: () => _showResourceActions(item),
+          icon: const Icon(Icons.more_horiz),
+        ),
         onTap: () => _openFile(item),
+        onLongPress: () => _showResourceActions(item),
       );
     },
   );
