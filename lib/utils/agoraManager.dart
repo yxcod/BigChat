@@ -6,10 +6,16 @@ import 'package:flutter/foundation.dart';
 enum AgoraCallConnectionState { idle, initializing, joining, joined, failed }
 
 class AgoraManager extends ChangeNotifier {
-  AgoraManager._internal();
+  AgoraManager._internal() : _engineFactory = createAgoraRtcEngine;
+
+  @visibleForTesting
+  AgoraManager.testing({required RtcEngine Function() engineFactory})
+    : _engineFactory = engineFactory;
 
   static final AgoraManager _instance = AgoraManager._internal();
   factory AgoraManager() => _instance;
+
+  final RtcEngine Function() _engineFactory;
 
   RtcEngine? _engine;
   int? _localUid;
@@ -31,7 +37,7 @@ class AgoraManager extends ChangeNotifier {
     }
     _setState(AgoraCallConnectionState.initializing);
     try {
-      final engine = createAgoraRtcEngine();
+      final engine = _engineFactory();
       await engine.initialize(
         RtcEngineContext(
           appId: appId,
@@ -41,7 +47,11 @@ class AgoraManager extends ChangeNotifier {
       engine.registerEventHandler(_eventHandler());
       await engine.enableVideo();
       await engine.enableAudio();
-      await engine.setEnableSpeakerphone(true);
+      // setEnableSpeakerphone changes the active route and can return
+      // ERR_NOT_READY (-3) before the channel has been joined. Configure the
+      // default route here; toggleSpeaker uses setEnableSpeakerphone later,
+      // when the engine is already in a channel.
+      await engine.setDefaultAudioRouteToSpeakerphone(true);
       await engine.startPreview();
       _engine = engine;
       _appId = appId;
