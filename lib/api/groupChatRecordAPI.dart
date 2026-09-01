@@ -46,19 +46,13 @@ Future<List<GroupConversationModel>> getGroupConversations(
             .map((conv) => GroupConversationModel.fromJson(conv))
             .toList();
       } else {
-        // 当API返回错误码时，返回空列表而不是抛出异常
-        // 这样即使群聊会话获取失败，也不会影响单聊会话的获取
-        debugPrint('获取群聊会话失败: ${response.data['code']}');
-        return [];
+        throw Exception('获取群聊会话失败: ${response.data['code']}');
       }
     } else {
-      // 当HTTP请求失败时，返回空列表而不是抛出异常
-      debugPrint('获取群聊会话失败: ${response.statusCode}');
-      return [];
+      throw Exception('获取群聊会话失败: ${response.statusCode}');
     }
   } catch (e) {
-    // 当发生其他异常时，返回空列表而不是抛出异常
     debugPrint('获取群聊会话失败: $e');
-    return [];
+    rethrow;
   }
 }

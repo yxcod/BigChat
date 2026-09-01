@@ -11,25 +11,27 @@ Future<List<ConversationModel>> getConversationApi(String userName) async {
     );
     //debugPrint('POST请求成功：${response.data}');
     final mapData = response.data as Map<String, dynamic>;
-    final conversationList = mapData['conversationList'] as List<dynamic>?;
-    if (conversationList != null) {
-      return conversationList
-          .map(
-            (item) => ConversationModel.formJSON(item as Map<String, dynamic>),
-          )
-          .toList();
-    } else {
-      // 未获取到conversationList数据，返回空列表
-      debugPrint('未获取到会话列表数据');
-      return [];
+    final code = mapData['code'];
+    if (code != null && code != 100 && code != 200) {
+      throw Exception('获取会话列表失败：$code');
     }
+    final conversationList = mapData['conversationList'];
+    if (conversationList is! List) {
+      throw const FormatException('会话列表数据格式错误');
+    }
+    return conversationList
+        .whereType<Map>()
+        .map(
+          (item) => ConversationModel.formJSON(
+            item.map((key, value) => MapEntry(key.toString(), value)),
+          ),
+        )
+        .toList();
   } on DioException catch (e) {
-    // 发生DioException异常，返回空列表
     debugPrint('POST请求失败：${e.error}');
-    return [];
+    rethrow;
   } catch (e) {
-    // 发生其他异常，返回空列表
     debugPrint('获取会话列表失败：$e');
-    return [];
+    rethrow;
   }
 }

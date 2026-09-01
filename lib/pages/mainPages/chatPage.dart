@@ -20,6 +20,7 @@ import '../../features/chat/domain/chat_realtime_event.dart';
 import '../../features/chat/domain/chat_message_mapper.dart';
 import '../../features/chat/domain/read_all_policy.dart';
 import '../../features/chat/data/hidden_conversations_store.dart';
+import '../../features/chat/data/conversation_snapshot_store.dart';
 import '../../shared/widgets/swipe_action_cell.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
@@ -31,12 +32,14 @@ class Chatpage extends StatefulWidget {
   final List<Chat> chatList;
   final Function(int)? onUnreadCountChanged;
   final bool autoRefresh;
+  final ConversationSnapshotStore? conversationSnapshotStore;
 
   const Chatpage({
     super.key,
     required this.chatList,
     this.onUnreadCountChanged,
     this.autoRefresh = true,
+    this.conversationSnapshotStore,
   });
 
   @override
@@ -56,6 +59,8 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
   String _searchQuery = '';
   final HiddenConversationsStore _hiddenConversationsStore =
       HiddenConversationsStore();
+  late final ConversationSnapshotStore _conversationSnapshotStore =
+      widget.conversationSnapshotStore ?? ConversationSnapshotStore();
   Map<String, int> _hiddenConversations = {};
   String _hiddenConversationsOwner = '';
   final Set<int> _locallyReadGroupIds = {};
@@ -74,7 +79,12 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
       _handleGroupNotificationSettingsChanged,
     );
     _chats.addAll(
-      sortChatsByLatest(widget.chatList.map(_applyGroupNotificationSetting)),
+      sortChatsByLatest(
+        (widget.chatList.isNotEmpty
+                ? widget.chatList
+                : _restoreConversationSnapshot())
+            .map(_applyGroupNotificationSetting),
+      ),
     );
     if (!widget.autoRefresh) return;
     // 延迟到构建完成后执行需要setState的操作
@@ -97,6 +107,25 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
         _updateChatUnreadCount(userName, count);
       }
     };
+  }
+
+  List<Chat> _restoreConversationSnapshot() {
+    final owner = globalUtil.userName?.trim() ?? '';
+    if (owner.isEmpty) return const [];
+    _hiddenConversationsOwner = owner;
+    _hiddenConversations = _hiddenConversationsStore.load(owner);
+    return _conversationSnapshotStore
+        .load(owner)
+        .map(Chat.fromCacheJson)
+        .where((chat) => chat.userName.isNotEmpty)
+        .where((chat) {
+          return !_hiddenConversationsStore.shouldHide(
+            _hiddenConversations,
+            _hiddenKey(chat),
+            chat.updateTime,
+          );
+        })
+        .toList(growable: false);
   }
 
   void _refreshPrivacyMessages() {
@@ -643,10 +672,11 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
     widget.onUnreadCountChanged?.call(totalUnreadCount);
   }
 
-  Future<List<Chat>> _convertToChatList(
+  List<Chat> _convertToChatList(
     List<ConversationModel> conversations,
     List<GroupConversationModel> groupConversations,
-  ) async {
+    List<GroupInfoModel> allGroups,
+  ) {
     final globalUtil = GlobalUtil();
     final currentUserName = globalUtil.userName;
     final friendList = globalUtil.userInfoModel.friendListData ?? [];
@@ -712,91 +742,72 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
     }
 
     // 转换群聊会话
-    try {
-      // 获取所有群聊信息
-      final allGroups = await getGroups(currentUserName!);
+    for (final groupConversation in groupConversations) {
+      try {
+        // 查找对应的群聊信息
+        final groupInfo = allGroups.firstWhere(
+          (g) => g.groupId == groupConversation.groupId,
+          orElse: () => GroupInfoModel(
+            groupId: groupConversation.groupId,
+            groupName: '未知群聊',
+            creatorId: '',
+          ),
+        );
+        final groupIdStr = groupConversation.groupId.toString();
 
-      for (final groupConversation in groupConversations) {
-        try {
-          // 查找对应的群聊信息
-          final groupInfo = allGroups.firstWhere(
-            (g) => g.groupId == groupConversation.groupId,
-            orElse: () => GroupInfoModel(
-              groupId: groupConversation.groupId,
-              groupName: '未知群聊',
-              creatorId: '',
-            ),
-          );
-          final groupIdStr = groupConversation.groupId.toString();
+        // 格式化时间
+        final formattedTime = GlobalUtil.formatTimestamp(
+          groupConversation.updateTime,
+        );
 
-          // 格式化时间
-          final formattedTime = GlobalUtil.formatTimestamp(
-            groupConversation.updateTime,
-          );
+        // 构建群聊头像 URL
+        String avatarName = groupInfo.groupAvatar;
+        String newAvatarUrl = globalUtil.getImageURL(groupIdStr, avatarName);
 
-          // 构建群聊头像 URL
-          String avatarName = groupInfo.groupAvatar;
-          String newAvatarUrl = globalUtil.getImageURL(groupIdStr, avatarName);
-
-          // 检查缓存中是否已有该群聊的头像，并且 URL 是否相同
-          String avatarURL;
-          if (_avatarCache.containsKey(groupIdStr)) {
-            String cachedUrl = _avatarCache[groupIdStr]!;
-            if (cachedUrl == newAvatarUrl) {
-              // URL 相同，使用缓存的头像 URL
-              avatarURL = cachedUrl;
-            } else {
-              // URL 不同，使用新的头像 URL 并更新缓存
-              avatarURL = newAvatarUrl;
-              _avatarCache[groupIdStr] = newAvatarUrl;
-            }
+        // 检查缓存中是否已有该群聊的头像，并且 URL 是否相同
+        String avatarURL;
+        if (_avatarCache.containsKey(groupIdStr)) {
+          String cachedUrl = _avatarCache[groupIdStr]!;
+          if (cachedUrl == newAvatarUrl) {
+            // URL 相同，使用缓存的头像 URL
+            avatarURL = cachedUrl;
           } else {
-            // 缓存中没有，使用新的头像 URL 并加入缓存
+            // URL 不同，使用新的头像 URL 并更新缓存
             avatarURL = newAvatarUrl;
             _avatarCache[groupIdStr] = newAvatarUrl;
           }
+        } else {
+          // 缓存中没有，使用新的头像 URL 并加入缓存
+          avatarURL = newAvatarUrl;
+          _avatarCache[groupIdStr] = newAvatarUrl;
+        }
 
-          // 查找最后发送者的名称
-          String? lastSenderName;
-          if (groupConversation.lastSenderId.isNotEmpty) {
-            // 如果发送者是自身，显示为"我"
-            if (groupConversation.lastSenderId == currentUserName) {
-              lastSenderName = '我';
-            } else {
-              try {
-                // 优先使用已缓存的群成员，避免会话列表刷新时产生 N+1 请求。
-                final groupMembers = globalUtil.getGroupMembers(
-                  groupConversation.groupId,
-                );
-                // 从群成员列表中查找发送者的群昵称
-                final senderMember = groupMembers.firstWhere(
-                  (member) => member.userId == groupConversation.lastSenderId,
-                  orElse: () => GroupMemberModel(
-                    userId: groupConversation.lastSenderId,
-                    groupNickName: '',
-                    avatar: '',
-                  ),
-                );
-                // 如果有群昵称，使用群昵称；否则使用用户名
-                if (senderMember.groupNickName.isNotEmpty) {
-                  lastSenderName = senderMember.groupNickName;
-                } else {
-                  // 如果没有群昵称，从好友列表中查找
-                  final sender = friendList.firstWhere(
-                    (f) => f.userName == groupConversation.lastSenderId,
-                    orElse: () => FriendInfoModel.formJSON({
-                      'userName': groupConversation.lastSenderId,
-                    }),
-                  );
-                  lastSenderName = (sender.remarks?.isEmpty ?? true)
-                      ? (sender.nickName?.isEmpty ?? true)
-                            ? sender.userName!
-                            : sender.nickName!
-                      : sender.remarks!;
-                }
-              } catch (e) {
-                debugPrint('获取群成员信息失败：$e');
-                // 如果获取群成员失败，从好友列表中查找
+        // 查找最后发送者的名称
+        String? lastSenderName;
+        if (groupConversation.lastSenderId.isNotEmpty) {
+          // 如果发送者是自身，显示为"我"
+          if (groupConversation.lastSenderId == currentUserName) {
+            lastSenderName = '我';
+          } else {
+            try {
+              // 优先使用已缓存的群成员，避免会话列表刷新时产生 N+1 请求。
+              final groupMembers = globalUtil.getGroupMembers(
+                groupConversation.groupId,
+              );
+              // 从群成员列表中查找发送者的群昵称
+              final senderMember = groupMembers.firstWhere(
+                (member) => member.userId == groupConversation.lastSenderId,
+                orElse: () => GroupMemberModel(
+                  userId: groupConversation.lastSenderId,
+                  groupNickName: '',
+                  avatar: '',
+                ),
+              );
+              // 如果有群昵称，使用群昵称；否则使用用户名
+              if (senderMember.groupNickName.isNotEmpty) {
+                lastSenderName = senderMember.groupNickName;
+              } else {
+                // 如果没有群昵称，从好友列表中查找
                 final sender = friendList.firstWhere(
                   (f) => f.userName == groupConversation.lastSenderId,
                   orElse: () => FriendInfoModel.formJSON({
@@ -809,49 +820,60 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
                           : sender.nickName!
                     : sender.remarks!;
               }
+            } catch (e) {
+              debugPrint('获取群成员信息失败：$e');
+              // 如果获取群成员失败，从好友列表中查找
+              final sender = friendList.firstWhere(
+                (f) => f.userName == groupConversation.lastSenderId,
+                orElse: () => FriendInfoModel.formJSON({
+                  'userName': groupConversation.lastSenderId,
+                }),
+              );
+              lastSenderName = (sender.remarks?.isEmpty ?? true)
+                  ? (sender.nickName?.isEmpty ?? true)
+                        ? sender.userName!
+                        : sender.nickName!
+                  : sender.remarks!;
             }
           }
-
-          // 创建群聊 Chat 对象
-          final serverUnreadCount = groupConversation.unreadCount;
-          final locallyRead = _locallyReadGroupIds.contains(
-            groupConversation.groupId,
-          );
-          if (serverUnreadCount == 0) {
-            _locallyReadGroupIds.remove(groupConversation.groupId);
-          }
-          final rawUnreadCount = locallyRead ? 0 : serverUnreadCount;
-          final muted = _groupNotificationSettings.isMuted(
-            groupConversation.groupId,
-          );
-          chatList.add(
-            Chat(
-              name: groupInfo.groupName,
-              avatar: avatarURL,
-              lastMessage: chatVoicePreview(groupConversation.lastMsg),
-              time: formattedTime.substring(11, 16), // 只显示时分
-              unreadCount: muted ? 0 : rawUnreadCount,
-              rawUnreadCount: rawUnreadCount,
-              userName: groupIdStr,
-              isGroup: true,
-              isMuted: muted,
-              hasMutedUnread: muted && rawUnreadCount > 0,
-              lastSenderName: lastSenderName,
-              mentionedMe: groupConversation.mentionedMe && rawUnreadCount > 0,
-              updateTime: groupConversation.updateTime,
-            ),
-          );
-        } catch (e) {
-          debugPrint('转换群聊会话失败：$e');
-          // 继续处理其他群聊会话，不中断整个流程
         }
+
+        // 创建群聊 Chat 对象
+        final serverUnreadCount = groupConversation.unreadCount;
+        final locallyRead = _locallyReadGroupIds.contains(
+          groupConversation.groupId,
+        );
+        if (serverUnreadCount == 0) {
+          _locallyReadGroupIds.remove(groupConversation.groupId);
+        }
+        final rawUnreadCount = locallyRead ? 0 : serverUnreadCount;
+        final muted = _groupNotificationSettings.isMuted(
+          groupConversation.groupId,
+        );
+        chatList.add(
+          Chat(
+            name: groupInfo.groupName,
+            avatar: avatarURL,
+            lastMessage: chatVoicePreview(groupConversation.lastMsg),
+            time: formattedTime.substring(11, 16), // 只显示时分
+            unreadCount: muted ? 0 : rawUnreadCount,
+            rawUnreadCount: rawUnreadCount,
+            userName: groupIdStr,
+            isGroup: true,
+            isMuted: muted,
+            hasMutedUnread: muted && rawUnreadCount > 0,
+            lastSenderName: lastSenderName,
+            mentionedMe: groupConversation.mentionedMe && rawUnreadCount > 0,
+            updateTime: groupConversation.updateTime,
+          ),
+        );
+      } catch (e) {
+        debugPrint('转换群聊会话失败：$e');
+        // 继续处理其他群聊会话，不中断整个流程
       }
-    } catch (e) {
-      debugPrint('获取群聊信息失败：$e');
-      // 继续处理，不中断整个流程
     }
 
-    return sortChatsByLatest(chatList.map(_applyConversationPreview));
+    return sortChatsByLatest(chatList);
   }
 
   Future<void> fetchConversations() async {
@@ -868,15 +890,22 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
       }
       await _ensureHiddenConversationsLoaded();
 
-      // 调用 API 获取单聊会话列表
-      final conversations = await getConversationApi(currentUserName);
-      // 调用 API 获取群聊会话列表
-      final groupConversations = await getGroupConversations(currentUserName);
+      // 三项请求同时发起，缩短会话列表刷新时间。任意请求失败都保留
+      // 当前 UI 和本地快照，避免把网络故障误判为“没有会话”。
+      final results = await Future.wait<Object>([
+        getConversationApi(currentUserName),
+        getGroupConversations(currentUserName),
+        getGroups(currentUserName),
+      ]);
+      final conversations = results[0] as List<ConversationModel>;
+      final groupConversations = results[1] as List<GroupConversationModel>;
+      final allGroups = results[2] as List<GroupInfoModel>;
 
       // 转换为 Chat 列表并更新 UI
-      final allChats = await _convertToChatList(
+      final allChats = _convertToChatList(
         conversations,
         groupConversations,
+        allGroups,
       );
       var hiddenChanged = false;
       final chatList = allChats.where((chat) {
@@ -901,9 +930,18 @@ class _ChatpageState extends State<Chatpage> with WidgetsBindingObserver {
         return;
       }
 
+      try {
+        await _conversationSnapshotStore.save(
+          currentUserName,
+          chatList.map((chat) => chat.toCacheJson()),
+        );
+      } catch (error) {
+        debugPrint('保存会话列表快照失败：$error');
+      }
+
       setState(() {
         _chats.clear();
-        _chats.addAll(chatList);
+        _chats.addAll(chatList.map(_applyConversationPreview));
         _notifyUnreadCountChanged();
       });
 
@@ -1764,6 +1802,44 @@ class Chat {
       mentionedMe: mentionedMe ?? this.mentionedMe,
     );
   }
+
+  factory Chat.fromCacheJson(Map<String, dynamic> json) {
+    int readInt(String key) => int.tryParse(json[key]?.toString() ?? '') ?? 0;
+    bool readBool(String key) => json[key] == true || json[key] == 1;
+    return Chat(
+      name: json['name']?.toString() ?? '',
+      avatar: json['avatar']?.toString() ?? '',
+      lastMessage: json['lastMessage']?.toString() ?? '',
+      time: json['time']?.toString() ?? '',
+      unreadCount: readInt('unreadCount'),
+      rawUnreadCount: readInt('rawUnreadCount'),
+      userName: json['userName']?.toString() ?? '',
+      isGroup: readBool('isGroup'),
+      isOnline: readBool('isOnline'),
+      lastSenderName: json['lastSenderName']?.toString(),
+      updateTime: readInt('updateTime'),
+      isMuted: readBool('isMuted'),
+      hasMutedUnread: readBool('hasMutedUnread'),
+      mentionedMe: readBool('mentionedMe'),
+    );
+  }
+
+  Map<String, dynamic> toCacheJson() => {
+    'name': name,
+    'avatar': avatar,
+    'lastMessage': lastMessage,
+    'time': time,
+    'unreadCount': unreadCount,
+    'rawUnreadCount': rawUnreadCount,
+    'userName': userName,
+    'isGroup': isGroup,
+    'isOnline': isOnline,
+    if (lastSenderName != null) 'lastSenderName': lastSenderName,
+    'updateTime': updateTime,
+    'isMuted': isMuted,
+    'hasMutedUnread': hasMutedUnread,
+    'mentionedMe': mentionedMe,
+  };
 }
 
 List<Chat> sortChatsByLatest(Iterable<Chat> chats) {
