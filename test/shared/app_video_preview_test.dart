@@ -20,6 +20,7 @@ void main() {
 
     expect(find.text('42%'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(AnimatedSwitcher), findsOneWidget);
   });
 
   testWidgets('failed local video preview is not playable', (tester) async {

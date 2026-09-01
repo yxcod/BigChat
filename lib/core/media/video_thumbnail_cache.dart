@@ -26,7 +26,9 @@ class VideoThumbnailCache {
   }) async {
     try {
       final root = rootDirectory ?? await getApplicationSupportDirectory();
-      final directory = Directory('${root.path}/video_thumbnails');
+      // v2 uses the real first frame. Keep it separate from the previous
+      // 200ms cache so existing installs refresh their covers once.
+      final directory = Directory('${root.path}/video_thumbnails_v2');
       await directory.create(recursive: true);
       final destination = File('${directory.path}/${_stableHash(source)}.jpg');
       if (await destination.exists() && await destination.length() > 0) {
@@ -38,7 +40,7 @@ class VideoThumbnailCache {
         thumbnailPath: directory.path,
         imageFormat: ImageFormat.JPEG,
         maxWidth: 720,
-        timeMs: 200,
+        timeMs: 0,
         quality: 82,
       );
       if (generated == null) return null;

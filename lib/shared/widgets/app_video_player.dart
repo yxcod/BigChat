@@ -380,7 +380,20 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _cover(),
+              // Display the generic cover immediately, then replace it with
+              // the generated first frame without leaving a blank area.
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: KeyedSubtree(
+                  key: ValueKey<String>(
+                    _thumbnailPath ??
+                        ((_controller?.value.isInitialized ?? false)
+                            ? 'decoded-first-frame'
+                            : 'temporary-cover'),
+                  ),
+                  child: _cover(),
+                ),
+              ),
               if (_previewError == null || _isTransferring)
                 Center(child: _centerOverlay()),
               if (_previewError != null && !_isTransferring)
