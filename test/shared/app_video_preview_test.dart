@@ -44,6 +44,19 @@ void main() {
     expect(find.byType(AppVideoPlayerPage), findsNothing);
   });
 
+  testWidgets('completed upload reveals the local video cover', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AppVideoPreview(source: '', isLocal: true, uploadProgress: 1),
+        ),
+      ),
+    );
+
+    expect(find.text('100%'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
   testWidgets('privacy video keeps saving disabled in the player', (
     tester,
   ) async {

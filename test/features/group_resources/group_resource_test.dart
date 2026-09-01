@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter_base/features/group_resources/data/group_resource_media_cache.dart';
 import 'package:flutter_base/features/group_resources/domain/group_resource.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -50,4 +53,23 @@ void main() {
     expect(resource.isVideo, isTrue);
     expect(resource.isImage, isFalse);
   });
+
+  test(
+    'an existing uploaded media path can be restored after restart',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'group_resource_media_test',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/resource.mp4');
+      await file.writeAsBytes(const [1, 2, 3]);
+
+      expect(
+        const GroupResourceMediaCache().existingPath(file.path),
+        file.path,
+      );
+      await file.delete();
+      expect(const GroupResourceMediaCache().existingPath(file.path), isNull);
+    },
+  );
 }

@@ -87,6 +87,9 @@ void main() {
 
     repository.completeUpload();
     await tester.pumpAndSettle();
+
+    expect(find.text('待上传照片.jpg'), findsOneWidget);
+    expect(find.textContaining('上传中'), findsNothing);
   });
 }
 
@@ -126,7 +129,7 @@ class _PendingUploadGroupResourceRepository extends GroupResourceRepository {
       const [];
 
   @override
-  Future<void> upload({
+  Future<GroupResource> upload({
     required int groupId,
     required GroupResourceType type,
     required String path,
@@ -135,6 +138,18 @@ class _PendingUploadGroupResourceRepository extends GroupResourceRepository {
   }) async {
     onProgress?.call(42, 100);
     await _uploadCompleter.future;
+    return GroupResource(
+      id: 99,
+      groupId: groupId,
+      type: type,
+      originalName: originalName,
+      mimeType: 'image/jpeg',
+      fileSize: 1024,
+      uploaderId: 'owner',
+      createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
+      canDelete: true,
+      localPath: path,
+    );
   }
 
   void completeUpload() => _uploadCompleter.complete();

@@ -92,10 +92,14 @@ Future<String> videoCachePath(
       uri.queryParameters['videoName'] ??
       uri.queryParameters['fileName'] ??
       uri.queryParameters['resourceName'];
+  final resourceId = uri.queryParameters['resourceId']?.trim();
   final fallback = uri.pathSegments.isEmpty
       ? 'video.mp4'
       : uri.pathSegments.last;
-  var safeName = '${owner}_${requestedName ?? fallback}'.replaceAll(
+  final identity = resourceId?.isNotEmpty == true
+      ? 'group_${resourceId!}_${requestedName ?? fallback}'
+      : requestedName ?? fallback;
+  var safeName = '${owner}_$identity'.replaceAll(
     RegExp(r'[^A-Za-z0-9._-]'),
     '_',
   );

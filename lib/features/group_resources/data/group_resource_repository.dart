@@ -4,13 +4,19 @@ import '../../../utils/gloabl.dart';
 import '../../../utils/http.dart';
 import '../domain/group_resource.dart';
 import 'group_resource_cache.dart';
+import 'group_resource_media_cache.dart';
 
 class GroupResourceRepository {
-  GroupResourceRepository({HttpUtil? httpUtil, GroupResourceCache? cache})
-    : _http = httpUtil ?? HttpUtil(),
-      _cache = cache ?? GroupResourceCache();
+  GroupResourceRepository({
+    HttpUtil? httpUtil,
+    GroupResourceCache? cache,
+    GroupResourceMediaCache? mediaCache,
+  }) : _http = httpUtil ?? HttpUtil(),
+       _cache = cache ?? GroupResourceCache(),
+       _mediaCache = mediaCache ?? const GroupResourceMediaCache();
   final HttpUtil _http;
   final GroupResourceCache _cache;
+  final GroupResourceMediaCache _mediaCache;
 
   String get _userName => GlobalUtil().userName ?? '';
 
@@ -27,15 +33,22 @@ class GroupResourceRepository {
     if (data is! Map || data['code'] != 100) {
       throw Exception(data is Map ? data['message'] : '获取群资源失败');
     }
+    final cachedById = {
+      for (final item in _cache.load(_userName, groupId, type)) item.id: item,
+    };
     final items = data['items'];
     final List<GroupResource> resources = items is List
-        ? items
-              .whereType<Map>()
-              .map(
-                (item) =>
-                    GroupResource.fromJson(Map<String, dynamic>.from(item)),
-              )
-              .toList()
+        ? items.whereType<Map>().map((item) {
+            final resource = GroupResource.fromJson(
+              Map<String, dynamic>.from(item),
+            );
+            final localPath = _mediaCache.existingPath(
+              cachedById[resource.id]?.localPath,
+            );
+            return localPath == null
+                ? resource
+                : resource.copyWith(localPath: localPath);
+          }).toList()
         : const <GroupResource>[];
     try {
       await _cache.save(_userName, groupId, type, resources);
@@ -49,7 +62,7 @@ class GroupResourceRepository {
   List<GroupResource> loadCached(int groupId, GroupResourceType type) =>
       _cache.load(_userName, groupId, type);
 
-  Future<void> upload({
+  Future<GroupResource> upload({
     required int groupId,
     required GroupResourceType type,
     required String path,
@@ -76,6 +89,31 @@ class GroupResourceRepository {
     if (data is! Map || data['code'] != 100) {
       throw Exception(data is Map ? data['message'] : '上传失败');
     }
+    final uploaded = data['data'];
+    if (uploaded is! Map) throw Exception('服务器未返回上传资源信息');
+    var resource = GroupResource.fromJson(Map<String, dynamic>.from(uploaded));
+    if (resource.id <= 0) throw Exception('服务器未返回有效资源ID');
+
+    final localPath = await _mediaCache.persistUpload(
+      resource: resource,
+      sourcePath: path,
+      remoteUrl: downloadUrl(resource.id),
+    );
+    final visibleLocalPath = localPath ?? _mediaCache.existingPath(path);
+    if (visibleLocalPath != null) {
+      resource = resource.copyWith(localPath: visibleLocalPath);
+    }
+    try {
+      final existing = _cache.load(_userName, groupId, type);
+      await _cache.save(_userName, groupId, type, [
+        resource,
+        ...existing.where((item) => item.id != resource.id),
+      ]);
+    } catch (_) {
+      // Upload success is authoritative even when the local snapshot cannot
+      // be updated. The current page still retains its optimistic preview.
+    }
+    return resource;
   }
 
   Future<void> delete(int resourceId) async {

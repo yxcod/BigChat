@@ -11,6 +11,7 @@ class GroupResource {
     required this.uploaderId,
     required this.createdAt,
     required this.canDelete,
+    this.localPath,
   });
 
   final int id;
@@ -22,6 +23,7 @@ class GroupResource {
   final String uploaderId;
   final DateTime createdAt;
   final bool canDelete;
+  final String? localPath;
 
   bool get isVideo => mimeType.startsWith('video/');
   bool get isImage => mimeType.startsWith('image/');
@@ -43,6 +45,7 @@ class GroupResource {
       uploaderId: json['uploaderId']?.toString() ?? '',
       createdAt: DateTime.fromMillisecondsSinceEpoch(timestamp),
       canDelete: json['canDelete'] == true,
+      localPath: json['localPath']?.toString(),
     );
   }
 
@@ -56,5 +59,19 @@ class GroupResource {
     'uploaderId': uploaderId,
     'createdAt': createdAt.millisecondsSinceEpoch,
     'canDelete': canDelete,
+    if (localPath?.isNotEmpty == true) 'localPath': localPath,
   };
+
+  GroupResource copyWith({String? localPath}) => GroupResource(
+    id: id,
+    groupId: groupId,
+    type: type,
+    originalName: originalName,
+    mimeType: mimeType,
+    fileSize: fileSize,
+    uploaderId: uploaderId,
+    createdAt: createdAt,
+    canDelete: canDelete,
+    localPath: localPath ?? this.localPath,
+  );
 }

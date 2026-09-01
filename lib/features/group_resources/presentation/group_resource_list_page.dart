@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -83,7 +82,6 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       if (mounted) {
         setState(() {
           _items = items;
-          _pending.removeWhere((item) => item.completed);
         });
       }
     } catch (error) {
@@ -152,7 +150,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       );
     });
     try {
-      await _repository.upload(
+      final uploaded = await _repository.upload(
         groupId: widget.groupId,
         type: widget.type,
         path: draft.path,
@@ -165,21 +163,14 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
           );
         },
       );
-      _updatePending(
-        pendingId,
-        (item) => item.copyWith(progress: 1, completed: true),
-      );
-      try {
-        final items = await _repository.list(widget.groupId, widget.type);
-        if (mounted) {
-          setState(() {
-            _items = items;
-            _pending.removeWhere((item) => item.id == pendingId);
-          });
-        }
-      } catch (_) {
-        // The upload is already committed. Keep its local preview visible
-        // until pull-to-refresh can replace it with the server resource.
+      if (mounted) {
+        setState(() {
+          _items = [
+            uploaded,
+            ..._items.where((item) => item.id != uploaded.id),
+          ];
+          _pending.removeWhere((item) => item.id == pendingId);
+        });
       }
       if (mounted) _message('上传成功');
     } catch (error) {
@@ -286,11 +277,15 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
 
   Future<void> _openFile(GroupResource item) async {
     final url = _repository.downloadUrl(item.id);
+    final localPath = _validLocalPath(item);
     if (item.isVideo) {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) =>
-              AppVideoPlayerPage(source: url, fileName: item.originalName),
+          builder: (_) => AppVideoPlayerPage(
+            source: localPath ?? url,
+            isLocal: localPath != null,
+            fileName: item.originalName,
+          ),
         ),
       );
       return;
@@ -304,15 +299,22 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         '_',
       );
       final path = '${directory.path}/$safeName';
-      await HttpUtil().downloadFile(
-        url,
-        path,
-        onReceiveProgress: (received, total) {
-          if (mounted && total > 0) {
-            setState(() => _progress = received / total);
-          }
-        },
-      );
+      if (localPath != null) {
+        final destination = File(path);
+        if (destination.absolute.path != File(localPath).absolute.path) {
+          await File(localPath).copy(path);
+        }
+      } else {
+        await HttpUtil().downloadFile(
+          url,
+          path,
+          onReceiveProgress: (received, total) {
+            if (mounted && total > 0) {
+              setState(() => _progress = received / total);
+            }
+          },
+        );
+      }
       if (mounted) _message('已下载到应用本地：$path');
     } catch (error) {
       if (mounted) _message('下载失败：$error');
@@ -323,11 +325,12 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
 
   Future<void> _save(GroupResource item) async {
     final url = _repository.downloadUrl(item.id);
+    final localPath = _validLocalPath(item);
     setState(() => _progress = 0);
     try {
       if (item.isImage) {
         await const ChatMediaSaver().saveImage(
-          source: url,
+          source: localPath ?? url,
           fileName: item.originalName,
         );
         if (mounted) _message('照片已保存到系统相册');
@@ -335,6 +338,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         await const ChatMediaSaver().saveVideo(
           source: url,
           fileName: item.originalName,
+          localPath: localPath,
         );
         if (mounted) _message('视频已保存到系统相册');
       } else {
@@ -465,6 +469,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       }
       final item = _items[index - _pending.length];
       final url = _repository.downloadUrl(item.id);
+      final localPath = _validLocalPath(item);
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -472,11 +477,12 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
             LayoutBuilder(
               builder: (context, constraints) => AppVideoPreview(
                 key: ValueKey('group_album_video_${item.id}'),
-                source: url,
+                source: localPath ?? url,
+                isLocal: localPath != null,
                 width: constraints.maxWidth,
                 height: constraints.maxHeight,
                 fileName: item.originalName,
-                autoCacheRemote: true,
+                autoCacheRemote: localPath == null,
                 onLongPress: () => _showResourceActions(item),
               ),
             )
@@ -484,18 +490,16 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
             GestureDetector(
               onTap: () => showFullscreenImage(
                 context,
-                imageProvider: AppImageCache.provider(url),
+                imageProvider: _imageProvider(item, url),
                 onSave: () => _save(item),
               ),
               onLongPress: () => _showResourceActions(item),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: CachedNetworkImage(
-                  cacheManager: AppImageCache.manager,
-                  imageUrl: url,
-                  cacheKey: AppImageCache.cacheKey(url),
+                child: Image(
+                  image: _imageProvider(item, url),
                   fit: BoxFit.cover,
-                  errorWidget: (_, _, _) => ColoredBox(
+                  errorBuilder: (_, _, _) => ColoredBox(
                     color: context.appSurface,
                     child: const Icon(Icons.broken_image_outlined),
                   ),
@@ -538,7 +542,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
               source: item.path,
               isLocal: true,
               fileName: item.name,
-              uploadProgress: item.failed ? null : progress,
+              uploadProgress: item.failed || progress >= 1 ? null : progress,
               uploadFailed: item.failed,
             )
           else
@@ -550,7 +554,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
                 child: const Icon(Icons.image_outlined),
               ),
             ),
-          if (!item.isVideo)
+          if (!item.isVideo && progress < 1)
             ColoredBox(
               color: const Color(0x55000000),
               child: Center(
@@ -626,8 +630,6 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       subtitle: Text(
         item.failed
             ? '上传失败'
-            : item.completed
-            ? '已上传，正在刷新列表'
             : '${_size(item.size)} · 上传中 ${(progress * 100).round()}%',
         style: item.failed ? const TextStyle(color: Colors.red) : null,
       ),
@@ -660,7 +662,9 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
         width: 48,
         height: 48,
         fileName: item.name,
-        uploadProgress: item.failed ? null : item.progress,
+        uploadProgress: item.failed || item.progress >= 1
+            ? null
+            : item.progress,
         uploadFailed: item.failed,
       );
     }
@@ -669,31 +673,45 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
 
   Widget _buildServerFilePreview(GroupResource item) {
     final url = _repository.downloadUrl(item.id);
+    final localPath = _validLocalPath(item);
     if (item.isImage) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: CachedNetworkImage(
-          cacheManager: AppImageCache.manager,
-          imageUrl: url,
-          cacheKey: AppImageCache.cacheKey(url),
+        child: Image(
+          image: _imageProvider(item, url),
           width: 48,
           height: 48,
           fit: BoxFit.cover,
-          errorWidget: (_, _, _) => _fileIcon(false),
+          errorBuilder: (_, _, _) => _fileIcon(false),
         ),
       );
     }
     if (item.isVideo) {
       return AppVideoPreview(
-        source: url,
+        source: localPath ?? url,
+        isLocal: localPath != null,
         width: 48,
         height: 48,
         fileName: item.originalName,
-        autoCacheRemote: true,
+        autoCacheRemote: localPath == null,
         onLongPress: () => _showResourceActions(item),
       );
     }
     return _fileIcon(false);
+  }
+
+  String? _validLocalPath(GroupResource item) {
+    final path = item.localPath;
+    if (path == null || path.isEmpty) return null;
+    final file = File(path);
+    return file.existsSync() && file.lengthSync() > 0 ? path : null;
+  }
+
+  ImageProvider<Object> _imageProvider(GroupResource item, String url) {
+    final localPath = _validLocalPath(item);
+    return localPath == null
+        ? AppImageCache.provider(url)
+        : FileImage(File(localPath));
   }
 
   Widget _fileIcon(bool video) => Container(
@@ -759,7 +777,6 @@ class _PendingGroupResource {
     required this.kind,
     required this.progress,
     this.failed = false,
-    this.completed = false,
   });
 
   final String id;
@@ -769,7 +786,6 @@ class _PendingGroupResource {
   final GroupResourceUploadKind kind;
   final double progress;
   final bool failed;
-  final bool completed;
 
   bool get isVideo =>
       kind == GroupResourceUploadKind.video || isVideoPath(path);
@@ -783,18 +799,14 @@ class _PendingGroupResource {
         lower.endsWith('.gif');
   }
 
-  _PendingGroupResource copyWith({
-    double? progress,
-    bool? failed,
-    bool? completed,
-  }) => _PendingGroupResource(
-    id: id,
-    path: path,
-    name: name,
-    size: size,
-    kind: kind,
-    progress: progress ?? this.progress,
-    failed: failed ?? this.failed,
-    completed: completed ?? this.completed,
-  );
+  _PendingGroupResource copyWith({double? progress, bool? failed}) =>
+      _PendingGroupResource(
+        id: id,
+        path: path,
+        name: name,
+        size: size,
+        kind: kind,
+        progress: progress ?? this.progress,
+        failed: failed ?? this.failed,
+      );
 }

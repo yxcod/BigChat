@@ -219,7 +219,12 @@ class StorageUtil {
         if (await directory.exists()) await directory.delete(recursive: true);
       }
       final support = await getApplicationSupportDirectory();
-      for (final name in <String>['chat_video_cache', 'chat_voice_cache']) {
+      for (final name in <String>[
+        'chat_video_cache',
+        'chat_voice_cache',
+        'group_resource_image_cache',
+        'video_thumbnails_v2',
+      ]) {
         final directory = Directory('${support.path}/$name');
         if (await directory.exists()) await directory.delete(recursive: true);
       }

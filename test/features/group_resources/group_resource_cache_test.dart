@@ -21,6 +21,7 @@ void main() {
         uploaderId: 'owner',
         createdAt: DateTime.fromMillisecondsSinceEpoch(1000),
         canDelete: true,
+        localPath: '/cached/group/video.mp4',
       );
 
       await cache.save('owner', 8, GroupResourceType.album, [video]);
@@ -28,6 +29,10 @@ void main() {
       expect(
         cache.load('owner', 8, GroupResourceType.album).single.isVideo,
         isTrue,
+      );
+      expect(
+        cache.load('owner', 8, GroupResourceType.album).single.localPath,
+        '/cached/group/video.mp4',
       );
       expect(cache.load('other', 8, GroupResourceType.album), isEmpty);
       expect(cache.load('owner', 8, GroupResourceType.file), isEmpty);

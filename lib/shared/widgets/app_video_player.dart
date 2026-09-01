@@ -65,7 +65,8 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.source != widget.source ||
         oldWidget.isLocal != widget.isLocal ||
-        oldWidget.autoCacheRemote != widget.autoCacheRemote) {
+        oldWidget.autoCacheRemote != widget.autoCacheRemote ||
+        oldWidget.fileName != widget.fileName) {
       _initializePreview();
     }
   }
@@ -322,8 +323,11 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
         child: Icon(Icons.error_outline, size: 32, color: Colors.white),
       );
     }
+    final uploadProgress = widget.uploadProgress;
     final progress =
-        widget.uploadProgress ??
+        (uploadProgress != null && uploadProgress < 1
+            ? uploadProgress
+            : null) ??
         (_isDownloading ? (_downloadProgress ?? 0) : null);
     if (progress != null) {
       final normalized = progress.clamp(0.0, 1.0);

@@ -64,7 +64,32 @@ void main() {
       );
 
       expect(path, endsWith('.mov'));
+      expect(path, contains('group_7_'));
       expect(Uri.parse(url).queryParameters.containsKey('fileName'), isFalse);
     },
   );
+
+  test('group videos with the same file name have distinct cache paths', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'group_video_identity_test',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    const first =
+        'http://example.test/api/group/resource/download?resourceId=7&userName=10001';
+    const second =
+        'http://example.test/api/group/resource/download?resourceId=8&userName=10001';
+
+    final firstPath = await videoCachePath(
+      first,
+      rootDirectory: root,
+      suggestedFileName: '相册视频.mov',
+    );
+    final secondPath = await videoCachePath(
+      second,
+      rootDirectory: root,
+      suggestedFileName: '相册视频.mov',
+    );
+
+    expect(firstPath, isNot(secondPath));
+  });
 }
