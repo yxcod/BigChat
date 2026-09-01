@@ -109,6 +109,15 @@ class _ProfilePageState extends State<ProfilePage>
     final userName = GlobalUtil().userName ?? '';
     if (userName.isEmpty) return;
     if (mounted) setState(() => _isLoadingMoments = true);
+    if (_momentsRepository case final CachedMomentsReader cachedRepository) {
+      final cached = await cachedRepository.loadCachedMoments(userName);
+      if (mounted && cached.isNotEmpty) {
+        setState(() {
+          _moments = cached;
+          _isLoadingMoments = false;
+        });
+      }
+    }
     try {
       final moments = await _momentsRepository.fetchOwnMoments(userName);
       if (!mounted) return;
