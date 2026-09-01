@@ -127,6 +127,43 @@ void main() {
     expect(find.byKey(const Key('moment_publish_fab')), findsNothing);
   });
 
+  testWidgets('friend moment media offers a bottom save action', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = LocalMomentsRepository();
+    await repository.publish(
+      const MomentDraft(
+        authorId: 'friend',
+        authorName: '小李',
+        authorAvatarUrl: '',
+        content: '带照片的动态',
+        mediaPaths: ['https://example.com/moment.jpg'],
+        visibility: MomentVisibility.public,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MyMomentsPage(
+          repository: repository,
+          userId: 'friend',
+          displayName: '小李',
+          avatarUrl: '',
+          allowPublishing: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final image = find.byKey(const ValueKey('moment_image_0'));
+    tester.widget<GestureDetector>(image).onLongPress?.call();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('save_moment_media')), findsOneWidget);
+    expect(find.text('保存到本地'), findsOneWidget);
+  });
+
   testWidgets('owner can confirm and permanently remove a moment', (
     tester,
   ) async {

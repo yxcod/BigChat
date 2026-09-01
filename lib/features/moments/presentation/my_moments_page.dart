@@ -10,6 +10,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme_context.dart';
 import '../../../core/cache/app_image_cache.dart';
 import '../../../core/media/video_media.dart';
+import '../../../core/media/chat_media_saver.dart';
 import '../../../model/userInfoModel.dart';
 import '../../../utils/gloabl.dart';
 import '../../../shared/widgets/fullscreen_image_viewer.dart';
@@ -1295,6 +1296,72 @@ class _MomentMediaGrid extends StatelessWidget {
 
   final List<String> paths;
 
+  bool _isRemote(String path) =>
+      path.startsWith('http://') || path.startsWith('https://');
+
+  String _fileName(String path) {
+    final uri = Uri.tryParse(path);
+    final candidate =
+        uri?.queryParameters['imageName'] ??
+        uri?.queryParameters['videoName'] ??
+        (uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : path);
+    return candidate.trim().isEmpty
+        ? (isVideoPath(path) ? 'moment_video.mp4' : 'moment_image.jpg')
+        : candidate;
+  }
+
+  Future<void> _save(BuildContext context, String path) async {
+    try {
+      if (isVideoPath(path)) {
+        await const ChatMediaSaver().saveVideo(
+          source: path,
+          fileName: _fileName(path),
+          localPath: _isRemote(path) ? null : path,
+        );
+      } else {
+        await const ChatMediaSaver().saveImage(
+          source: path,
+          fileName: _fileName(path),
+        );
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isVideoPath(path) ? '视频已保存到系统相册' : '照片已保存到系统相册'),
+          ),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('保存失败，请检查相册权限')));
+      }
+    }
+  }
+
+  Future<void> _showSaveMenu(BuildContext context, String path) async {
+    final save = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const Key('save_moment_media'),
+              leading: const Icon(Icons.download_rounded),
+              title: const Text('保存到本地'),
+              onTap: () => Navigator.pop(context, true),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (save == true && context.mounted) await _save(context, path);
+  }
+
   @override
   Widget build(BuildContext context) {
     final count = paths.length.clamp(1, 9);
@@ -1321,12 +1388,16 @@ class _MomentMediaGrid extends StatelessWidget {
                 final path = paths[index];
                 if (isVideoPath(path)) {
                   return AppVideoPreview(
+                    key: ValueKey('moment_video_$index'),
                     source: path,
                     isLocal:
                         !(path.startsWith('http://') ||
                             path.startsWith('https://')),
                     width: double.infinity,
                     height: double.infinity,
+                    fileName: _fileName(path),
+                    autoCacheRemote: _isRemote(path),
+                    onLongPress: () => _showSaveMenu(context, path),
                   );
                 }
                 final imageProvider =
@@ -1334,10 +1405,13 @@ class _MomentMediaGrid extends StatelessWidget {
                     ? AppImageCache.provider(path)
                     : FileImage(File(path));
                 return GestureDetector(
+                  key: ValueKey('moment_image_$index'),
                   onTap: () => showFullscreenImage(
                     context,
                     imageProvider: imageProvider,
+                    onSave: () => _save(context, path),
                   ),
+                  onLongPress: () => _showSaveMenu(context, path),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(7),
                     child:

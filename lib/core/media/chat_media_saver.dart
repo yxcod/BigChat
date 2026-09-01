@@ -14,17 +14,23 @@ class ChatMediaSaver {
     required String source,
     required String fileName,
   }) async {
-    final response = await HttpUtil().get(
-      source,
-      options: Options(
-        responseType: ResponseType.bytes,
-        receiveTimeout: const Duration(minutes: 2),
-      ),
-    );
-    final data = response.data;
-    final bytes = data is Uint8List
-        ? data
-        : Uint8List.fromList(List<int>.from(data as List));
+    final local = File(source);
+    late final Uint8List bytes;
+    if (await local.exists()) {
+      bytes = await local.readAsBytes();
+    } else {
+      final response = await HttpUtil().get(
+        source,
+        options: Options(
+          responseType: ResponseType.bytes,
+          receiveTimeout: const Duration(minutes: 2),
+        ),
+      );
+      final data = response.data;
+      bytes = data is Uint8List
+          ? data
+          : Uint8List.fromList(List<int>.from(data as List));
+    }
     if (bytes.isEmpty) throw Exception('图片下载失败');
     final result = await SaverGallery.saveImage(
       bytes,
