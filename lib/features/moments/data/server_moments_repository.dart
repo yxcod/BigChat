@@ -38,7 +38,8 @@ class MomentsApiException implements Exception {
   String toString() => message;
 }
 
-class ServerMomentsRepository implements MomentsRepository {
+class ServerMomentsRepository
+    implements MomentsRepository, CachedMomentsReader {
   ServerMomentsRepository({
     MomentsApiClient? apiClient,
     MomentsLocalStorage? cache,
@@ -60,7 +61,7 @@ class ServerMomentsRepository implements MomentsRepository {
         'limit': 50,
       });
       final moments = _parseMomentList(envelope, authorId: userId);
-      await _cache.save(moments);
+      await _replaceAuthorCache(userId, moments);
       return moments;
     } catch (_) {
       final cached = (await _cache.load())
@@ -73,26 +74,44 @@ class ServerMomentsRepository implements MomentsRepository {
 
   @override
   Future<List<Moment>> fetchUserMoments(String userId, {int? maxItems}) async {
-    final moments = <Moment>[];
-    String? beforeMomentId;
-    while (maxItems == null || moments.length < maxItems) {
-      final remaining = maxItems == null ? 50 : maxItems - moments.length;
-      final request = <String, dynamic>{
-        'targetUserName': userId,
-        'limit': remaining.clamp(1, 50),
-        if (beforeMomentId != null) 'beforeMomentId': beforeMomentId,
-      };
-      final envelope = await _apiClient.post('/api/moment/userList', request);
-      final data = _requireMapData(envelope);
-      final page = _parseMomentItems(data, authorId: userId);
-      moments.addAll(page);
-      final hasMore = data['hasMore'] == true;
-      if (!hasMore || page.isEmpty) break;
-      final nextCursor = page.last.id;
-      if (nextCursor == beforeMomentId) break;
-      beforeMomentId = nextCursor;
+    try {
+      final moments = <Moment>[];
+      String? beforeMomentId;
+      while (maxItems == null || moments.length < maxItems) {
+        final remaining = maxItems == null ? 50 : maxItems - moments.length;
+        final request = <String, dynamic>{
+          'targetUserName': userId,
+          'limit': remaining.clamp(1, 50),
+          if (beforeMomentId != null) 'beforeMomentId': beforeMomentId,
+        };
+        final envelope = await _apiClient.post('/api/moment/userList', request);
+        final data = _requireMapData(envelope);
+        final page = _parseMomentItems(data, authorId: userId);
+        moments.addAll(page);
+        final hasMore = data['hasMore'] == true;
+        if (!hasMore || page.isEmpty) break;
+        final nextCursor = page.last.id;
+        if (nextCursor == beforeMomentId) break;
+        beforeMomentId = nextCursor;
+      }
+      await _replaceAuthorCache(userId, moments);
+      return List<Moment>.unmodifiable(moments);
+    } catch (_) {
+      final cached = await loadCachedMoments(userId, maxItems: maxItems);
+      if (cached.isNotEmpty) return cached;
+      rethrow;
     }
-    return List<Moment>.unmodifiable(moments);
+  }
+
+  @override
+  Future<List<Moment>> loadCachedMoments(String userId, {int? maxItems}) async {
+    final cached =
+        (await _cache.load())
+            .where((moment) => moment.authorId == userId)
+            .toList()
+          ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+    final result = maxItems == null ? cached : cached.take(maxItems).toList();
+    return List<Moment>.unmodifiable(result);
   }
 
   @override
@@ -227,6 +246,16 @@ class ServerMomentsRepository implements MomentsRepository {
     } else {
       moments[index] = updated;
     }
+    await _cache.save(moments);
+  }
+
+  Future<void> _replaceAuthorCache(
+    String authorId,
+    Iterable<Moment> latest,
+  ) async {
+    final moments = await _cache.load();
+    moments.removeWhere((moment) => moment.authorId == authorId);
+    moments.addAll(latest);
     await _cache.save(moments);
   }
 

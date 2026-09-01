@@ -144,6 +144,44 @@ void main() {
     expect(moments.single.content, '离线动态');
   });
 
+  test('exposes cached moments before a network refresh', () async {
+    final cache = InMemoryMomentsStorage();
+    await cache.save([Moment.fromJson(_momentJson(id: 9, content: '本地优先动态'))]);
+    final repository = ServerMomentsRepository(
+      apiClient: _FakeMomentsApi((_, _) => throw Exception('not called')),
+      cache: cache,
+    );
+
+    final moments = await repository.loadCachedMoments('me');
+
+    expect(moments.single.content, '本地优先动态');
+  });
+
+  test('refreshing one author keeps other authors cached', () async {
+    final cache = InMemoryMomentsStorage();
+    final other = Moment.fromJson({
+      ..._momentJson(id: 7, content: '其他账号动态'),
+      'authorId': 'other',
+    });
+    await cache.save([other]);
+    final repository = ServerMomentsRepository(
+      apiClient: _FakeMomentsApi((_, _) async {
+        return {
+          'code': 100,
+          'data': {
+            'items': [_momentJson(id: 10, content: '当前账号动态')],
+          },
+        };
+      }),
+      cache: cache,
+    );
+
+    await repository.fetchOwnMoments('me');
+
+    expect((await repository.loadCachedMoments('me')).single.id, '10');
+    expect((await repository.loadCachedMoments('other')).single.id, '7');
+  });
+
   test('deletes a moment from the server and local cache', () async {
     final cache = InMemoryMomentsStorage();
     await cache.save([Moment.fromJson(_momentJson(id: 8, content: '待删除'))]);

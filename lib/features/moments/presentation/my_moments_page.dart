@@ -116,15 +116,20 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
   }
 
   Future<void> _loadMoments() async {
+    if (_repository case final CachedMomentsReader cachedRepository) {
+      final cached = await cachedRepository.loadCachedMoments(_userId);
+      if (mounted && cached.isNotEmpty) {
+        setState(() {
+          _moments = _filterMoments(cached);
+          _isLoading = false;
+        });
+      }
+    }
     try {
       final loadedMoments = widget.allowPublishing
           ? await _repository.fetchOwnMoments(_userId)
           : await _repository.fetchUserMoments(_userId);
-      final moments = widget.visibilityFilter == null
-          ? loadedMoments
-          : loadedMoments
-                .where((moment) => moment.visibility == widget.visibilityFilter)
-                .toList(growable: false);
+      final moments = _filterMoments(loadedMoments);
       if (!mounted) return;
       setState(() {
         _moments = moments;
@@ -140,6 +145,14 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
         ),
       );
     }
+  }
+
+  List<Moment> _filterMoments(Iterable<Moment> moments) {
+    return widget.visibilityFilter == null
+        ? List<Moment>.of(moments)
+        : moments
+              .where((moment) => moment.visibility == widget.visibilityFilter)
+              .toList(growable: false);
   }
 
   Future<void> _loadSpace() async {

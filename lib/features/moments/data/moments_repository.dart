@@ -20,6 +20,11 @@ abstract class MomentsRepository {
   Future<void> deleteMoment({required String momentId, required String userId});
 }
 
+/// Optional local-first capability for repositories with durable snapshots.
+abstract interface class CachedMomentsReader {
+  Future<List<Moment>> loadCachedMoments(String userId, {int? maxItems});
+}
+
 /// Frontend-only implementation. Replace this registration with an API-backed
 /// repository later; pages only depend on [MomentsRepository].
 class LocalMomentsRepository implements MomentsRepository {
