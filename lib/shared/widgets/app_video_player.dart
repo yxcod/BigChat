@@ -565,6 +565,15 @@ class _AppVideoPlayerPageState extends State<AppVideoPlayerPage> {
           ),
         );
       }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('保存失败，请检查相册权限'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _downloading = false);
     }

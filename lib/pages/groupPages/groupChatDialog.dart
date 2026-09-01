@@ -2777,6 +2777,7 @@ class GroupMessageBubble extends StatelessWidget {
                             ),
                         isLocal: localVideoPath != null,
                         autoCacheRemote: !message.isPrivacy,
+                        allowSave: !message.isPrivacy,
                         uploadProgress: videoUploadProgress,
                         uploadFailed: videoUploadFailed,
                       ),

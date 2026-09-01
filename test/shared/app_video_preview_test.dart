@@ -32,8 +32,38 @@ void main() {
     );
 
     expect(find.text('发送失败'), findsOneWidget);
-    await tester.tap(find.byType(AppVideoPreview));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AppVideoPreview),
+        matching: find.byType(InkWell),
+      ),
+    );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(AppVideoPlayerPage), findsNothing);
+  });
+
+  testWidgets('privacy video keeps saving disabled in the player', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: AppVideoPreview(source: '', allowSave: false)),
+      ),
+    );
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AppVideoPreview),
+        matching: find.byType(InkWell),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final page = tester.widget<AppVideoPlayerPage>(
+      find.byType(AppVideoPlayerPage),
+    );
+    expect(page.allowSave, isFalse);
   });
 }
