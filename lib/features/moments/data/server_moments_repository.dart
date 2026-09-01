@@ -177,7 +177,7 @@ class ServerMomentsRepository
         code: code,
       );
     }
-    final moments = await _cache.load();
+    final moments = List<Moment>.of(await _cache.load());
     moments.removeWhere(
       (moment) => moment.id == momentId && moment.authorId == userId,
     );
@@ -239,7 +239,7 @@ class ServerMomentsRepository
   }
 
   Future<void> _upsertCache(Moment updated) async {
-    final moments = await _cache.load();
+    final moments = List<Moment>.of(await _cache.load());
     final index = moments.indexWhere((moment) => moment.id == updated.id);
     if (index == -1) {
       moments.insert(0, updated);
@@ -253,7 +253,7 @@ class ServerMomentsRepository
     String authorId,
     Iterable<Moment> latest,
   ) async {
-    final moments = await _cache.load();
+    final moments = List<Moment>.of(await _cache.load());
     moments.removeWhere((moment) => moment.authorId == authorId);
     moments.addAll(latest);
     await _cache.save(moments);

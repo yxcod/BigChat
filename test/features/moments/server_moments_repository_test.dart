@@ -32,7 +32,7 @@ void main() {
     });
     final repository = ServerMomentsRepository(
       apiClient: api,
-      cache: InMemoryMomentsStorage(),
+      cache: _ReadOnlyMomentsStorage(),
     );
 
     final moments = await repository.fetchOwnMoments('me');
@@ -51,7 +51,7 @@ void main() {
     });
     final repository = ServerMomentsRepository(
       apiClient: api,
-      cache: InMemoryMomentsStorage(),
+      cache: _ReadOnlyMomentsStorage(),
     );
 
     final moment = await repository.publish(
@@ -132,7 +132,7 @@ void main() {
   });
 
   test('uses cached own moments when loading from server fails', () async {
-    final cache = InMemoryMomentsStorage();
+    final cache = _ReadOnlyMomentsStorage();
     await cache.save([Moment.fromJson(_momentJson(id: 8, content: '离线动态'))]);
     final repository = ServerMomentsRepository(
       apiClient: _FakeMomentsApi((_, _) => throw Exception('offline')),
@@ -145,7 +145,7 @@ void main() {
   });
 
   test('exposes cached moments before a network refresh', () async {
-    final cache = InMemoryMomentsStorage();
+    final cache = _ReadOnlyMomentsStorage();
     await cache.save([Moment.fromJson(_momentJson(id: 9, content: '本地优先动态'))]);
     final repository = ServerMomentsRepository(
       apiClient: _FakeMomentsApi((_, _) => throw Exception('not called')),
@@ -158,7 +158,7 @@ void main() {
   });
 
   test('refreshing one author keeps other authors cached', () async {
-    final cache = InMemoryMomentsStorage();
+    final cache = _ReadOnlyMomentsStorage();
     final other = Moment.fromJson({
       ..._momentJson(id: 7, content: '其他账号动态'),
       'authorId': 'other',
@@ -183,7 +183,7 @@ void main() {
   });
 
   test('deletes a moment from the server and local cache', () async {
-    final cache = InMemoryMomentsStorage();
+    final cache = _ReadOnlyMomentsStorage();
     await cache.save([Moment.fromJson(_momentJson(id: 8, content: '待删除'))]);
     final repository = ServerMomentsRepository(
       apiClient: _FakeMomentsApi((path, data) async {
@@ -232,5 +232,20 @@ class _FakeMomentsApi implements MomentsApiClient {
   @override
   Future<Map<String, dynamic>> post(String path, Map<String, dynamic> data) {
     return _handler(path, data);
+  }
+}
+
+class _ReadOnlyMomentsStorage implements MomentsLocalStorage {
+  _ReadOnlyMomentsStorage([Iterable<Moment> initial = const []])
+    : _moments = List<Moment>.of(initial);
+
+  List<Moment> _moments;
+
+  @override
+  Future<List<Moment>> load() async => List<Moment>.unmodifiable(_moments);
+
+  @override
+  Future<void> save(List<Moment> moments) async {
+    _moments = List<Moment>.of(moments);
   }
 }
