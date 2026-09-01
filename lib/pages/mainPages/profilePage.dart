@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -11,6 +12,7 @@ import '../../core/media/video_media.dart';
 import '../../features/moments/data/moments_repository.dart';
 import '../../features/moments/data/server_moments_repository.dart';
 import '../../features/moments/domain/moment.dart';
+import '../../features/moments/application/moment_notification_center.dart';
 import '../../features/nearby/presentation/nearby_merchants_page.dart';
 import '../../model/userInfoModel.dart';
 import '../../utils/gloabl.dart';
@@ -23,6 +25,7 @@ class ProfilePage extends StatefulWidget {
     this.initialProfile,
     this.initialMoments = const [],
     this.autoLoad = true,
+    this.notificationCenter,
   });
 
   final Future<UserInfoModel> Function(String userName) profileLoader;
@@ -30,6 +33,7 @@ class ProfilePage extends StatefulWidget {
   final UserInfoModel? initialProfile;
   final List<Moment> initialMoments;
   final bool autoLoad;
+  final MomentNotificationCenter? notificationCenter;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -38,6 +42,7 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage>
     with AutomaticKeepAliveClientMixin {
   late final MomentsRepository _momentsRepository;
+  late final MomentNotificationCenter _notificationCenter;
   String signature = '有个性，不签名';
   String nickName = '默认昵称';
   int gender = 0;
@@ -55,12 +60,26 @@ class _ProfilePageState extends State<ProfilePage>
     super.initState();
     _momentsRepository =
         widget.momentsRepository ?? ServerMomentsRepository.instance;
+    _notificationCenter =
+        widget.notificationCenter ?? MomentNotificationCenter.instance;
+    _notificationCenter.addListener(_handleNotificationChanged);
     _moments = List<Moment>.from(widget.initialMoments);
     _applyProfile(widget.initialProfile ?? GlobalUtil().userInfoModel);
     if (widget.autoLoad) {
       _fetchProfileInfo();
       _fetchMoments();
+      unawaited(_notificationCenter.initialize());
     }
+  }
+
+  @override
+  void dispose() {
+    _notificationCenter.removeListener(_handleNotificationChanged);
+    super.dispose();
+  }
+
+  void _handleNotificationChanged() {
+    if (mounted) setState(() {});
   }
 
   void _applyProfile(UserInfoModel userInfo) {
@@ -395,6 +414,17 @@ class _ProfilePageState extends State<ProfilePage>
                       ],
                     ),
                   ),
+                  if (_notificationCenter.hasUnread)
+                    Container(
+                      key: const ValueKey('moment_notification_unread_dot'),
+                      width: 10,
+                      height: 10,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFF3B30),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                   Icon(
                     Icons.chevron_right_rounded,
                     color: Color(0xFFA3A6AB),

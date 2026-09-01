@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -23,6 +24,7 @@ import '../../user_space/presentation/space_message_management_page.dart';
 import '../data/moments_repository.dart';
 import '../data/server_moments_repository.dart';
 import '../domain/moment.dart';
+import '../application/moment_notification_center.dart';
 import 'moment_composer_page.dart';
 
 class MyMomentsPage extends StatefulWidget {
@@ -41,6 +43,7 @@ class MyMomentsPage extends StatefulWidget {
     this.spaceRepository,
     this.coverUploader,
     this.reviewsRepository,
+    this.notificationCenter,
   });
 
   final MomentsRepository? repository;
@@ -56,6 +59,7 @@ class MyMomentsPage extends StatefulWidget {
   final UserSpaceRepository? spaceRepository;
   final SpaceCoverUploader? coverUploader;
   final MerchantReviewsRepository? reviewsRepository;
+  final MomentNotificationCenter? notificationCenter;
 
   @override
   State<MyMomentsPage> createState() => _MyMomentsPageState();
@@ -70,6 +74,7 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
   late final bool _isOwner;
   late final UserSpaceRepository _spaceRepository;
   late final SpaceCoverUploader _coverUploader;
+  late final MomentNotificationCenter _notificationCenter;
   List<Moment> _moments = const [];
   UserSpaceData? _space;
   final Set<String> _deletingMomentIds = {};
@@ -101,8 +106,44 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
               )
             : ServerUserSpaceRepository());
     _coverUploader = widget.coverUploader ?? ServerSpaceCoverUploader();
+    _notificationCenter =
+        widget.notificationCenter ?? MomentNotificationCenter.instance;
+    _notificationCenter.addListener(_handleNotificationChanged);
+    if (_isOwner) unawaited(_notificationCenter.initialize());
     _loadMoments();
     _loadSpace();
+  }
+
+  void _handleNotificationChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Widget _buildNotificationAction() {
+    return IconButton(
+      key: const ValueKey('moment_notifications_button'),
+      tooltip: '动态互动',
+      onPressed: () => Navigator.pushNamed(context, '/momentNotifications'),
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.notifications_none_rounded),
+          if (_notificationCenter.hasUnread)
+            Positioned(
+              right: -1,
+              top: -1,
+              child: Container(
+                key: const ValueKey('moment_notifications_appbar_dot'),
+                width: 9,
+                height: 9,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF3B30),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   String _buildCurrentAvatarUrl(GlobalUtil global) {
@@ -282,6 +323,7 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
 
   @override
   void dispose() {
+    _notificationCenter.removeListener(_handleNotificationChanged);
     _scrollController.dispose();
     super.dispose();
   }
@@ -450,6 +492,7 @@ class _MyMomentsPageState extends State<MyMomentsPage> {
         title: Text(
           widget.pageTitle ?? (_isOwner ? '我的空间' : '$_displayName的空间'),
         ),
+        actions: _isOwner ? [_buildNotificationAction()] : null,
       ),
       floatingActionButton: widget.allowPublishing
           ? FloatingActionButton.extended(

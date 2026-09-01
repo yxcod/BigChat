@@ -212,6 +212,7 @@ class StorageUtil {
         _imageDir,
         'chat_cache',
         'moments',
+        'moment_notifications',
         'downloaded_videos',
       ]) {
         final directory = Directory('${documents.path}/$name');

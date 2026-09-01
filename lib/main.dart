@@ -25,6 +25,9 @@ import './core/notifications/push_notification_service.dart';
 import './core/permissions/initial_permission_service.dart';
 import './features/calls/application/call_coordinator.dart';
 import './features/account/application/session_termination_event.dart';
+import './features/moments/application/moment_notification_center.dart';
+import './features/moments/domain/moment_interaction_notification.dart';
+import './features/settings/data/app_settings_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -133,6 +136,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
     CallCoordinator.instance.initialize();
     _connectRestoredSession();
+    unawaited(MomentNotificationCenter.instance.initialize());
     _locationSyncTimer = Timer.periodic(
       const Duration(minutes: 5),
       (_) => _reconcileLocationPreference(),
@@ -200,6 +204,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
       return;
     }
+    if (rawMessage['type'] == 'momentInteraction') {
+      unawaited(_handleMomentInteraction(rawMessage));
+      return;
+    }
     final event = ChatRealtimeEvent.parse(rawMessage);
     if (event.type == ChatRealtimeEventType.friendRequestUpdated) {
       unawaited(_friendshipRealtimeService.handle(rawMessage));
@@ -225,6 +233,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _dismissMessageBanner();
     WebSocketManager().disconnect();
     GlobalUtil().resetSessionState();
+    MomentNotificationCenter.instance.reset();
     await StorageUtil.logout();
     if (!mounted) return;
     final navigator = GlobalNavigatorKey.navigatorState;
@@ -269,7 +278,61 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _showMessageBanner(notice);
   }
 
+  Future<void> _handleMomentInteraction(Map<String, dynamic> event) async {
+    final notification = await MomentNotificationCenter.instance.handleRealtime(
+      event,
+    );
+    if (!mounted || !_isAppForeground || notification == null) return;
+    final ownerId = GlobalUtil().userName?.trim() ?? '';
+    final settings = await AppSettingsRepository(ownerId: ownerId).load();
+    if (!mounted || !settings.bannerEnabled) return;
+    _showAppBanner(
+      title: '${notification.displayActorName} ${notification.actionText}',
+      body:
+          notification.type == MomentInteractionType.comment &&
+              notification.commentContent.trim().isNotEmpty
+          ? notification.commentContent.trim()
+          : '点击查看动态互动',
+      icon: notification.type == MomentInteractionType.like
+          ? Icons.favorite_rounded
+          : Icons.mode_comment_rounded,
+      onTap: () {
+        GlobalNavigatorKey.navigatorState?.pushNamed('/momentNotifications');
+      },
+    );
+  }
+
   void _showMessageBanner(AppMessageNotice notice) {
+    _showAppBanner(
+      title: notice.title,
+      body: notice.body,
+      icon: Icons.notifications_rounded,
+      onTap: () {
+        final navigator = GlobalNavigatorKey.navigatorState;
+        if (navigator == null) return;
+        if (notice.event.type == ChatRealtimeEventType.friendRequestUpdated) {
+          navigator.pushNamed(
+            '/friendAddManagerPage',
+            arguments: const <FriendRequestModel>[],
+          );
+        } else if (notice.event.type == ChatRealtimeEventType.groupMessage) {
+          navigator.pushNamed(
+            '/groupChatDialog',
+            arguments: {'groupId': notice.event.groupId, 'groupName': '群聊'},
+          );
+        } else {
+          navigator.pushNamed('/chatDialog', arguments: notice.event.senderId);
+        }
+      },
+    );
+  }
+
+  void _showAppBanner({
+    required String title,
+    required String body,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     final navigator = GlobalNavigatorKey.navigatorState;
     if (navigator == null) return;
     final overlay = navigator.overlay;
@@ -291,38 +354,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             child: InkWell(
               onTap: () {
                 _dismissMessageBanner();
-                if (notice.event.type ==
-                    ChatRealtimeEventType.friendRequestUpdated) {
-                  navigator.pushNamed(
-                    '/friendAddManagerPage',
-                    arguments: const <FriendRequestModel>[],
-                  );
-                } else if (notice.event.type ==
-                    ChatRealtimeEventType.groupMessage) {
-                  navigator.pushNamed(
-                    '/groupChatDialog',
-                    arguments: {
-                      'groupId': notice.event.groupId,
-                      'groupName': '群聊',
-                    },
-                  );
-                } else {
-                  navigator.pushNamed(
-                    '/chatDialog',
-                    arguments: notice.event.senderId,
-                  );
-                }
+                onTap();
               },
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(14, 11, 6, 11),
                 child: Row(
                   children: [
-                    const CircleAvatar(
-                      backgroundColor: Color(0x1F07C160),
-                      child: Icon(
-                        Icons.notifications_rounded,
-                        color: Color(0xFF07C160),
-                      ),
+                    CircleAvatar(
+                      backgroundColor: const Color(0x1F07C160),
+                      child: Icon(icon, color: const Color(0xFF07C160)),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -331,12 +371,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            notice.title,
+                            title,
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            notice.body,
+                            body,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -485,6 +525,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         _connectionMonitor.setAppActive(true);
         WebSocketManager().reconnectNow();
         _reconcileLocationPreference();
+        unawaited(MomentNotificationCenter.instance.refreshUnreadCount());
         unawaited(PushNotificationService.instance.updateAppForeground(true));
         if (_privacyLockPending && mounted) {
           // 根节点锁屏必须参与当前帧构建，不能先展示主界面再跳转锁屏页。
@@ -560,6 +601,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     await PushNotificationService.instance.unregisterCurrentUser();
     WebSocketManager().disconnect();
     GlobalUtil().resetSessionState();
+    MomentNotificationCenter.instance.reset();
     await StorageUtil.logout();
     final navigator = GlobalNavigatorKey.navigatorState;
     if (navigator != null) {

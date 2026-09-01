@@ -7,6 +7,7 @@ import '../../utils/gloabl.dart';
 import '../../model/messageModel.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme_context.dart';
+import '../../features/moments/application/moment_notification_center.dart';
 
 class BigchatMainPage extends StatefulWidget {
   const BigchatMainPage({super.key, this.autoRefresh = true});
@@ -25,6 +26,8 @@ class _BigchatMainPageState extends State<BigchatMainPage>
   int _currentIndex = 0;
   int _totalUnreadCount = 0;
   bool _wasBackgrounded = false;
+  final MomentNotificationCenter _momentNotificationCenter =
+      MomentNotificationCenter.instance;
 
   void _onUnreadCountChanged(int count) {
     setState(() {
@@ -38,6 +41,7 @@ class _BigchatMainPageState extends State<BigchatMainPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _momentNotificationCenter.addListener(_handleMomentNotificationChanged);
     _pages = [
       Chatpage(
         chatList: _chats,
@@ -68,7 +72,12 @@ class _BigchatMainPageState extends State<BigchatMainPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _momentNotificationCenter.removeListener(_handleMomentNotificationChanged);
     super.dispose();
+  }
+
+  void _handleMomentNotificationChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -216,10 +225,12 @@ class _BigchatMainPageState extends State<BigchatMainPage>
             icon: _buildNavigationIcon(
               icon: Icons.account_circle_outlined,
               selected: false,
+              showDot: _momentNotificationCenter.hasUnread,
             ),
             activeIcon: _buildNavigationIcon(
               icon: Icons.account_circle_rounded,
               selected: true,
+              showDot: _momentNotificationCenter.hasUnread,
             ),
             label: '我的',
           ),
@@ -232,6 +243,7 @@ class _BigchatMainPageState extends State<BigchatMainPage>
     required IconData icon,
     required bool selected,
     int unreadCount = 0,
+    bool showDot = false,
   }) {
     return SizedBox(
       width: 52,
@@ -276,6 +288,21 @@ class _BigchatMainPageState extends State<BigchatMainPage>
                     fontWeight: FontWeight.w600,
                     height: 1,
                   ),
+                ),
+              ),
+            )
+          else if (showDot)
+            Positioned(
+              top: 1,
+              right: 2,
+              child: Container(
+                key: const ValueKey('main_moment_unread_dot'),
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: AppColors.danger,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: context.appSurface, width: 1.5),
                 ),
               ),
             ),

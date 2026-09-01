@@ -173,6 +173,8 @@ class PushNotificationService {
       } else if (eventType == 'friendRequest' ||
           eventType == 'friendRequestUpdated') {
         navigator.pushNamed('/friendAddManagerPage', arguments: const []);
+      } else if (eventType == 'momentInteraction') {
+        navigator.pushNamed('/momentNotifications');
       } else if (eventType == 'groupMessage') {
         final groupId = int.tryParse(extras['groupId']?.toString() ?? '');
         if (groupId != null && groupId > 0) {
