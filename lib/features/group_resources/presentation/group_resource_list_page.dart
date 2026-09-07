@@ -153,12 +153,14 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       );
     });
     try {
+      // Cover extraction is best-effort. Some iPhone HEVC/HDR assets can keep
+      // AVAssetImageGenerator busy for a long time; never let that prevent the
+      // actual video from being uploaded and downloaded.
       final coverPath = isVideo
-          ? await VideoThumbnailCache.resolve(draft.path)
+          ? await VideoThumbnailCache.resolve(
+              draft.path,
+            ).timeout(const Duration(milliseconds: 800), onTimeout: () => null)
           : null;
-      if (isVideo && coverPath == null) {
-        throw Exception('无法读取该视频的首帧，请更换视频后重试');
-      }
       if (coverPath != null) {
         _updatePending(
           pendingId,
