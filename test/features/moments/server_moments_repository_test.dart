@@ -108,9 +108,8 @@ void main() {
         ),
       );
 
-      expect(requestData['mediaUrls'], [
-        {'url': videoUrl, 'thumbnailUrl': thumbnailUrl},
-      ]);
+      expect(requestData['mediaUrls'], [videoUrl]);
+      expect(requestData['mediaThumbnails'], {videoUrl: thumbnailUrl});
       expect(moment.mediaThumbnails[videoUrl], thumbnailUrl);
       expect(moment.localMediaPaths[videoUrl], '/local/video.mp4');
       expect(

@@ -21,10 +21,14 @@ class MomentUploadedMedia {
   final String? localThumbnailPath;
 }
 
+typedef MomentUploadProgressCallback =
+    void Function(double progress, String status);
+
 abstract class MomentMediaUploader {
   Future<List<MomentUploadedMedia>> upload({
     required String authorId,
     required List<String> localPaths,
+    MomentUploadProgressCallback? onProgress,
   });
 }
 
@@ -40,13 +44,26 @@ class ServerMomentMediaUploader implements MomentMediaUploader {
   Future<List<MomentUploadedMedia>> upload({
     required String authorId,
     required List<String> localPaths,
+    MomentUploadProgressCallback? onProgress,
   }) async {
     final uploadedMedia = <MomentUploadedMedia>[];
+    void report(int index, double itemProgress, String status) {
+      if (localPaths.isEmpty) return;
+      onProgress?.call(
+        ((index + itemProgress.clamp(0.0, 1.0)) / localPaths.length).clamp(
+          0.0,
+          1.0,
+        ),
+        status,
+      );
+    }
+
     for (var index = 0; index < localPaths.length; index++) {
       final path = localPaths[index];
       final uri = Uri.tryParse(path);
       if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
         uploadedMedia.add(MomentUploadedMedia(url: path));
+        report(index, 1, '媒体已就绪');
         continue;
       }
 
@@ -54,30 +71,52 @@ class ServerMomentMediaUploader implements MomentMediaUploader {
       if (!await file.exists()) throw Exception('动态图片不存在');
       if (isVideoPath(path)) {
         await validateVideoFile(path);
+        report(index, 0.02, '正在保存视频到本地');
         final timestamp = DateTime.now().microsecondsSinceEpoch;
         final videoName =
             '${authorId}_moment_${timestamp}_$index.${videoExtension(path)}';
-        final thumbnailPath = await VideoThumbnailCache.resolve(file.path);
-        if (thumbnailPath == null) throw Exception('无法生成动态视频封面');
-        final thumbnailName =
-            '${authorId}_moment_${timestamp}_${index}_cover.jpg';
         final videoUrl = _globalUtil.getVideoURL(authorId, videoName);
-        final thumbnailUrl = _globalUtil.getImageURL(authorId, thumbnailName);
         final cachedVideoPath = await cacheUploadedVideo(
           file.path,
           videoUrl,
           suggestedFileName: videoName,
         );
         if (cachedVideoPath == null) throw Exception('无法保存动态视频到本地缓存');
-        await _httpUtil.uploadImageFile(
-          thumbnailName,
-          thumbnailPath,
-          userName: authorId,
+        report(index, 0.08, '正在生成视频封面');
+        final thumbnailPath = await VideoThumbnailCache.resolve(
+          cachedVideoPath,
         );
+        if (thumbnailPath == null) throw Exception('无法生成动态视频封面，请更换视频后重试');
+        final thumbnailName =
+            '${authorId}_moment_${timestamp}_${index}_cover.jpg';
+        final thumbnailUrl = _globalUtil.getImageURL(authorId, thumbnailName);
+        report(index, 0.12, '正在上传视频');
         await _httpUtil.uploadVideoFile(
           videoName,
           cachedVideoPath,
           userName: authorId,
+          onSendProgress: (sent, total) {
+            if (total <= 0) return;
+            report(
+              index,
+              0.12 + (sent / total).clamp(0.0, 1.0) * 0.76,
+              '正在上传视频',
+            );
+          },
+        );
+        report(index, 0.9, '正在上传视频封面');
+        await _httpUtil.uploadImageFile(
+          thumbnailName,
+          thumbnailPath,
+          userName: authorId,
+          onSendProgress: (sent, total) {
+            if (total <= 0) return;
+            report(
+              index,
+              0.9 + (sent / total).clamp(0.0, 1.0) * 0.09,
+              '正在上传视频封面',
+            );
+          },
         );
         await AppImageCache.cacheUploadedFile(thumbnailUrl, thumbnailPath);
         uploadedMedia.add(
@@ -88,6 +127,7 @@ class ServerMomentMediaUploader implements MomentMediaUploader {
             localThumbnailPath: thumbnailPath,
           ),
         );
+        report(index, 1, '视频上传完成');
         continue;
       }
       if (await file.length() > 5 * 1024 * 1024) {
@@ -97,12 +137,21 @@ class ServerMomentMediaUploader implements MomentMediaUploader {
 
       final timestamp = DateTime.now().microsecondsSinceEpoch;
       final imageName = '${authorId}_moment_${timestamp}_$index.$extension';
-      await _httpUtil.uploadImageFile(imageName, file.path, userName: authorId);
+      await _httpUtil.uploadImageFile(
+        imageName,
+        file.path,
+        userName: authorId,
+        onSendProgress: (sent, total) {
+          if (total <= 0) return;
+          report(index, (sent / total).clamp(0.0, 1.0), '正在上传图片');
+        },
+      );
       final imageUrl = _globalUtil.getImageURL(authorId, imageName);
       await AppImageCache.cacheUploadedFile(imageUrl, file.path);
       uploadedMedia.add(
         MomentUploadedMedia(url: imageUrl, localPath: file.path),
       );
+      report(index, 1, '图片上传完成');
     }
     return uploadedMedia;
   }

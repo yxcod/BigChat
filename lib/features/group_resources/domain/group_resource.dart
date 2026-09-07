@@ -70,19 +70,22 @@ class GroupResource {
     if (coverLocalPath?.isNotEmpty == true) 'coverLocalPath': coverLocalPath,
   };
 
-  GroupResource copyWith({String? localPath, String? coverLocalPath}) =>
-      GroupResource(
-        id: id,
-        groupId: groupId,
-        type: type,
-        originalName: originalName,
-        mimeType: mimeType,
-        fileSize: fileSize,
-        uploaderId: uploaderId,
-        createdAt: createdAt,
-        canDelete: canDelete,
-        hasCover: hasCover,
-        localPath: localPath ?? this.localPath,
-        coverLocalPath: coverLocalPath ?? this.coverLocalPath,
-      );
+  GroupResource copyWith({
+    bool? hasCover,
+    String? localPath,
+    String? coverLocalPath,
+  }) => GroupResource(
+    id: id,
+    groupId: groupId,
+    type: type,
+    originalName: originalName,
+    mimeType: mimeType,
+    fileSize: fileSize,
+    uploaderId: uploaderId,
+    createdAt: createdAt,
+    canDelete: canDelete,
+    hasCover: hasCover ?? this.hasCover,
+    localPath: localPath ?? this.localPath,
+    coverLocalPath: coverLocalPath ?? this.coverLocalPath,
+  );
 }

@@ -38,6 +38,15 @@ class VideoThumbnailCache {
       if (await destination.exists() && await destination.length() > 0) {
         return destination.path;
       }
+      if (await destination.exists()) await destination.delete();
+
+      // AVAssetImageGenerator is considerably more reliable for iPhone HEVC
+      // and HDR clips. Use it first on iOS and cap every native/plugin attempt
+      // so a problematic asset can never leave the publishing UI spinning.
+      if (Platform.isIOS) {
+        final native = await _generateNative(source, destination);
+        if (native != null) return native;
+      }
 
       String? generated;
       for (final timeMs in const [0, 250]) {
@@ -49,24 +58,14 @@ class VideoThumbnailCache {
             maxWidth: 720,
             timeMs: timeMs,
             quality: 82,
-          );
+          ).timeout(const Duration(seconds: 12));
           if (generated != null && await _isUsableFile(generated)) break;
         } catch (_) {
           generated = null;
         }
       }
       if (generated == null || !await _isUsableFile(generated)) {
-        try {
-          final nativePath = await _nativeChannel.invokeMethod<String>(
-            'generate',
-            {'sourcePath': source, 'outputPath': destination.path},
-          );
-          return nativePath != null && await _isUsableFile(nativePath)
-              ? nativePath
-              : null;
-        } catch (_) {
-          return null;
-        }
+        return Platform.isIOS ? null : _generateNative(source, destination);
       }
       final generatedFile = File(generated);
       if (generatedFile.absolute.path != destination.absolute.path) {
@@ -78,6 +77,25 @@ class VideoThumbnailCache {
         }
       }
       return destination.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String?> _generateNative(
+    String source,
+    File destination,
+  ) async {
+    try {
+      final nativePath = await _nativeChannel
+          .invokeMethod<String>('generate', {
+            'sourcePath': source,
+            'outputPath': destination.path,
+          })
+          .timeout(const Duration(seconds: 15));
+      return nativePath != null && await _isUsableFile(nativePath)
+          ? nativePath
+          : null;
     } catch (_) {
       return null;
     }

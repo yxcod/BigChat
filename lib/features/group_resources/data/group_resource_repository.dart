@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../utils/gloabl.dart';
 import '../../../utils/http.dart';
@@ -74,46 +75,34 @@ class GroupResourceRepository {
     String? coverPath,
     ProgressCallback? onProgress,
   }) async {
-    Future<Response<dynamic>> send({required bool includeCover}) async {
-      final files = <MultipartFile>[
-        await MultipartFile.fromFile(path, filename: originalName),
-      ];
-      if (includeCover && coverPath != null && coverPath.isNotEmpty) {
-        files.add(
-          await MultipartFile.fromFile(
-            coverPath,
-            filename:
-                '${originalName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}.cover.jpg',
-            contentType: DioMediaType('image', 'jpeg'),
-          ),
-        );
-      }
-      return _http.upload(
-        '/api/group/resource/upload',
-        files,
-        fieldName: 'file',
-        queryParameters: {
-          'groupId': groupId,
-          'userName': _userName,
-          'resourceType': type == GroupResourceType.file ? 1 : 2,
-        },
-        options: Options(
-          sendTimeout: const Duration(minutes: 20),
-          receiveTimeout: const Duration(minutes: 2),
-        ),
-        onSendProgress: onProgress,
-      );
-    }
-
-    late final Response<dynamic> response;
-    try {
-      response = await send(includeCover: true);
-    } on DioException catch (error) {
-      final status = error.response?.statusCode;
-      if (coverPath == null || (status != 400 && status != 415)) rethrow;
-      onProgress?.call(0, 1);
-      response = await send(includeCover: false);
-    }
+    final hasCover = coverPath != null && coverPath.isNotEmpty;
+    final mediaFile = await MultipartFile.fromFile(
+      path,
+      filename: originalName,
+    );
+    // Keep the established single-file upload contract. The video must not be
+    // rolled back just because a server version cannot yet accept its cover.
+    final response = await _http.upload(
+      '/api/group/resource/upload',
+      [mediaFile],
+      fieldName: 'file',
+      queryParameters: {
+        'groupId': groupId,
+        'userName': _userName,
+        'resourceType': type == GroupResourceType.file ? 1 : 2,
+      },
+      options: Options(
+        sendTimeout: const Duration(minutes: 20),
+        receiveTimeout: const Duration(minutes: 2),
+      ),
+      onSendProgress: (sent, total) {
+        if (!hasCover || total <= 0) {
+          onProgress?.call(sent, total);
+          return;
+        }
+        onProgress?.call((sent * 94 / 100).round(), total);
+      },
+    );
     final data = response.data;
     if (data is! Map || data['code'] != 100) {
       throw Exception(data is Map ? data['message'] : '上传失败');
@@ -122,6 +111,40 @@ class GroupResourceRepository {
     if (uploaded is! Map) throw Exception('服务器未返回上传资源信息');
     var resource = GroupResource.fromJson(Map<String, dynamic>.from(uploaded));
     if (resource.id <= 0) throw Exception('服务器未返回有效资源ID');
+
+    var coverUploaded = false;
+    if (hasCover) {
+      try {
+        final coverFile = await MultipartFile.fromFile(
+          coverPath,
+          filename:
+              '${originalName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')}.cover.jpg',
+          contentType: DioMediaType('image', 'jpeg'),
+        );
+        final coverResponse = await _http.upload(
+          '/api/group/resource/cover/upload',
+          [coverFile],
+          fieldName: 'file',
+          queryParameters: {'resourceId': resource.id, 'userName': _userName},
+          options: Options(
+            sendTimeout: const Duration(minutes: 1),
+            receiveTimeout: const Duration(seconds: 30),
+          ),
+          onSendProgress: (sent, total) {
+            if (total <= 0) return;
+            final coverFraction = (sent / total).clamp(0.0, 1.0);
+            onProgress?.call((94 + coverFraction * 6).round(), 100);
+          },
+        );
+        coverUploaded =
+            coverResponse.data is Map && coverResponse.data['code'] == 100;
+      } catch (error) {
+        // An older server has no separate-cover endpoint. The uploaded video
+        // remains valid and this device still keeps its generated local cover.
+        debugPrint('Group video cover upload deferred: $error');
+      }
+      onProgress?.call(1, 1);
+    }
 
     final localPath = await _mediaCache.persistUpload(
       resource: resource,
@@ -139,7 +162,10 @@ class GroupResourceRepository {
         remoteUrl: coverUrl(resource.id),
       );
       if (coverLocalPath != null) {
-        resource = resource.copyWith(coverLocalPath: coverLocalPath);
+        resource = resource.copyWith(
+          hasCover: resource.hasCover || coverUploaded,
+          coverLocalPath: coverLocalPath,
+        );
       }
     }
     try {

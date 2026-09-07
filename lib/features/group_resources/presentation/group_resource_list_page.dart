@@ -137,13 +137,6 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
     if (draft == null || !mounted) return;
     final isVideo =
         draft.kind == GroupResourceUploadKind.video || isVideoPath(draft.path);
-    final coverPath = isVideo
-        ? await VideoThumbnailCache.resolve(draft.path)
-        : null;
-    if (isVideo && coverPath == null) {
-      if (mounted) _message('无法读取该视频的首帧，请更换视频后重试');
-      return;
-    }
     final pendingId = DateTime.now().microsecondsSinceEpoch.toString();
     setState(() {
       _uploading = true;
@@ -155,12 +148,23 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
           name: draft.name,
           size: draft.size,
           kind: draft.kind,
-          coverPath: coverPath,
           progress: 0,
         ),
       );
     });
     try {
+      final coverPath = isVideo
+          ? await VideoThumbnailCache.resolve(draft.path)
+          : null;
+      if (isVideo && coverPath == null) {
+        throw Exception('无法读取该视频的首帧，请更换视频后重试');
+      }
+      if (coverPath != null) {
+        _updatePending(
+          pendingId,
+          (item) => item.copyWith(coverPath: coverPath),
+        );
+      }
       final uploaded = await _repository.upload(
         groupId: widget.groupId,
         type: widget.type,
@@ -834,15 +838,18 @@ class _PendingGroupResource {
         lower.endsWith('.gif');
   }
 
-  _PendingGroupResource copyWith({double? progress, bool? failed}) =>
-      _PendingGroupResource(
-        id: id,
-        path: path,
-        name: name,
-        size: size,
-        kind: kind,
-        progress: progress ?? this.progress,
-        coverPath: coverPath,
-        failed: failed ?? this.failed,
-      );
+  _PendingGroupResource copyWith({
+    double? progress,
+    String? coverPath,
+    bool? failed,
+  }) => _PendingGroupResource(
+    id: id,
+    path: path,
+    name: name,
+    size: size,
+    kind: kind,
+    progress: progress ?? this.progress,
+    coverPath: coverPath ?? this.coverPath,
+    failed: failed ?? this.failed,
+  );
 }

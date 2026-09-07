@@ -42,6 +42,8 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
   MomentVisibility _visibility = MomentVisibility.public;
   String? _location;
   bool _isPublishing = false;
+  double _publishProgress = 0;
+  String _publishStatus = '';
 
   bool get _canPublish =>
       _contentController.text.trim().isNotEmpty || _mediaPaths.isNotEmpty;
@@ -119,15 +121,32 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
 
   Future<void> _publish() async {
     if (!_canPublish || _isPublishing) return;
-    setState(() => _isPublishing = true);
+    setState(() {
+      _isPublishing = true;
+      _publishProgress = 0;
+      _publishStatus = _mediaPaths.isEmpty ? '正在发布动态' : '正在准备媒体';
+    });
     try {
       final uploadedMedia = _mediaPaths.isEmpty
           ? const <MomentUploadedMedia>[]
           : await (widget.mediaUploader ?? ServerMomentMediaUploader()).upload(
               authorId: widget.authorId,
               localPaths: _mediaPaths,
+              onProgress: (progress, status) {
+                if (!mounted) return;
+                setState(() {
+                  _publishProgress = progress * 0.96;
+                  _publishStatus = status;
+                });
+              },
             );
       final mediaPaths = uploadedMedia.map((item) => item.url).toList();
+      if (mounted) {
+        setState(() {
+          _publishProgress = 0.98;
+          _publishStatus = '正在发布动态';
+        });
+      }
       await widget.repository.publish(
         MomentDraft(
           authorId: widget.authorId,
@@ -163,7 +182,13 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _isPublishing = false);
+      if (mounted) {
+        setState(() {
+          _isPublishing = false;
+          _publishProgress = 0;
+          _publishStatus = '';
+        });
+      }
     }
   }
 
@@ -234,13 +259,7 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
               ),
               child: _isPublishing
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                  ? Text('${(_publishProgress * 100).round()}%')
                   : const Text('发布'),
             ),
           ),
@@ -249,6 +268,16 @@ class _MomentComposerPageState extends State<MomentComposerPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 28),
         children: [
+          if (_isPublishing) ...[
+            LinearProgressIndicator(value: _publishProgress),
+            const SizedBox(height: 8),
+            Text(
+              _publishStatus,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: context.appTextSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+          ],
           TextField(
             key: const Key('moment_content_field'),
             controller: _contentController,

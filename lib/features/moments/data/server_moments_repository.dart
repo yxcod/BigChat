@@ -118,30 +118,17 @@ class ServerMomentsRepository
         '${draft.authorId}-${DateTime.now().microsecondsSinceEpoch}';
     final request = <String, dynamic>{
       'content': draft.content.trim(),
-      'mediaUrls': draft.mediaPaths.map((url) {
-        final thumbnailUrl = draft.mediaThumbnailUrls[url];
-        return thumbnailUrl == null || thumbnailUrl.isEmpty
-            ? url
-            : {'url': url, 'thumbnailUrl': thumbnailUrl};
-      }).toList(),
+      // Keep mediaUrls as strings so servers predating video-cover support can
+      // still publish instead of throwing while coercing an object to string.
+      'mediaUrls': draft.mediaPaths,
+      if (draft.mediaThumbnailUrls.isNotEmpty)
+        'mediaThumbnails': draft.mediaThumbnailUrls,
       'visibility': draft.visibility.index,
       'location': draft.location,
       'clientRequestId': clientRequestId,
     };
-    late Map<String, dynamic> data;
-    try {
-      final envelope = await _apiClient.post('/api/moment/publish', request);
-      data = _requireMapData(envelope);
-    } catch (_) {
-      if (draft.mediaThumbnailUrls.isEmpty) rethrow;
-      final fallbackRequest = Map<String, dynamic>.of(request)
-        ..['mediaUrls'] = draft.mediaPaths;
-      final envelope = await _apiClient.post(
-        '/api/moment/publish',
-        fallbackRequest,
-      );
-      data = _requireMapData(envelope);
-    }
+    final envelope = await _apiClient.post('/api/moment/publish', request);
+    final data = _requireMapData(envelope);
     final moment = _parseMoment(data).copyWith(
       mediaThumbnails: draft.mediaThumbnailUrls,
       localMediaPaths: draft.localMediaPaths,
