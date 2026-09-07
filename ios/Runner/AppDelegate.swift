@@ -70,16 +70,24 @@ import UIKit
         result(FlutterMethodNotImplemented)
         return
       }
+      guard
+        let arguments = call.arguments as? [String: Any],
+        let sourcePath = arguments["sourcePath"] as? String,
+        let outputPath = arguments["outputPath"] as? String
+      else {
+        result(FlutterError(code: "invalid_arguments", message: "视频封面参数无效", details: nil))
+        return
+      }
+
+      // Reply before decoding. On physical iOS devices the binary messenger
+      // may wait for this callback before Dart can begin observing outputPath.
+      // The generator therefore writes asynchronously while Dart treats the
+      // non-empty file at the agreed path as the completion signal.
+      result(outputPath)
       DispatchQueue.global(qos: .userInitiated).async {
         do {
-          guard
-            let arguments = call.arguments as? [String: Any],
-            let sourcePath = arguments["sourcePath"] as? String,
-            let outputPath = arguments["outputPath"] as? String
-          else {
-            throw NSError(domain: "BigChatVideoCover", code: 1)
-          }
-          let asset = AVURLAsset(url: URL(fileURLWithPath: sourcePath))
+          let sourceURL = URL(fileURLWithPath: sourcePath)
+          let asset = AVURLAsset(url: sourceURL)
           let generator = AVAssetImageGenerator(asset: asset)
           generator.appliesPreferredTrackTransform = true
           generator.maximumSize = CGSize(width: 720, height: 720)
@@ -95,11 +103,9 @@ import UIKit
             withIntermediateDirectories: true
           )
           try jpeg.write(to: outputURL, options: .atomic)
-          DispatchQueue.main.async { result(outputPath) }
         } catch {
-          DispatchQueue.main.async {
-            result(FlutterError(code: "cover_failed", message: "无法生成视频封面", details: error.localizedDescription))
-          }
+          // Dart falls back to the cross-platform generator when the agreed
+          // output file does not become available within its bounded wait.
         }
       }
     }

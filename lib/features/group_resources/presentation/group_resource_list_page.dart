@@ -159,7 +159,7 @@ class _GroupResourceListPageState extends State<GroupResourceListPage> {
       final coverPath = isVideo
           ? await VideoThumbnailCache.resolve(
               draft.path,
-            ).timeout(const Duration(milliseconds: 800), onTimeout: () => null)
+            ).timeout(const Duration(seconds: 4), onTimeout: () => null)
           : null;
       if (coverPath != null) {
         _updatePending(

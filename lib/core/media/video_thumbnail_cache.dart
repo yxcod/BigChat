@@ -17,10 +17,11 @@ class VideoThumbnailCache {
     if (normalized.isEmpty) return Future<String?>.value();
     return _pending.putIfAbsent(
       normalized,
-      () => _generate(
-        normalized,
-        rootDirectory: rootDirectory,
-      ).whenComplete(() => _pending.remove(normalized)),
+      () => _generate(normalized, rootDirectory: rootDirectory).whenComplete(() {
+        // Do not return the removed Future. Returning it makes whenComplete
+        // wait on itself and leaves every successful cover resolution pending.
+        _pending.remove(normalized);
+      }),
     );
   }
 
@@ -87,12 +88,25 @@ class VideoThumbnailCache {
     File destination,
   ) async {
     try {
-      final nativePath = await _nativeChannel
+      // AVFoundation writes to a path chosen by Dart. Some iOS/Flutter engine
+      // combinations deliver the method-channel reply late even though the
+      // JPEG is already complete, so file readiness is authoritative here.
+      final nativeResult = _nativeChannel
           .invokeMethod<String>('generate', {
             'sourcePath': source,
             'outputPath': destination.path,
           })
-          .timeout(const Duration(seconds: 15));
+          .then<String?>((path) => path, onError: (_, _) => null);
+      for (var attempt = 0; attempt < 50; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        final exists = await destination.exists();
+        final length = exists ? await destination.length() : 0;
+        if (length > 0) return destination.path;
+      }
+      final nativePath = await nativeResult.timeout(
+        const Duration(milliseconds: 400),
+        onTimeout: () => null,
+      );
       return nativePath != null && await _isUsableFile(nativePath)
           ? nativePath
           : null;

@@ -454,6 +454,13 @@ class _AppVideoPreviewState extends State<AppVideoPreview> {
               // the generated first frame without leaving a blank area.
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
+                layoutBuilder: (currentChild, previousChildren) => Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ...previousChildren,
+                    if (currentChild != null) currentChild,
+                  ],
+                ),
                 child: KeyedSubtree(
                   key: ValueKey<String>(
                     _thumbnailPath ??
